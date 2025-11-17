@@ -1,0 +1,30 @@
+{
+  "kind": "collectionType",
+  "collectionName": "repuestos",
+  "info": {
+    "singularName": "repuesto",
+    "pluralName": "repuestos",
+    "displayName": "repuesto"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "nombre": {
+      "type": "string"
+    },
+    "sku": {
+      "type": "string"
+    },
+    "descripcion": {
+      "type": "text"
+    },
+    "stock": {
+      "type": "integer"
+    },
+    "precio": {
+      "type": "decimal"
+    }
+  }
+}

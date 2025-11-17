@@ -1,0 +1,30 @@
+{
+  "kind": "collectionType",
+  "collectionName": "mecenicos",
+  "info": {
+    "singularName": "mecenico",
+    "pluralName": "mecenicos",
+    "displayName": "mecanico"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "nombre": {
+      "type": "string"
+    },
+    "apellido": {
+      "type": "string"
+    },
+    "especialidad": {
+      "type": "string"
+    },
+    "servicios": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::servicio.servicio",
+      "mappedBy": "mecenico"
+    }
+  }
+}
