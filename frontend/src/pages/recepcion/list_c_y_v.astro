@@ -1,0 +1,276 @@
+---
+import '../../styles/global.css';
+---
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Client and Vehicle Management</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "primary": "#135bec",
+            "background-light": "#f6f6f8",
+            "background-dark": "#101622",
+          },
+          fontFamily: {
+            "display": ["Inter", "sans-serif"]
+          },
+          borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+        },
+      },
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      font-size: 24px;
+    }
+    body {
+      background: linear-gradient(135deg, #f6f6f8 0%, #e9ecef 100%);
+    }
+    .form-input:focus, .form-select:focus {
+      box-shadow: 0 0 0 3px rgba(19, 91, 236, 0.1);
+    }
+    tr:hover {
+      background-color: rgba(19, 91, 236, 0.03) !important;
+      transition: background-color 0.2s;
+    }
+    button:hover {
+      transform: scale(1.1);
+      transition: transform 0.2s;
+    }
+  </style>
+</head>
+<body class="font-display">
+<div class="relative flex h-auto min-h-screen w-full flex-col bg-background-light dark:bg-background-dark group/design-root overflow-x-hidden">
+<div class="flex flex-row min-h-screen">
+<!-- SideNavBar -->
+<div class="flex flex-col gap-4 p-4 bg-white dark:bg-background-dark border-r border-gray-200 dark:border-gray-800 w-64">
+<div class="flex gap-3 items-center">
+<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" data-alt="Taller Veloz company logo" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBLBxtiaKaUP1j5IVvSQnTffGZb3q01Hx1ZSaIDCFmywtshsIYp7T81C4Y59YgJaV5vS43qcjoZ_qSSIcPk0yczUccj4gzzYnV-TKRtRz1Nw1kjNhXXBH5NbN9xzWRNCVE6XHxFxdvdScnhgAwXXFJotXuXHD1wReviw0OEQWdT1E5NEXerLJZ7d1lkP-NNzSgHMyA0qfkonCTGIlLKM7CGtVn2CeZyOAogiQqjodrF0Z4p8DEohweswQZowub1fM-WzBmZ9BN_y7at");'></div>
+<div class="flex flex-col">
+<h1 class="text-gray-900 dark:text-white text-base font-medium leading-normal">Taller Veloz</h1>
+<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Gestión de Taller</p>
+</div>
+</div>
+<div class="flex flex-col gap-2 mt-4">
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/recepcion/dash_recep">
+<span class="material-symbols-outlined">dashboard</span>
+<p class="text-sm font-medium leading-normal">Dashboard</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/recepcion/crear_cliente">
+<span class="material-symbols-outlined">person_add</span>
+<p class="text-sm font-medium leading-normal">Crear Cliente</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/recepcion/crear_vehiculo">
+<span class="material-symbols-outlined">directions_car</span>
+<p class="text-sm font-medium leading-normal">Crear Vehículo</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/recepcion/crear_orden">
+<span class="material-symbols-outlined">post_add</span>
+<p class="text-sm font-medium leading-normal">Crear Orden</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/10 text-primary" href="/recepcion/list_c_y_v">
+<span class="material-symbols-outlined text-primary">group</span>
+<p class="text-sm font-medium leading-normal">Listar C y V</p>
+</a>
+</div>
+<div class="mt-auto flex flex-col gap-2">
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
+<span class="material-symbols-outlined">settings</span>
+<p class="text-sm font-medium leading-normal">Configuración</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
+<span class="material-symbols-outlined">logout</span>
+<p class="text-sm font-medium leading-normal">Cerrar Sesión</p>
+</a>
+</div>
+</div>
+<!-- Main Content -->
+<div class="flex-1 flex flex-col">
+<main class="flex-1 p-8">
+<div class="w-full max-w-7xl mx-auto">
+<!-- PageHeading -->
+<div class="flex flex-wrap justify-between items-center gap-4 mb-6">
+<h1 class="text-[#0d121b] dark:text-white text-3xl font-black leading-tight tracking-tight">Client and Vehicle Management</h1>
+<button class="flex items-center gap-2 min-w-[84px] cursor-pointer justify-center overflow-hidden rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold leading-normal tracking-[0.015em] hover:bg-primary/90">
+<span class="material-symbols-outlined text-xl">add</span>
+<span class="truncate">Add New Client</span>
+</button>
+</div>
+<!-- Toolbar: Search and Filters -->
+<div class="bg-white dark:bg-[#1C2534] rounded-xl p-4 mb-6">
+<div class="flex flex-col md:flex-row gap-4">
+<!-- SearchBar -->
+<div class="flex-grow">
+<label class="flex flex-col min-w-40 h-12 w-full">
+<div class="flex w-full flex-1 items-stretch rounded-lg h-full">
+<div class="text-gray-500 dark:text-gray-400 flex bg-[#f6f6f8] dark:bg-gray-900/50 items-center justify-center pl-4 rounded-l-lg">
+<span class="material-symbols-outlined">search</span>
+</div>
+<input class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-r-lg text-[#0d121b] dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border-none bg-[#f6f6f8] dark:bg-gray-900/50 h-full placeholder:text-gray-500 dark:placeholder:text-gray-400 px-4 text-base font-normal leading-normal" placeholder="Search by client name, license plate, phone..." value=""/>
+</div>
+</label>
+</div>
+<!-- Chips -->
+<div class="flex gap-3 items-center">
+<button class="flex h-12 shrink-0 items-center justify-center gap-x-2 rounded-lg bg-[#f6f6f8] dark:bg-gray-900/50 px-4">
+<p class="text-[#0d121b] dark:text-white text-sm font-medium leading-normal">Status</p>
+<span class="material-symbols-outlined text-gray-500 dark:text-gray-400">expand_more</span>
+</button>
+<button class="flex h-12 shrink-0 items-center justify-center gap-x-2 rounded-lg bg-[#f6f6f8] dark:bg-gray-900/50 px-4">
+<p class="text-[#0d121b] dark:text-white text-sm font-medium leading-normal">Vehicle Brand</p>
+<span class="material-symbols-outlined text-gray-500 dark:text-gray-400">expand_more</span>
+</button>
+<button class="flex h-12 shrink-0 items-center justify-center gap-x-2 rounded-lg bg-[#f6f6f8] dark:bg-gray-900/50 px-4">
+<p class="text-[#0d121b] dark:text-white text-sm font-medium leading-normal">Last Visit</p>
+<span class="material-symbols-outlined text-gray-500 dark:text-gray-400">expand_more</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Data Table -->
+<div class="bg-white dark:bg-[#1C2534] rounded-xl overflow-hidden">
+<div class="overflow-x-auto">
+<table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">
+<thead class="text-xs text-gray-700 dark:text-gray-300 uppercase bg-gray-50 dark:bg-gray-800">
+<tr>
+<th class="p-4 w-4" scope="col"></th>
+<th class="px-6 py-3" scope="col">Client Name</th>
+<th class="px-6 py-3" scope="col">Contact</th>
+<th class="px-6 py-3 text-center" scope="col">Vehicles</th>
+<th class="px-6 py-3" scope="col">Last Visit</th>
+<th class="px-6 py-3" scope="col">Status</th>
+<th class="px-6 py-3 text-right" scope="col">Actions</th>
+</tr>
+</thead>
+<tbody>
+<!-- Row 1 -->
+<tr class="bg-white dark:bg-[#1C2534] border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
+<td class="p-4"><button><span class="material-symbols-outlined">chevron_right</span></button></td>
+<td class="px-6 py-4 font-medium text-gray-900 dark:text-white whitespace-nowrap">John Doe</td>
+<td class="px-6 py-4">john.doe@email.com</td>
+<td class="px-6 py-4 text-center">2</td>
+<td class="px-6 py-4">2023-10-26</td>
+<td class="px-6 py-4">
+<span class="bg-green-100 text-green-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full dark:bg-green-900 dark:text-green-300">Active</span>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="p-2 text-gray-500 hover:text-primary dark:hover:text-primary"><span class="material-symbols-outlined">edit</span></button>
+<button class="p-2 text-gray-500 hover:text-primary dark:hover:text-primary"><span class="material-symbols-outlined">visibility</span></button>
+<button class="p-2 text-gray-500 hover:text-primary dark:hover:text-primary"><span class="material-symbols-outlined">add_circle</span></button>
+</td>
+</tr>
+<!-- Row 2 (Expanded) -->
+<tr class="bg-white dark:bg-[#1C2534] border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
+<td class="p-4"><button><span class="material-symbols-outlined">expand_more</span></button></td>
+<td class="px-6 py-4 font-medium text-gray-900 dark:text-white whitespace-nowrap">Jane Smith</td>
+<td class="px-6 py-4">(555) 123-4567</td>
+<td class="px-6 py-4 text-center">1</td>
+<td class="px-6 py-4">2023-09-15</td>
+<td class="px-6 py-4">
+<span class="bg-green-100 text-green-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full dark:bg-green-900 dark:text-green-300">Active</span>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="p-2 text-gray-500 hover:text-primary dark:hover:text-primary"><span class="material-symbols-outlined">edit</span></button>
+<button class="p-2 text-gray-500 hover:text-primary dark:hover:text-primary"><span class="material-symbols-outlined">visibility</span></button>
+<button class="p-2 text-gray-500 hover:text-primary dark:hover:text-primary"><span class="material-symbols-outlined">add_circle</span></button>
+</td>
+</tr>
+<!-- Nested Table for Row 2 -->
+<tr class="bg-gray-50 dark:bg-gray-800">
+<td class="p-0" colspan="7">
+<div class="px-10 py-4">
+<h4 class="font-bold text-sm text-gray-700 dark:text-gray-300 mb-2">Vehicles</h4>
+<table class="w-full text-sm">
+<thead class="text-xs text-gray-600 dark:text-gray-400">
+<tr>
+<th class="text-left py-2 px-3">License Plate</th>
+<th class="text-left py-2 px-3">Brand</th>
+<th class="text-left py-2 px-3">Model</th>
+<th class="text-left py-2 px-3">Year</th>
+</tr>
+</thead>
+<tbody>
+<tr class="border-b border-gray-200 dark:border-gray-700">
+<td class="py-2 px-3">ABC-1234</td>
+<td class="py-2 px-3">Toyota</td>
+<td class="py-2 px-3">Camry</td>
+<td class="py-2 px-3">2021</td>
+</tr>
+</tbody>
+</table>
+</div>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="bg-white dark:bg-[#1C2534] border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
+<td class="p-4"><button><span class="material-symbols-outlined">chevron_right</span></button></td>
+<td class="px-6 py-4 font-medium text-gray-900 dark:text-white whitespace-nowrap">Mike Johnson</td>
+<td class="px-6 py-4">mike.j@email.com</td>
+<td class="px-6 py-4 text-center">1</td>
+<td class="px-6 py-4">2022-05-20</td>
+<td class="px-6 py-4">
+<span class="bg-gray-100 text-gray-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full dark:bg-gray-700 dark:text-gray-300">Inactive</span>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="p-2 text-gray-500 hover:text-primary dark:hover:text-primary"><span class="material-symbols-outlined">edit</span></button>
+<button class="p-2 text-gray-500 hover:text-primary dark:hover:text-primary"><span class="material-symbols-outlined">visibility</span></button>
+<button class="p-2 text-gray-500 hover:text-primary dark:hover:text-primary"><span class="material-symbols-outlined">add_circle</span></button>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="bg-white dark:bg-[#1C2534] hover:bg-gray-50 dark:hover:bg-gray-800">
+<td class="p-4"><button><span class="material-symbols-outlined">chevron_right</span></button></td>
+<td class="px-6 py-4 font-medium text-gray-900 dark:text-white whitespace-nowrap">Emily Davis</td>
+<td class="px-6 py-4">(555) 876-5432</td>
+<td class="px-6 py-4 text-center">3</td>
+<td class="px-6 py-4">2023-11-01</td>
+<td class="px-6 py-4">
+<span class="bg-green-100 text-green-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full dark:bg-green-900 dark:text-green-300">Active</span>
+</td>
+<td class="px-6 py-4 text-right">
+<button class="p-2 text-gray-500 hover:text-primary dark:hover:text-primary"><span class="material-symbols-outlined">edit</span></button>
+<button class="p-2 text-gray-500 hover:text-primary dark:hover:text-primary"><span class="material-symbols-outlined">visibility</span></button>
+<button class="p-2 text-gray-500 hover:text-primary dark:hover:text-primary"><span class="material-symbols-outlined">add_circle</span></button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Pagination -->
+<nav aria-label="Table navigation" class="flex items-center justify-between p-4">
+<span class="text-sm font-normal text-gray-500 dark:text-gray-400">Showing <span class="font-semibold text-gray-900 dark:text-white">1-4</span> of <span class="font-semibold text-gray-900 dark:text-white">100</span></span>
+<ul class="inline-flex -space-x-px text-sm h-8">
+<li>
+<a class="flex items-center justify-center px-3 h-8 ml-0 leading-tight text-gray-500 bg-white border border-gray-300 rounded-l-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white" href="#">Previous</a>
+</li>
+<li>
+<a aria-current="page" class="flex items-center justify-center px-3 h-8 text-blue-600 border border-gray-300 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 dark:border-gray-700 dark:bg-gray-700 dark:text-white" href="#">1</a>
+</li>
+<li>
+<a class="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white" href="#">2</a>
+</li>
+<li>
+<a class="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white" href="#">3</a>
+</li>
+<li>
+<a class="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 rounded-r-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white" href="#">Next</a>
+</li>
+</ul>
+</nav>
+</div>
+</div>
+</main>
+</div>
+</div>
+</div>
+</body></html>

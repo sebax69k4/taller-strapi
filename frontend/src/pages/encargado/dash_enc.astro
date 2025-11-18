@@ -1,0 +1,290 @@
+---
+import '../../styles/global.css';           
+---
+
+<!DOCTYPE html>
+
+<html class="light" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Dashboard - Taller Veloz</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "primary": "#135bec",
+            "background-light": "#f6f6f8",
+            "background-dark": "#101622",
+            "brand-primary": "#1E3A8A",
+            "brand-accent": "#F59E0B",
+            "brand-background": "#F3F4F6",
+            "brand-success": "#10B981",
+            "brand-warning": "#FBBF24",
+            "brand-danger": "#EF4444",
+            "brand-text-primary": "#111827",
+            "brand-text-secondary": "#6B7280",
+            "brand-border": "#E5E7EB",
+
+            /* Dark Mode Colors */
+            "dark-brand-primary": "#3B82F6",
+            "dark-brand-accent": "#F59E0B",
+            "dark-brand-background": "#111827",
+            "dark-brand-card": "#1F2937",
+            "dark-brand-success": "#34D399",
+            "dark-brand-warning": "#FBBF24",
+            "dark-brand-danger": "#F87171",
+            "dark-brand-text-primary": "#F9FAFB",
+            "dark-brand-text-secondary": "#9CA3AF",
+            "dark-brand-border": "#374151"
+          },
+          fontFamily: {
+            "display": ["Inter"]
+          },
+          borderRadius: {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "full": "9999px"
+          },
+        },
+      },
+    }
+  </script>
+</head>
+<body class="font-display bg-background-light dark:bg-background-dark">
+<div class="relative flex h-auto min-h-screen w-full flex-col group/design-root overflow-x-hidden">
+<div class="flex flex-row min-h-screen">
+<!-- SideNavBar -->
+<div class="flex flex-col gap-4 p-4 bg-white dark:bg-background-dark border-r border-gray-200 dark:border-gray-800 w-64">
+<div class="flex gap-3 items-center">
+<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://cdn.usegalileo.ai/stability/a4b1f6ac-1498-420f-bb19-91ee46e9ce70.png");'></div>
+<div class="flex flex-col">
+<h1 class="text-gray-900 dark:text-white text-base font-medium leading-normal">Taller Veloz</h1>
+<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Gestión de Taller</p>
+</div>
+</div>
+<div class="flex flex-col gap-2 mt-4">
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/10 text-primary" href="/encargado/dash_enc">
+<span class="material-symbols-outlined text-primary">dashboard</span>
+<p class="text-sm font-medium leading-normal">Dashboard</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/alert_stock">
+<span class="material-symbols-outlined">inventory_2</span>
+<p class="text-sm font-medium leading-normal">Alertas Stock</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/asig_orden">
+<span class="material-symbols-outlined">assignment_ind</span>
+<p class="text-sm font-medium leading-normal">Asignar Orden</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/disp_mec">
+<span class="material-symbols-outlined">calendar_view_week</span>
+<p class="text-sm font-medium leading-normal">Disponibilidad</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/gen_factura">
+<span class="material-symbols-outlined">receipt_long</span>
+<p class="text-sm font-medium leading-normal">Generar Factura</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/marc_orden">
+<span class="material-symbols-outlined">flag</span>
+<p class="text-sm font-medium leading-normal">Marcar Orden</p>
+</a>
+</div>
+<div class="mt-auto flex flex-col gap-2">
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
+<span class="material-symbols-outlined">settings</span>
+<p class="text-sm font-medium leading-normal">Configuración</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
+<span class="material-symbols-outlined">logout</span>
+<p class="text-sm font-medium leading-normal">Cerrar Sesión</p>
+</a>
+</div>
+</div>
+<!-- Main Content -->
+<div class="flex-1 flex flex-col">
+<main class="flex-1 p-8">
+<!-- PageHeading -->
+<div class="flex flex-wrap justify-between gap-3 p-4">
+<div class="flex min-w-72 flex-col gap-2">
+<p class="text-brand-text-primary dark:text-dark-brand-text-primary text-4xl font-black leading-tight tracking-[-0.033em]">Dashboard del Encargado</p>
+<p class="text-brand-text-secondary dark:text-dark-brand-text-secondary text-base font-normal leading-normal">Bienvenido, aquí tienes un resumen de la actividad del taller.</p>
+</div>
+</div>
+<!-- Stats -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-4">
+<div class="flex flex-col gap-2 rounded-xl p-6 border border-brand-border dark:border-dark-brand-border bg-white dark:bg-dark-brand-card hover:shadow-lg transition-shadow cursor-pointer">
+<div class="flex items-center justify-between">
+<p class="text-brand-text-secondary dark:text-dark-brand-text-secondary text-base font-medium leading-normal">Órdenes Activas</p>
+<span class="material-symbols-outlined text-brand-warning">build_circle</span>
+</div>
+<p class="text-brand-text-primary dark:text-dark-brand-text-primary tracking-light text-4xl font-bold leading-tight">23</p>
+<p class="text-brand-success dark:text-dark-brand-success text-sm font-medium leading-normal">+2 esta semana</p>
+</div>
+<div class="flex flex-col gap-2 rounded-xl p-6 border border-brand-border dark:border-dark-brand-border bg-white dark:bg-dark-brand-card hover:shadow-lg transition-shadow cursor-pointer">
+<div class="flex items-center justify-between">
+<p class="text-brand-text-secondary dark:text-dark-brand-text-secondary text-base font-medium leading-normal">Completadas Hoy</p>
+<span class="material-symbols-outlined text-brand-success">task_alt</span>
+</div>
+<p class="text-brand-text-primary dark:text-dark-brand-text-primary tracking-light text-4xl font-bold leading-tight">8</p>
+<p class="text-brand-success dark:text-dark-brand-success text-sm font-medium leading-normal">+5% vs ayer</p>
+</div>
+<div class="flex flex-col gap-2 rounded-xl p-6 border border-brand-danger/50 dark:border-brand-danger/50 bg-red-50 dark:bg-brand-danger/10 hover:shadow-lg transition-shadow cursor-pointer">
+<div class="flex items-center justify-between">
+<p class="text-brand-text-secondary dark:text-dark-brand-text-secondary text-base font-medium leading-normal">Stock Bajo Mínimo</p>
+<span class="material-symbols-outlined text-brand-danger">inventory_2</span>
+</div>
+<p class="text-brand-danger dark:text-dark-brand-danger tracking-light text-4xl font-bold leading-tight">12</p>
+<p class="text-brand-text-secondary dark:text-dark-brand-text-secondary text-sm font-medium leading-normal">Requiere atención</p>
+</div>
+</div>
+<!-- SectionHeader -->
+<h2 class="text-brand-text-primary dark:text-dark-brand-text-primary text-[22px] font-bold leading-tight tracking-[-0.015em] px-4 pb-3 pt-5">Accesos Rápidos</h2>
+<!-- ButtonGroup -->
+<div class="flex justify-stretch">
+<div class="flex flex-1 gap-4 flex-wrap px-4 py-3 justify-start">
+<button class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 px-5 bg-brand-accent text-white text-base font-bold leading-normal tracking-[0.015em] gap-2 hover:opacity-90 transition-opacity">
+<span class="material-symbols-outlined">warning</span>
+<span class="truncate">Alertas de Stock Bajo</span>
+</button>
+<button class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 px-5 bg-brand-primary text-white text-base font-bold leading-normal tracking-[0.015em] gap-2 hover:opacity-90 transition-opacity">
+<span class="material-symbols-outlined">add_circle</span>
+<span class="truncate">Asignar Orden</span>
+</button>
+<button class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 px-5 bg-gray-200 dark:bg-dark-brand-card dark:border dark:border-dark-brand-border text-brand-text-primary dark:text-dark-brand-text-primary text-base font-bold leading-normal tracking-[0.015em] gap-2 hover:bg-gray-300 dark:hover:bg-gray-700 transition-colors">
+<span class="material-symbols-outlined">group</span>
+<span class="truncate">Disponibilidad Mecánicos</span>
+</button>
+</div>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-5 gap-6 p-4 mt-6">
+<!-- Summary Table -->
+<div class="lg:col-span-3">
+<h2 class="text-brand-text-primary dark:text-dark-brand-text-primary text-[22px] font-bold leading-tight tracking-[-0.015em] pb-4">Actividad Reciente</h2>
+<div class="w-full bg-white dark:bg-dark-brand-card rounded-xl border border-brand-border dark:border-dark-brand-border overflow-hidden">
+<div class="overflow-x-auto">
+<table class="w-full text-sm text-left text-brand-text-secondary dark:text-dark-brand-text-secondary">
+<thead class="text-xs text-brand-text-secondary dark:text-dark-brand-text-secondary uppercase bg-brand-background dark:bg-dark-brand-card border-b border-brand-border dark:border-dark-brand-border">
+<tr>
+<th class="px-6 py-3" scope="col">ID Orden</th>
+<th class="px-6 py-3" scope="col">Cliente</th>
+<th class="px-6 py-3" scope="col">Vehículo</th>
+<th class="px-6 py-3" scope="col">Mecánico</th>
+<th class="px-6 py-3" scope="col">Estado</th>
+</tr>
+</thead>
+<tbody>
+<tr class="bg-white dark:bg-dark-brand-card border-b dark:border-dark-brand-border hover:bg-gray-50 dark:hover:bg-gray-800">
+<th class="px-6 py-4 font-medium text-brand-text-primary dark:text-dark-brand-text-primary whitespace-nowrap" scope="row">#8351</th>
+<td class="px-6 py-4">Ana Torres</td>
+<td class="px-6 py-4">Ford Focus '19</td>
+<td class="px-6 py-4">Carlos Ruiz</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-brand-warning/20 text-yellow-800 dark:bg-brand-warning/30 dark:text-yellow-200">En Progreso</span>
+</td>
+</tr>
+<tr class="bg-white dark:bg-dark-brand-card border-b dark:border-dark-brand-border hover:bg-gray-50 dark:hover:bg-gray-800">
+<th class="px-6 py-4 font-medium text-brand-text-primary dark:text-dark-brand-text-primary whitespace-nowrap" scope="row">#8350</th>
+<td class="px-6 py-4">Javier Gómez</td>
+<td class="px-6 py-4">Toyota RAV4 '22</td>
+<td class="px-6 py-4">Luis Fernández</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-brand-success/20 text-green-800 dark:bg-brand-success/30 dark:text-green-200">Completado</span>
+</td>
+</tr>
+<tr class="bg-white dark:bg-dark-brand-card border-b dark:border-dark-brand-border hover:bg-gray-50 dark:hover:bg-gray-800">
+<th class="px-6 py-4 font-medium text-brand-text-primary dark:text-dark-brand-text-primary whitespace-nowrap" scope="row">#8349</th>
+<td class="px-6 py-4">María López</td>
+<td class="px-6 py-4">VW Golf '20</td>
+<td class="px-6 py-4">Carlos Ruiz</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-brand-warning/20 text-yellow-800 dark:bg-brand-warning/30 dark:text-yellow-200">En Progreso</span>
+</td>
+</tr>
+<tr class="bg-white dark:bg-dark-brand-card border-b dark:border-dark-brand-border hover:bg-gray-50 dark:hover:bg-gray-800">
+<th class="px-6 py-4 font-medium text-brand-text-primary dark:text-dark-brand-text-primary whitespace-nowrap" scope="row">#8348</th>
+<td class="px-6 py-4">Pedro Martín</td>
+<td class="px-6 py-4">Honda Civic '18</td>
+<td class="px-6 py-4">Elena Sosa</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-brand-danger/20 text-red-800 dark:bg-brand-danger/30 dark:text-red-200">Pendiente Pieza</span>
+</td>
+</tr>
+<tr class="bg-white dark:bg-dark-brand-card hover:bg-gray-50 dark:hover:bg-gray-800">
+<th class="px-6 py-4 font-medium text-brand-text-primary dark:text-dark-brand-text-primary whitespace-nowrap" scope="row">#8347</th>
+<td class="px-6 py-4">Laura Sánchez</td>
+<td class="px-6 py-4">Nissan Qashqai '21</td>
+<td class="px-6 py-4">Luis Fernández</td>
+<td class="px-6 py-4">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-brand-success/20 text-green-800 dark:bg-brand-success/30 dark:text-green-200">Completado</span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+<!-- Bar Chart -->
+<div class="lg:col-span-2">
+<h2 class="text-brand-text-primary dark:text-dark-brand-text-primary text-[22px] font-bold leading-tight tracking-[-0.015em] pb-4">Resumen de Stock</h2>
+<div class="w-full bg-white dark:bg-dark-brand-card rounded-xl p-6 border border-brand-border dark:border-dark-brand-border">
+<div class="space-y-6">
+<div>
+<div class="flex justify-between items-center mb-1">
+<span class="text-base font-medium text-brand-text-secondary dark:text-dark-brand-text-secondary">Filtros</span>
+<span class="text-sm font-medium text-brand-text-primary dark:text-dark-brand-text-primary">85%</span>
+</div>
+<div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+<div class="bg-brand-primary h-2.5 rounded-full" style="width: 85%"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between items-center mb-1">
+<span class="text-base font-medium text-brand-text-secondary dark:text-dark-brand-text-secondary">Aceites</span>
+<span class="text-sm font-medium text-brand-text-primary dark:text-dark-brand-text-primary">60%</span>
+</div>
+<div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+<div class="bg-brand-primary h-2.5 rounded-full" style="width: 60%"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between items-center mb-1">
+<span class="text-base font-medium text-brand-text-secondary dark:text-dark-brand-text-secondary">Frenos</span>
+<span class="text-sm font-medium text-brand-danger dark:text-dark-brand-danger">15%</span>
+</div>
+<div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+<div class="bg-brand-danger h-2.5 rounded-full" style="width: 15%"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between items-center mb-1">
+<span class="text-base font-medium text-brand-text-secondary dark:text-dark-brand-text-secondary">Baterías</span>
+<span class="text-sm font-medium text-brand-text-primary dark:text-dark-brand-text-primary">70%</span>
+</div>
+<div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+<div class="bg-brand-primary h-2.5 rounded-full" style="width: 70%"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between items-center mb-1">
+<span class="text-base font-medium text-brand-text-secondary dark:text-dark-brand-text-secondary">Neumáticos</span>
+<span class="text-sm font-medium text-brand-warning dark:text-dark-brand-warning">30%</span>
+</div>
+<div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+<div class="bg-brand-warning h-2.5 rounded-full" style="width: 30%"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</div>
+</div>
+</div>
+</body></html>

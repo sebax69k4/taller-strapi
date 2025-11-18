@@ -1,0 +1,135 @@
+---
+import '../../styles/global.css';
+---
+<!DOCTYPE html>
+
+<html class="light" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Registrar Nuevo Cliente</title>
+<script id="tailwind-config">
+      window.tailwind = window.tailwind || {};
+      window.tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#135bec",
+              "background-light": "#f6f6f8",
+              "background-dark": "#101622",
+            },
+            fontFamily: {
+              "display": ["Inter", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="font-display">
+<div class="relative flex h-auto min-h-screen w-full flex-col bg-background-light dark:bg-background-dark group/design-root overflow-x-hidden">
+<div class="flex flex-row min-h-screen">
+<!-- SideNavBar -->
+<div class="flex flex-col gap-4 p-4 bg-white dark:bg-background-dark border-r border-gray-200 dark:border-gray-800 w-64">
+<div class="flex gap-3 items-center">
+<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" data-alt="Taller Veloz company logo" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBLBxtiaKaUP1j5IVvSQnTffGZb3q01Hx1ZSaIDCFmywtshsIYp7T81C4Y59YgJaV5vS43qcjoZ_qSSIcPk0yczUccj4gzzYnV-TKRtRz1Nw1kjNhXXBH5NbN9xzWRNCVE6XHxFxdvdScnhgAwXXFJotXuXHD1wReviw0OEQWdT1E5NEXerLJZ7d1lkP-NNzSgHMyA0qfkonCTGIlLKM7CGtVn2CeZyOAogiQqjodrF0Z4p8DEohweswQZowub1fM-WzBmZ9BN_y7at");'></div>
+<div class="flex flex-col">
+<h1 class="text-gray-900 dark:text-white text-base font-medium leading-normal">Taller Veloz</h1>
+<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Gestión de Taller</p>
+</div>
+</div>
+<div class="flex flex-col gap-2 mt-4">
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/recepcion/dash_recep">
+<span class="material-symbols-outlined">dashboard</span>
+<p class="text-sm font-medium leading-normal">Dashboard</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/10 text-primary" href="/recepcion/crear_cliente">
+<span class="material-symbols-outlined text-primary">person_add</span>
+<p class="text-sm font-medium leading-normal">Crear Cliente</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/recepcion/crear_vehiculo">
+<span class="material-symbols-outlined">directions_car</span>
+<p class="text-sm font-medium leading-normal">Crear Vehículo</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/recepcion/crear_orden">
+<span class="material-symbols-outlined">post_add</span>
+<p class="text-sm font-medium leading-normal">Crear Orden</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/recepcion/list_c_y_v">
+<span class="material-symbols-outlined">group</span>
+<p class="text-sm font-medium leading-normal">Listar C y V</p>
+</a>
+</div>
+<div class="mt-auto flex flex-col gap-2">
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
+<span class="material-symbols-outlined">settings</span>
+<p class="text-sm font-medium leading-normal">Configuración</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
+<span class="material-symbols-outlined">logout</span>
+<p class="text-sm font-medium leading-normal">Cerrar Sesión</p>
+</a>
+</div>
+</div>
+<!-- Main Content -->
+<div class="flex-1 flex flex-col">
+<main class="flex-1 p-8">
+<div class="w-full max-w-2xl mx-auto">
+<div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+<div class="p-6 sm:p-8">
+<div class="flex flex-col gap-2">
+<h1 class="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-slate-50">Registrar Nuevo Cliente</h1>
+<p class="text-sm text-slate-500 dark:text-slate-400">Complete los siguientes campos para añadir un nuevo cliente al sistema.</p>
+</div>
+<form class="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2">
+<div class="flex flex-col">
+<label class="text-sm font-medium text-slate-800 dark:text-slate-200 pb-2" for="nombre">Nombre</label>
+<input class="form-input w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-primary dark:text-slate-200" id="nombre" placeholder="ej: Juan" type="text"/>
+</div>
+<div class="flex flex-col">
+<label class="text-sm font-medium text-slate-800 dark:text-slate-200 pb-2" for="apellido">Apellido</label>
+<input class="form-input w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-primary dark:text-slate-200" id="apellido" placeholder="ej: Pérez" type="text"/>
+</div>
+<div class="flex flex-col sm:col-span-2">
+<label class="text-sm font-medium text-slate-800 dark:text-slate-200 pb-2" for="email">Email</label>
+<input class="form-input w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-primary dark:text-slate-200" id="email" placeholder="ej: juan.perez@email.com" type="email"/>
+</div>
+<div class="flex flex-col sm:col-span-2">
+<label class="text-sm font-medium text-slate-800 dark:text-slate-200 pb-2" for="telefono">Teléfono</label>
+<input class="form-input w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-primary dark:text-slate-200" id="telefono" placeholder="ej: +1 (555) 123-4567" type="tel"/>
+</div>
+<div class="flex flex-col sm:col-span-2">
+<label class="text-sm font-medium text-slate-800 dark:text-slate-200 pb-2" for="direccion">Dirección</label>
+<input class="form-input w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-primary dark:text-slate-200" id="direccion" placeholder="ej: Av. Siempre Viva 742" type="text"/>
+</div>
+</form>
+</div>
+<div class="flex justify-end gap-4 rounded-b-xl border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 p-6">
+<button class="inline-flex items-center justify-center rounded-lg bg-white dark:bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 ring-1 ring-inset ring-slate-300 dark:ring-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50" type="button">
+                        Cancelar
+                    </button>
+<button class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90" type="submit">
+<span class="material-symbols-outlined mr-2 text-base">save</span>
+                        Guardar Cliente
+                    </button>
+</div>
+</div>
+<div class="mt-6 flex w-full items-center gap-3 rounded-lg bg-green-500/10 dark:bg-green-500/20 p-4 text-sm text-green-800 dark:text-green-300">
+<span class="material-symbols-outlined flex-shrink-0 text-xl text-green-600 dark:text-green-400">check_circle</span>
+<p>El cliente se ha registrado correctamente en el sistema.</p>
+</div>
+</div>
+</main>
+</div>
+</div>
+</div>
+</body></html>

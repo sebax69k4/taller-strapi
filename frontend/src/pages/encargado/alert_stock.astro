@@ -1,0 +1,218 @@
+---
+import '../../styles/global.css';
+---
+<!DOCTYPE html>
+
+<html class="light" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Alertas de Stock - Taller Veloz</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#135bec",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#101622",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings:
+            'FILL' 0,
+            'wght' 400,
+            'GRAD' 0,
+            'opsz' 24
+        }
+        .material-symbols-outlined.fill {
+            font-variation-settings:
+            'FILL' 1,
+            'wght' 400,
+            'GRAD' 0,
+            'opsz' 24
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-gray-800 dark:text-gray-200">
+<div class="relative flex min-h-screen w-full">
+<!-- SideNavBar -->
+<aside class="flex w-64 flex-col bg-white dark:bg-gray-900/50 p-4 border-r border-gray-200 dark:border-gray-800">
+<div class="flex flex-col gap-4">
+<div class="flex items-center gap-3">
+<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://cdn.usegalileo.ai/stability/a4b1f6ac-1498-420f-bb19-91ee46e9ce70.png");'></div>
+<div class="flex flex-col">
+<h1 class="text-gray-900 dark:text-white text-base font-medium leading-normal">Taller Veloz</h1>
+<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Gestión de Taller</p>
+</div>
+</div>
+<nav class="flex flex-col gap-2 mt-4">
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/dash_enc">
+<span class="material-symbols-outlined">dashboard</span>
+<p class="text-sm font-medium leading-normal">Dashboard</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/10 text-primary" href="/encargado/alert_stock">
+<span class="material-symbols-outlined text-primary">inventory_2</span>
+<p class="text-sm font-medium leading-normal">Alertas Stock</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/asig_orden">
+<span class="material-symbols-outlined">assignment_ind</span>
+<p class="text-sm font-medium leading-normal">Asignar Orden</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/disp_mec">
+<span class="material-symbols-outlined">calendar_view_week</span>
+<p class="text-sm font-medium leading-normal">Disponibilidad</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/gen_factura">
+<span class="material-symbols-outlined">receipt_long</span>
+<p class="text-sm font-medium leading-normal">Generar Factura</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/marc_orden">
+<span class="material-symbols-outlined">flag</span>
+<p class="text-sm font-medium leading-normal">Marcar Orden</p>
+</a>
+</nav>
+</div>
+<div class="mt-auto flex flex-col gap-2">
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
+<span class="material-symbols-outlined">settings</span>
+<p class="text-sm font-medium leading-normal">Configuración</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
+<span class="material-symbols-outlined">logout</span>
+<p class="text-sm font-medium leading-normal">Cerrar Sesión</p>
+</a>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="flex-1 p-8">
+<div class="max-w-7xl mx-auto">
+<!-- PageHeading -->
+<div class="flex flex-wrap justify-between items-center gap-4 mb-6">
+<div class="flex flex-col gap-2">
+<h1 class="text-[#0d121b] dark:text-white text-3xl font-black tracking-tight">Inventario: Alerta de Bajo Stock</h1>
+<p class="text-[#4c669a] dark:text-gray-400 text-base font-normal leading-normal">Gestiona y reabastece los repuestos que están por debajo del umbral mínimo.</p>
+</div>
+<button class="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-primary/20 dark:bg-primary/30 text-primary dark:text-white text-sm font-bold leading-normal tracking-[0.015em]">
+<span class="truncate">Crear Nuevo Pedido</span>
+</button>
+</div>
+<!-- Stats -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+<div class="flex flex-col gap-2 rounded-xl p-6 border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/50">
+<p class="text-[#0d121b] dark:text-gray-300 text-base font-medium leading-normal">Total de Repuestos Críticos</p>
+<p class="text-[#0d121b] dark:text-white tracking-tight text-3xl font-bold leading-tight">14</p>
+</div>
+<div class="flex flex-col gap-2 rounded-xl p-6 border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/50">
+<p class="text-[#0d121b] dark:text-gray-300 text-base font-medium leading-normal">Pedidos Pendientes</p>
+<p class="text-[#0d121b] dark:text-white tracking-tight text-3xl font-bold leading-tight">3</p>
+</div>
+</div>
+<!-- SearchBar and Filters -->
+<div class="mb-4">
+<label class="flex flex-col min-w-40 h-12 w-full">
+<div class="flex w-full flex-1 items-stretch rounded-lg h-full">
+<div class="text-[#4c669a] dark:text-gray-400 flex border border-r-0 border-gray-200 dark:border-gray-700 bg-background-light dark:bg-background-dark items-center justify-center pl-4 rounded-l-lg">
+<span class="material-symbols-outlined">search</span>
+</div>
+<input class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-r-lg text-[#0d121b] dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/50 h-full placeholder:text-[#4c669a] dark:placeholder:text-gray-500 px-4 text-base font-normal leading-normal" placeholder="Buscar por nombre o código del repuesto..." value=""/>
+</div>
+</label>
+</div>
+<!-- Table -->
+<div class="overflow-x-auto @container bg-white dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-800">
+<table class="w-full text-left">
+<thead class="border-b border-gray-200 dark:border-gray-800">
+<tr>
+<th class="table-col-status px-4 py-3 text-[#0d121b] dark:text-gray-300 text-sm font-medium">Estado</th>
+<th class="table-col-part px-4 py-3 text-[#0d121b] dark:text-gray-300 text-sm font-medium">Repuesto</th>
+<th class="table-col-stock px-4 py-3 text-[#0d121b] dark:text-gray-300 text-sm font-medium text-center">Stock Actual</th>
+<th class="table-col-threshold px-4 py-3 text-[#0d121b] dark:text-gray-300 text-sm font-medium text-center">Umbral Mínimo</th>
+<th class="table-col-supplier px-4 py-3 text-[#0d121b] dark:text-gray-300 text-sm font-medium">Proveedor</th>
+<th class="table-col-actions px-4 py-3 text-right text-[#0d121b] dark:text-gray-300 text-sm font-medium">Acciones</th>
+</tr>
+</thead>
+<tbody>
+<tr class="border-b border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+<td class="px-4 py-3 align-middle">
+<span class="inline-flex items-center gap-2 rounded-full bg-red-100 dark:bg-red-900/50 px-3 py-1 text-sm font-medium text-red-700 dark:text-red-300">
+<span class="h-2 w-2 rounded-full bg-red-500"></span>
+                                        Crítico
+                                    </span>
+</td>
+<td class="px-4 py-3 align-middle text-[#0d121b] dark:text-white text-sm font-normal">Filtro de Aceite B-452</td>
+<td class="px-4 py-3 align-middle text-center text-red-600 dark:text-red-400 text-sm font-bold">2</td>
+<td class="px-4 py-3 align-middle text-center text-[#4c669a] dark:text-gray-400 text-sm font-normal">5</td>
+<td class="px-4 py-3 align-middle text-[#4c669a] dark:text-gray-400 text-sm font-normal">AutoPartes Express</td>
+<td class="px-4 py-3 text-right align-middle">
+<button class="text-primary dark:text-blue-400 text-sm font-bold tracking-[0.015em] hover:underline">Reabastecer</button>
+</td>
+</tr>
+<tr class="border-b border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+<td class="px-4 py-3 align-middle">
+<span class="inline-flex items-center gap-2 rounded-full bg-red-100 dark:bg-red-900/50 px-3 py-1 text-sm font-medium text-red-700 dark:text-red-300">
+<span class="h-2 w-2 rounded-full bg-red-500"></span>
+                                        Crítico
+                                    </span>
+</td>
+<td class="px-4 py-3 align-middle text-[#0d121b] dark:text-white text-sm font-normal">Pastillas de Freno Delanteras T-800</td>
+<td class="px-4 py-3 align-middle text-center text-red-600 dark:text-red-400 text-sm font-bold">4</td>
+<td class="px-4 py-3 align-middle text-center text-[#4c669a] dark:text-gray-400 text-sm font-normal">8</td>
+<td class="px-4 py-3 align-middle text-[#4c669a] dark:text-gray-400 text-sm font-normal">Frenos Seguros S.A.</td>
+<td class="px-4 py-3 text-right align-middle">
+<button class="text-primary dark:text-blue-400 text-sm font-bold tracking-[0.015em] hover:underline">Reabastecer</button>
+</td>
+</tr>
+<tr class="border-b border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+<td class="px-4 py-3 align-middle">
+<span class="inline-flex items-center gap-2 rounded-full bg-yellow-100 dark:bg-yellow-900/50 px-3 py-1 text-sm font-medium text-yellow-800 dark:text-yellow-300">
+<span class="h-2 w-2 rounded-full bg-yellow-500"></span>
+                                        Bajo
+                                    </span>
+</td>
+<td class="px-4 py-3 align-middle text-[#0d121b] dark:text-white text-sm font-normal">Bujía de Iridio NGK-340</td>
+<td class="px-4 py-3 align-middle text-center text-yellow-700 dark:text-yellow-400 text-sm font-bold">12</td>
+<td class="px-4 py-3 align-middle text-center text-[#4c669a] dark:text-gray-400 text-sm font-normal">10</td>
+<td class="px-4 py-3 align-middle text-[#4c669a] dark:text-gray-400 text-sm font-normal">MotorTech</td>
+<td class="px-4 py-3 text-right align-middle">
+<button class="text-primary dark:text-blue-400 text-sm font-bold tracking-[0.015em] hover:underline">Reabastecer</button>
+</td>
+</tr>
+<tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+<td class="px-4 py-3 align-middle">
+<span class="inline-flex items-center gap-2 rounded-full bg-red-100 dark:bg-red-900/50 px-3 py-1 text-sm font-medium text-red-700 dark:text-red-300">
+<span class="h-2 w-2 rounded-full bg-red-500"></span>
+                                        Crítico
+                                    </span>
+</td>
+<td class="px-4 py-3 align-middle text-[#0d121b] dark:text-white text-sm font-normal">Correa de Distribución G-210</td>
+<td class="px-4 py-3 align-middle text-center text-red-600 dark:text-red-400 text-sm font-bold">1</td>
+<td class="px-4 py-3 align-middle text-center text-[#4c669a] dark:text-gray-400 text-sm font-normal">3</td>
+<td class="px-4 py-3 align-middle text-[#4c669a] dark:text-gray-400 text-sm font-normal">Componentes Duraderos</td>
+<td class="px-4 py-3 text-right align-middle">
+<button class="text-primary dark:text-blue-400 text-sm font-bold tracking-[0.015em] hover:underline">Reabastecer</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+</main>
+</div>
+</body></html>

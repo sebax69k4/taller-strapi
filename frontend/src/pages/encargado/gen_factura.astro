@@ -1,0 +1,289 @@
+---
+import '../../styles/global.css';
+--- 
+<!DOCTYPE html>
+
+<html class="light" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Generar Factura - Taller Veloz</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings:
+      'FILL' 0,
+      'wght' 400,
+      'GRAD' 0,
+      'opsz' 24
+    }
+  </style>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "primary": "#135bec",
+            "background-light": "#f6f6f8",
+            "background-dark": "#101622",
+          },
+          fontFamily: {
+            "display": ["Inter", "sans-serif"]
+          },
+          borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+        },
+      },
+    }
+  </script>
+</head>
+<body class="font-display bg-background-light dark:bg-background-dark">
+<div class="relative flex min-h-screen w-full">
+<!-- SideNavBar -->
+<aside class="flex w-64 flex-col bg-white dark:bg-gray-900 p-4 border-r border-gray-200 dark:border-gray-800">
+<div class="flex flex-col gap-4">
+<div class="flex items-center gap-3">
+<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://cdn.usegalileo.ai/stability/a4b1f6ac-1498-420f-bb19-91ee46e9ce70.png");'></div>
+<div class="flex flex-col">
+<h1 class="text-gray-900 dark:text-white text-base font-medium leading-normal">Taller Veloz</h1>
+<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Gestión de Taller</p>
+</div>
+</div>
+<nav class="flex flex-col gap-2 mt-4">
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/dash_enc">
+<span class="material-symbols-outlined">dashboard</span>
+<p class="text-sm font-medium leading-normal">Dashboard</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/alert_stock">
+<span class="material-symbols-outlined">inventory_2</span>
+<p class="text-sm font-medium leading-normal">Alertas Stock</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/asig_orden">
+<span class="material-symbols-outlined">assignment_ind</span>
+<p class="text-sm font-medium leading-normal">Asignar Orden</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/disp_mec">
+<span class="material-symbols-outlined">calendar_view_week</span>
+<p class="text-sm font-medium leading-normal">Disponibilidad</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/10 text-primary" href="/encargado/gen_factura">
+<span class="material-symbols-outlined text-primary">receipt_long</span>
+<p class="text-sm font-medium leading-normal">Generar Factura</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/marc_orden">
+<span class="material-symbols-outlined">flag</span>
+<p class="text-sm font-medium leading-normal">Marcar Orden</p>
+</a>
+</nav>
+</div>
+<div class="mt-auto flex flex-col gap-2">
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
+<span class="material-symbols-outlined">settings</span>
+<p class="text-sm font-medium leading-normal">Configuración</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
+<span class="material-symbols-outlined">logout</span>
+<p class="text-sm font-medium leading-normal">Cerrar Sesión</p>
+</a>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="flex-1 p-6 lg:p-8">
+<div class="max-w-7xl mx-auto">
+<!-- PageHeading and Actions -->
+<div class="flex flex-wrap items-center justify-between gap-4 mb-8">
+<p class="text-gray-900 dark:text-white text-4xl font-black leading-tight tracking-[-0.033em]">Crear Nueva Factura</p>
+<div class="flex items-center gap-2">
+<button class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">Cancelar</button>
+<button class="px-4 py-2 text-sm font-medium text-primary bg-primary/20 dark:bg-primary/30 dark:text-white rounded-lg hover:bg-primary/30 dark:hover:bg-primary/40">Guardar Borrador</button>
+<button class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary/90 flex items-center gap-2">
+<span class="material-symbols-outlined text-base">picture_as_pdf</span>
+              Generar PDF y Guardar
+            </button>
+</div>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
+<!-- Left Column: Form -->
+<div class="lg:col-span-3 flex flex-col gap-6">
+<!-- SearchBar -->
+<div class="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800">
+<p class="text-gray-900 dark:text-white text-base font-medium leading-normal pb-3">1. Seleccionar Orden de Trabajo Completada</p>
+<label class="flex flex-col min-w-40 h-12 w-full">
+<div class="flex w-full flex-1 items-stretch rounded-lg h-full">
+<div class="text-gray-500 dark:text-gray-400 flex bg-background-light dark:bg-background-dark items-center justify-center pl-4 rounded-l-lg border border-gray-300 dark:border-gray-700 border-r-0">
+<span class="material-symbols-outlined">search</span>
+</div>
+<input class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-r-lg text-gray-900 dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-gray-300 dark:border-gray-700 bg-background-light dark:bg-background-dark h-full placeholder:text-gray-500 dark:placeholder:text-gray-400 px-4 text-base font-normal leading-normal" placeholder="Buscar por número de orden o nombre de cliente" value="OT-2024-03-152 - Juan Pérez"/>
+</div>
+</label>
+</div>
+<!-- Invoice Details -->
+<div class="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800">
+<h2 class="text-gray-900 dark:text-white text-[22px] font-bold leading-tight tracking-[-0.015em] pb-4">Detalles de la Factura</h2>
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+<label class="flex flex-col">
+<p class="text-gray-900 dark:text-white text-sm font-medium leading-normal pb-2">Número de Factura</p>
+<input class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-gray-900 dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-gray-300 dark:border-gray-700 bg-background-light dark:bg-background-dark h-12 placeholder:text-gray-500 dark:placeholder:text-gray-400 p-3 text-base font-normal leading-normal" value="FACT-2024-0078"/>
+</label>
+<label class="flex flex-col">
+<p class="text-gray-900 dark:text-white text-sm font-medium leading-normal pb-2">Fecha de Emisión</p>
+<input class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-gray-900 dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-gray-300 dark:border-gray-700 bg-background-light dark:bg-background-dark h-12 placeholder:text-gray-500 dark:placeholder:text-gray-400 p-3 text-base font-normal leading-normal" type="date" value="2024-07-26"/>
+</label>
+</div>
+</div>
+<!-- Client Details -->
+<div class="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800">
+<h2 class="text-gray-900 dark:text-white text-[22px] font-bold leading-tight tracking-[-0.015em] pb-4">Información del Cliente</h2>
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-gray-700 dark:text-gray-300">
+<div>
+<p class="font-semibold text-gray-900 dark:text-white">Juan Pérez</p>
+<p>Calle Falsa 123, 28080 Madrid</p>
+<p>+34 600 123 456</p>
+</div>
+<div>
+<p class="font-semibold text-gray-900 dark:text-white">Vehículo</p>
+<p>Toyota Corolla (2022)</p>
+<p>Matrícula: 1234 ABC</p>
+</div>
+</div>
+</div>
+<!-- Line Items -->
+<div class="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800">
+<h2 class="text-gray-900 dark:text-white text-[22px] font-bold leading-tight tracking-[-0.015em] pb-4">Conceptos Facturados</h2>
+<div class="overflow-x-auto">
+<table class="w-full text-sm text-left">
+<thead class="text-xs text-gray-500 dark:text-gray-400 uppercase bg-background-light dark:bg-gray-800">
+<tr>
+<th class="px-4 py-3" scope="col">Descripción</th>
+<th class="px-4 py-3 text-center" scope="col">Cant.</th>
+<th class="px-4 py-3 text-right" scope="col">P. Unitario</th>
+<th class="px-4 py-3 text-right" scope="col">Total</th>
+<th class="px-4 py-3" scope="col"></th>
+</tr>
+</thead>
+<tbody>
+<tr class="border-b dark:border-gray-800">
+<td class="px-4 py-3"><input class="form-input w-full bg-transparent border-0 focus:ring-0 p-0 text-gray-900 dark:text-white" type="text" value="Cambio de aceite y filtro"/></td>
+<td class="px-4 py-3"><input class="form-input w-16 text-center bg-transparent border-0 focus:ring-0 p-0 text-gray-900 dark:text-white" type="number" value="1"/></td>
+<td class="px-4 py-3"><input class="form-input w-24 text-right bg-transparent border-0 focus:ring-0 p-0 text-gray-900 dark:text-white" type="text" value="€75.00"/></td>
+<td class="px-4 py-3 text-right text-gray-900 dark:text-white">€75.00</td>
+<td class="px-4 py-3 text-center"><button class="text-gray-400 hover:text-red-500"><span class="material-symbols-outlined text-base">delete</span></button></td>
+</tr>
+<tr class="border-b dark:border-gray-800">
+<td class="px-4 py-3"><input class="form-input w-full bg-transparent border-0 focus:ring-0 p-0 text-gray-900 dark:text-white" type="text" value="Filtro de aceite Bosch"/></td>
+<td class="px-4 py-3"><input class="form-input w-16 text-center bg-transparent border-0 focus:ring-0 p-0 text-gray-900 dark:text-white" type="number" value="1"/></td>
+<td class="px-4 py-3"><input class="form-input w-24 text-right bg-transparent border-0 focus:ring-0 p-0 text-gray-900 dark:text-white" type="text" value="€15.50"/></td>
+<td class="px-4 py-3 text-right text-gray-900 dark:text-white">€15.50</td>
+<td class="px-4 py-3 text-center"><button class="text-gray-400 hover:text-red-500"><span class="material-symbols-outlined text-base">delete</span></button></td>
+</tr>
+<tr class="border-b dark:border-gray-800">
+<td class="px-4 py-3"><input class="form-input w-full bg-transparent border-0 focus:ring-0 p-0 text-gray-900 dark:text-white" type="text" value="Pastillas de freno delanteras"/></td>
+<td class="px-4 py-3"><input class="form-input w-16 text-center bg-transparent border-0 focus:ring-0 p-0 text-gray-900 dark:text-white" type="number" value="2"/></td>
+<td class="px-4 py-3"><input class="form-input w-24 text-right bg-transparent border-0 focus:ring-0 p-0 text-gray-900 dark:text-white" type="text" value="€45.00"/></td>
+<td class="px-4 py-3 text-right text-gray-900 dark:text-white">€90.00</td>
+<td class="px-4 py-3 text-center"><button class="text-gray-400 hover:text-red-500"><span class="material-symbols-outlined text-base">delete</span></button></td>
+</tr>
+</tbody>
+</table>
+</div>
+<button class="mt-4 px-4 py-2 text-sm font-medium text-primary dark:text-white bg-primary/20 dark:bg-primary/30 rounded-lg hover:bg-primary/30 dark:hover:bg-primary/40 flex items-center gap-2">
+<span class="material-symbols-outlined text-base">add</span>
+                Añadir Concepto
+              </button>
+</div>
+<!-- Notes -->
+<div class="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800">
+<label class="flex flex-col">
+<p class="text-gray-900 dark:text-white text-base font-medium leading-normal pb-2">Notas y Términos de Pago</p>
+<textarea class="form-textarea flex w-full min-w-0 flex-1 resize-y overflow-hidden rounded-lg text-gray-900 dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-gray-300 dark:border-gray-700 bg-background-light dark:bg-background-dark placeholder:text-gray-500 dark:placeholder:text-gray-400 p-3 text-base font-normal leading-normal" placeholder="Ej: Pago a 30 días. Garantía de 3 meses en piezas y mano de obra..." rows="3">Pago requerido a la recepción de la factura. Gracias por su confianza.</textarea>
+</label>
+</div>
+</div>
+<!-- Right Column: Live Preview -->
+<div class="lg:col-span-2">
+<div class="sticky top-8 bg-white dark:bg-gray-900 shadow-lg rounded-xl border border-gray-200 dark:border-gray-800">
+<div class="p-6 border-b border-gray-200 dark:border-gray-800">
+<h3 class="text-lg font-semibold text-gray-900 dark:text-white">Previsualización de Factura</h3>
+</div>
+<div class="p-8 aspect-[210/297] text-sm text-gray-800 dark:text-gray-200">
+<!-- Invoice Preview Content -->
+<div class="flex justify-between items-start mb-8">
+<div>
+<h1 class="text-xl font-bold text-gray-900 dark:text-white">Taller AutoFix</h1>
+<p>Pol. Ind. La Estación, Nave 5</p>
+<p>45001, Toledo</p>
+<p>NIF: B12345678</p>
+</div>
+<div class="text-right">
+<h2 class="text-2xl font-bold text-gray-900 dark:text-white">FACTURA</h2>
+<p class="text-gray-500 dark:text-gray-400">#FACT-2024-0078</p>
+<p>Fecha: 26/07/2024</p>
+</div>
+</div>
+<div class="mb-8">
+<h3 class="font-semibold text-gray-900 dark:text-white border-b pb-1 mb-2">Facturar a:</h3>
+<p>Juan Pérez</p>
+<p>Calle Falsa 123</p>
+<p>28080, Madrid</p>
+</div>
+<table class="w-full mb-8">
+<thead class="bg-gray-100 dark:bg-gray-800">
+<tr>
+<th class="text-left font-semibold p-2">Descripción</th>
+<th class="text-center font-semibold p-2">Cant.</th>
+<th class="text-right font-semibold p-2">P. Unit.</th>
+<th class="text-right font-semibold p-2">Total</th>
+</tr>
+</thead>
+<tbody>
+<tr class="border-b dark:border-gray-800">
+<td class="p-2">Cambio de aceite y filtro</td>
+<td class="text-center p-2">1</td>
+<td class="text-right p-2">€75.00</td>
+<td class="text-right p-2">€75.00</td>
+</tr>
+<tr class="border-b dark:border-gray-800">
+<td class="p-2">Filtro de aceite Bosch</td>
+<td class="text-center p-2">1</td>
+<td class="text-right p-2">€15.50</td>
+<td class="text-right p-2">€15.50</td>
+</tr>
+<tr class="border-b dark:border-gray-800">
+<td class="p-2">Pastillas de freno delanteras</td>
+<td class="text-center p-2">2</td>
+<td class="text-right p-2">€45.00</td>
+<td class="text-right p-2">€90.00</td>
+</tr>
+</tbody>
+</table>
+<div class="flex justify-end">
+<div class="w-1/2">
+<div class="flex justify-between text-gray-700 dark:text-gray-300">
+<p>Subtotal</p>
+<p>€180.50</p>
+</div>
+<div class="flex justify-between text-gray-700 dark:text-gray-300">
+<p>IVA (21%)</p>
+<p>€37.91</p>
+</div>
+<div class="flex justify-between font-bold text-gray-900 dark:text-white mt-2 pt-2 border-t dark:border-gray-700">
+<p>Total a Pagar</p>
+<p>€218.41</p>
+</div>
+</div>
+</div>
+<div class="mt-8 text-xs text-gray-500 dark:text-gray-400">
+<p class="font-semibold">Notas:</p>
+<p>Pago requerido a la recepción de la factura. Gracias por su confianza.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>

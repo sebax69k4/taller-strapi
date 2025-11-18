@@ -1,0 +1,231 @@
+---
+import '../../styles/global.css';
+---
+<!DOCTYPE html>
+
+<html class="light" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Marcar Orden Completa - Taller Veloz</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "primary": "#135bec",
+            "background-light": "#f6f6f8",
+            "background-dark": "#101622",
+          },
+          fontFamily: {
+            "display": ["Inter", "sans-serif"]
+          },
+          borderRadius: {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "full": "9999px"
+          },
+        },
+      },
+    }
+  </script>
+<style>
+    body {
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+  </style>
+</head>
+<body class="font-display bg-background-light dark:bg-background-dark">
+<div class="relative flex h-auto min-h-screen w-full flex-col group/design-root overflow-x-hidden">
+<div class="flex flex-col lg:flex-row h-screen">
+<!-- SideNavBar -->
+<aside class="w-full lg:w-64 bg-white dark:bg-background-dark border-r border-gray-200 dark:border-gray-800 flex-shrink-0">
+<div class="flex h-full flex-col justify-between p-4">
+<div class="flex flex-col gap-4">
+<div class="flex items-center gap-3 px-2">
+<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://cdn.usegalileo.ai/stability/a4b1f6ac-1498-420f-bb19-91ee46e9ce70.png");'></div>
+<div class="flex flex-col">
+<h1 class="text-gray-900 dark:text-gray-100 text-base font-bold leading-normal">Taller Veloz</h1>
+<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Gestión de Taller</p>
+</div>
+</div>
+<div class="flex flex-col gap-2 mt-4">
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/dash_enc">
+<span class="material-symbols-outlined text-gray-500 dark:text-gray-400">dashboard</span>
+<p class="text-sm font-medium leading-normal">Dashboard</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/alert_stock">
+<span class="material-symbols-outlined text-gray-500 dark:text-gray-400">inventory_2</span>
+<p class="text-sm font-medium leading-normal">Alertas Stock</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/asig_orden">
+<span class="material-symbols-outlined text-gray-500 dark:text-gray-400">assignment_ind</span>
+<p class="text-sm font-medium leading-normal">Asignar Orden</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/disp_mec">
+<span class="material-symbols-outlined text-gray-500 dark:text-gray-400">calendar_view_week</span>
+<p class="text-sm font-medium leading-normal">Disponibilidad</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/gen_factura">
+<span class="material-symbols-outlined text-gray-500 dark:text-gray-400">receipt_long</span>
+<p class="text-sm font-medium leading-normal">Generar Factura</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/20 dark:bg-primary/30" href="/encargado/marc_orden">
+<span class="material-symbols-outlined text-primary dark:text-white font-bold">flag</span>
+<p class="text-primary dark:text-white text-sm font-bold leading-normal">Marcar Orden</p>
+</a>
+</div>
+</div>
+<div class="flex flex-col gap-2">
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
+<span class="material-symbols-outlined text-gray-500 dark:text-gray-400">settings</span>
+<p class="text-sm font-medium leading-normal">Configuración</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
+<span class="material-symbols-outlined text-gray-500 dark:text-gray-400">logout</span>
+<p class="text-sm font-medium leading-normal">Cerrar Sesión</p>
+</a>
+</div>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="flex-1 flex flex-col h-screen overflow-y-auto">
+<!-- Top Nav Bar -->
+<header class="flex items-center justify-end whitespace-nowrap border-b border-solid border-gray-200 dark:border-gray-800 px-6 py-3 bg-white dark:bg-background-dark sticky top-0 z-10">
+<div class="flex items-center gap-4">
+<button class="flex items-center justify-center rounded-lg h-10 w-10 hover:bg-gray-100 dark:hover:bg-white/10 text-gray-500 dark:text-gray-400">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="flex items-center justify-center rounded-lg h-10 w-10 hover:bg-gray-100 dark:hover:bg-white/10 text-gray-500 dark:text-gray-400">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" data-alt="User profile picture" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBfywIESnUT5P9I3kzdvZMJEHPNW6YSUAhI8lsK31PXfAKGRb3aBohMJNnEXP0Ay8xKHkxb9AXGCIxnVSADxHiNlyGr9w8mOv17URJ2CcyRzPCBc10EsXwrc5RjhqBQSO-aErbwvtdrxAsRlVqS4sLenTqGGVIWHREXK8x48NwJCSbm8U0iSDcp-F8QOh6q96sphgp9B02N2B8wUnpHyxbOSPQNH73YODJu2ebErCohJ2G9zzDfV37vRFsypGdO291QCX1QkQ28AoJj");'></div>
+</div>
+</header>
+<!-- Page Content -->
+<div class="flex-1 grid grid-cols-1 xl:grid-cols-2 gap-0">
+<!-- Left Panel: Order List -->
+<div class="flex flex-col bg-white dark:bg-background-dark p-6 border-r border-gray-200 dark:border-gray-800">
+<!-- Page Heading -->
+<div class="flex flex-wrap justify-between gap-3 mb-4">
+<div class="flex flex-col gap-1">
+<h1 class="text-gray-900 dark:text-white text-3xl font-bold leading-tight tracking-tight">Finalizar Órdenes de Trabajo</h1>
+<p class="text-gray-500 dark:text-gray-400 text-base font-normal leading-normal">Selecciona una orden para añadir notas y marcarla como 'Lista para Entrega'.</p>
+</div>
+</div>
+<!-- Search Bar -->
+<div class="py-3">
+<label class="flex flex-col w-full">
+<div class="flex w-full flex-1 items-stretch rounded-lg h-12 bg-gray-100 dark:bg-gray-800">
+<div class="text-gray-500 dark:text-gray-400 flex items-center justify-center pl-4">
+<span class="material-symbols-outlined">search</span>
+</div>
+<input class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-gray-900 dark:text-gray-100 focus:outline-0 focus:ring-0 border-none bg-transparent h-full placeholder:text-gray-500 dark:placeholder:text-gray-400 px-2 text-base font-normal" placeholder="Buscar por cliente, vehículo, Nº de orden..." value=""/>
+</div>
+</label>
+</div>
+<!-- Chips / Filters -->
+<div class="flex gap-3 py-3 overflow-x-auto">
+<button class="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-lg bg-gray-100 dark:bg-gray-800 pl-4 pr-3 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700">
+<p class="text-sm font-medium">Filtrar por Estado</p>
+<span class="material-symbols-outlined text-lg">expand_more</span>
+</button>
+<button class="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-lg bg-gray-100 dark:bg-gray-800 pl-4 pr-3 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700">
+<p class="text-sm font-medium">Ordenar por: Fecha</p>
+<span class="material-symbols-outlined text-lg">expand_more</span>
+</button>
+</div>
+<!-- Order List -->
+<div class="flex flex-col gap-3 mt-4 overflow-y-auto pr-2 -mr-2">
+<div class="flex flex-col gap-2 p-4 border rounded-xl bg-primary/10 dark:bg-primary/20 border-primary cursor-pointer">
+<div class="flex justify-between items-start">
+<p class="text-gray-900 dark:text-white font-bold">Orden #84321</p>
+<span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-yellow-500/20 text-yellow-700 dark:bg-yellow-400/30 dark:text-yellow-300">Revisión Final</span>
+</div>
+<p class="text-gray-800 dark:text-gray-200">Juan Pérez - Toyota Camry 2021</p>
+<p class="text-sm text-gray-500 dark:text-gray-400">Actualizado: 22 de Julio, 2024</p>
+</div>
+<div class="flex flex-col gap-2 p-4 border rounded-xl bg-transparent dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer">
+<div class="flex justify-between items-start">
+<p class="text-gray-900 dark:text-white font-bold">Orden #84319</p>
+<span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-green-500/20 text-green-700 dark:bg-green-400/30 dark:text-green-300">Trabajo Terminado</span>
+</div>
+<p class="text-gray-800 dark:text-gray-200">Maria Rodriguez - Honda CRV 2019</p>
+<p class="text-sm text-gray-500 dark:text-gray-400">Actualizado: 22 de Julio, 2024</p>
+</div>
+<div class="flex flex-col gap-2 p-4 border rounded-xl bg-transparent dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer">
+<div class="flex justify-between items-start">
+<p class="text-gray-900 dark:text-white font-bold">Orden #84315</p>
+<span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-green-500/20 text-green-700 dark:bg-green-400/30 dark:text-green-300">Trabajo Terminado</span>
+</div>
+<p class="text-gray-800 dark:text-gray-200">Carlos Gómez - Ford F-150 2022</p>
+<p class="text-sm text-gray-500 dark:text-gray-400">Actualizado: 21 de Julio, 2024</p>
+</div>
+<div class="flex flex-col gap-2 p-4 border rounded-xl bg-transparent dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer">
+<div class="flex justify-between items-start">
+<p class="text-gray-900 dark:text-white font-bold">Orden #84312</p>
+<span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-yellow-500/20 text-yellow-700 dark:bg-yellow-400/30 dark:text-yellow-300">Revisión Final</span>
+</div>
+<p class="text-gray-800 dark:text-gray-200">Laura Fernández - Nissan Sentra 2020</p>
+<p class="text-sm text-gray-500 dark:text-gray-400">Actualizado: 21 de Julio, 2024</p>
+</div>
+</div>
+</div>
+<!-- Right Panel: Order Details -->
+<div class="flex flex-col bg-background-light dark:bg-black/20 p-6 xl:p-8">
+<div class="flex-1 flex flex-col gap-6 max-w-2xl mx-auto w-full">
+<header>
+<h2 class="text-2xl font-bold text-gray-900 dark:text-white">Detalles de la Orden #84321</h2>
+<p class="text-gray-500 dark:text-gray-400 mt-1">Revisión general y cambio de aceite.</p>
+</header>
+<div class="border-t border-gray-200 dark:border-gray-800"></div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+<div>
+<h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Cliente</h3>
+<p class="text-base text-gray-900 dark:text-white mt-1">Juan Pérez</p>
+<p class="text-base text-gray-500 dark:text-gray-300">juan.perez@email.com</p>
+<p class="text-base text-gray-500 dark:text-gray-300">+1 (555) 123-4567</p>
+</div>
+<div>
+<h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Vehículo</h3>
+<p class="text-base text-gray-900 dark:text-white mt-1">Toyota Camry</p>
+<p class="text-base text-gray-500 dark:text-gray-300">Modelo 2021</p>
+<p class="text-base text-gray-500 dark:text-gray-300">VIN: ABC123XYZ456</p>
+</div>
+</div>
+<div>
+<h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Servicios Solicitados</h3>
+<ul class="list-disc list-inside mt-2 text-gray-700 dark:text-gray-300 space-y-1">
+<li>Cambio de aceite y filtro (sintético).</li>
+<li>Rotación de neumáticos.</li>
+<li>Inspección de frenos.</li>
+<li>Revisión de niveles de fluidos.</li>
+</ul>
+</div>
+<div class="flex-1 flex flex-col">
+<label class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2" for="final-notes">Notas Finales / Observaciones Internas</label>
+<textarea class="form-textarea w-full rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-primary focus:border-primary placeholder:text-gray-400 dark:placeholder:text-gray-500" id="final-notes" name="final-notes" placeholder="Añadir comentarios para el cliente o notas para el equipo..." rows="6"></textarea>
+</div>
+<div class="mt-auto pt-6 border-t border-gray-200 dark:border-gray-800 flex flex-col sm:flex-row gap-4">
+<button class="flex-1 flex items-center justify-center gap-2 h-12 px-6 bg-primary text-white rounded-lg text-base font-bold hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 dark:focus:ring-offset-background-dark">
+<span class="material-symbols-outlined">task_alt</span>
+                  Marcar como Lista para Entrega
+                </button>
+<button class="flex-1 sm:flex-none flex items-center justify-center h-12 px-6 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg text-base font-medium hover:bg-gray-300 dark:hover:bg-gray-600">
+                  Cancelar
+                </button>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</div>
+</body></html>
