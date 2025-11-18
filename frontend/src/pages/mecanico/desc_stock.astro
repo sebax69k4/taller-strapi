@@ -1,0 +1,183 @@
+---
+import '../../styles/global.css';
+---
+
+<!DOCTYPE html>
+
+<html class="light" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Descontar Stock - Taller Veloz</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#135bec",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#101622",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display">
+<div class="relative flex min-h-screen w-full">
+<!-- SideNavBar -->
+<aside class="flex w-64 flex-col bg-white dark:bg-gray-900 p-4 border-r border-gray-200 dark:border-gray-800">
+<div class="flex flex-col gap-4">
+<div class="flex items-center gap-3">
+<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://cdn.usegalileo.ai/stability/a4b1f6ac-1498-420f-bb19-91ee46e9ce70.png");'></div>
+<div class="flex flex-col">
+<h1 class="text-gray-900 dark:text-white text-base font-medium leading-normal">Taller Veloz</h1>
+<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Panel Mecánico</p>
+</div>
+</div>
+<nav class="flex flex-col gap-2 mt-4">
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/mecanico/dash_mec">
+<span class="material-symbols-outlined">dashboard</span>
+<p class="text-sm font-medium leading-normal">Mis Órdenes</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/mecanico/detalle_orden_trabajo">
+<span class="material-symbols-outlined">build</span>
+<p class="text-sm font-medium leading-normal">Detalle Orden</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/mecanico/bitacora_repuestos">
+<span class="material-symbols-outlined">inventory</span>
+<p class="text-sm font-medium leading-normal">Bitácora</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/10 text-primary" href="/mecanico/desc_stock">
+<span class="material-symbols-outlined text-primary">check_circle</span>
+<p class="text-sm font-medium leading-normal">Descontar Stock</p>
+</a>
+</nav>
+</div>
+<div class="mt-auto flex flex-col gap-2">
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
+<span class="material-symbols-outlined">settings</span>
+<p class="text-sm font-medium leading-normal">Configuración</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
+<span class="material-symbols-outlined">logout</span>
+<p class="text-sm font-medium leading-normal">Cerrar Sesión</p>
+</a>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="flex-1 p-6 lg:p-8">
+<div class="max-w-5xl mx-auto">
+<!-- PageHeading -->
+<div class="flex flex-wrap justify-between items-start gap-4 p-6 sm:p-8">
+<div class="flex min-w-72 flex-col gap-2">
+<p class="text-gray-900 dark:text-white text-3xl sm:text-4xl font-black leading-tight tracking-[-0.033em]">Actualización de Stock Confirmada</p>
+<p class="text-gray-500 dark:text-gray-400 text-base font-normal leading-normal">Los siguientes repuestos han sido deducidos del inventario para la Orden #4128.</p>
+</div>
+</div>
+<!-- DescriptionList -->
+<div class="px-6 sm:px-8 pb-4">
+<div class="grid grid-cols-1 sm:grid-cols-2">
+<div class="flex flex-col gap-1 border-t border-solid border-gray-200 dark:border-gray-700 py-4 pr-2">
+<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Orden de Trabajo</p>
+<p class="text-gray-900 dark:text-white text-sm font-medium leading-normal">#4128</p>
+</div>
+<div class="flex flex-col gap-1 border-t border-solid border-gray-200 dark:border-gray-700 py-4 sm:pl-2">
+<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Vehículo</p>
+<p class="text-gray-900 dark:text-white text-sm font-medium leading-normal">Toyota Corolla (AB123CD)</p>
+</div>
+<div class="flex flex-col gap-1 border-t border-solid border-gray-200 dark:border-gray-700 py-4 pr-2 col-span-1 sm:col-span-2 sm:pr-[50%]">
+<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Fecha de Actualización</p>
+<p class="text-gray-900 dark:text-white text-sm font-medium leading-normal">24/08/2023</p>
+</div>
+</div>
+</div>
+<!-- SectionHeader -->
+<h2 class="text-gray-900 dark:text-white text-[22px] font-bold leading-tight tracking-[-0.015em] px-6 sm:px-8 pb-3 pt-5">Resumen de Repuestos Utilizados</h2>
+<!-- Table -->
+<div class="px-6 sm:px-8 py-3 @container">
+<div class="flex overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent">
+<table class="w-full">
+<thead class="bg-gray-50 dark:bg-white/5">
+<tr>
+<th class="px-4 py-3 text-left text-gray-600 dark:text-gray-300 w-[40%] text-sm font-medium leading-normal">Repuesto</th>
+<th class="px-4 py-3 text-left text-gray-600 dark:text-gray-300 w-[15%] text-sm font-medium leading-normal">Utilizada</th>
+<th class="px-4 py-3 text-left text-gray-600 dark:text-gray-300 w-[15%] text-sm font-medium leading-normal">Anterior</th>
+<th class="px-4 py-3 text-left text-gray-600 dark:text-gray-300 w-[15%] text-sm font-medium leading-normal">Actual</th>
+<th class="px-4 py-3 text-left text-gray-600 dark:text-gray-300 w-[15%] text-sm font-medium leading-normal">Estado</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+<tr class="dark:hover:bg-white/5">
+<td class="h-[72px] px-4 py-2 text-gray-900 dark:text-white text-sm font-normal leading-normal">Filtro de Aceite (SKU: 51334)</td>
+<td class="h-[72px] px-4 py-2 text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">1</td>
+<td class="h-[72px] px-4 py-2 text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">30</td>
+<td class="h-[72px] px-4 py-2 text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">29</td>
+<td class="h-[72px] px-4 py-2 text-sm font-medium leading-normal">
+<div class="flex items-center gap-2 text-green-600 dark:text-green-400">
+<span class="material-symbols-outlined text-base">check_circle</span>
+<span>Deducido</span>
+</div>
+</td>
+</tr>
+<tr class="dark:hover:bg-white/5">
+<td class="h-[72px] px-4 py-2 text-gray-900 dark:text-white text-sm font-normal leading-normal">Pastillas de Freno (SKU: D1044)</td>
+<td class="h-[72px] px-4 py-2 text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">2</td>
+<td class="h-[72px] px-4 py-2 text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">15</td>
+<td class="h-[72px] px-4 py-2 text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">13</td>
+<td class="h-[72px] px-4 py-2 text-sm font-medium leading-normal">
+<div class="flex items-center gap-2 text-green-600 dark:text-green-400">
+<span class="material-symbols-outlined text-base">check_circle</span>
+<span>Deducido</span>
+</div>
+</td>
+</tr>
+<tr class="dark:hover:bg-white/5">
+<td class="h-[72px] px-4 py-2 text-gray-900 dark:text-white text-sm font-normal leading-normal">Bujía (SKU: BKR6E-11)</td>
+<td class="h-[72px] px-4 py-2 text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">4</td>
+<td class="h-[72px] px-4 py-2 text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">5</td>
+<td class="h-[72px] px-4 py-2 text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">1</td>
+<td class="h-[72px] px-4 py-2 text-sm font-medium leading-normal">
+<div class="flex items-center gap-2 text-orange-500 dark:text-orange-400">
+<span class="material-symbols-outlined text-base">warning</span>
+<span>Stock Bajo</span>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- ButtonGroup -->
+<div class="flex justify-stretch mt-4">
+<div class="flex flex-1 gap-3 flex-wrap px-6 sm:px-8 py-6 justify-end border-t border-gray-200 dark:border-gray-700">
+<button class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 px-5 bg-gray-100 dark:bg-white/10 text-gray-900 dark:text-white text-base font-bold leading-normal tracking-[0.015em] hover:bg-gray-200 dark:hover:bg-white/20">
+<span class="truncate">Imprimir Resumen</span>
+</button>
+<button class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 px-5 bg-primary text-white text-base font-bold leading-normal tracking-[0.015em] hover:bg-primary/90">
+<span class="truncate">Aceptar</span>
+</button>
+</div>
+</div>
+</div>
+</main>
+</div>
+</div>
+</body></html>
