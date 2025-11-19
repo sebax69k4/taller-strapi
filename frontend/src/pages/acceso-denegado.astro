@@ -1,0 +1,38 @@
+---
+import '../styles/global.css';
+
+// Este script podría eliminar la cookie de sesión si existe
+Astro.cookies.delete('jwt', { path: '/' });
+---
+
+<!DOCTYPE html>
+<html lang="es" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acceso Denegado - Taller Veloz</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
+</head>
+<body class="font-display bg-background-light dark:bg-background-dark text-text-light dark:text-text-dark">
+    <div class="flex items-center justify-center min-h-screen px-4">
+        <div class="w-full max-w-md p-8 text-center space-y-6 bg-surface-light dark:bg-surface-dark rounded-xl shadow-lg border border-border-light dark:border-border-dark">
+            <div class="flex flex-col items-center space-y-4">
+                <span class="material-symbols-outlined text-7xl text-red-500">
+                    lock
+                </span>
+                <h1 class="text-3xl font-black text-gray-900 dark:text-white">Acceso Denegado</h1>
+                <p class="text-neutral-gray-light dark:text-neutral-gray-dark">No tienes los permisos necesarios para acceder a esta página.</p>
+            </div>
+            <div>
+                <a href="/login" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-colors">
+                    Volver al Login
+                </a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

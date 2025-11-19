@@ -1,5 +1,70 @@
 ---
 import '../styles/global.css';
+
+let errorMessage = '';
+
+if (Astro.request.method === 'POST') {
+  try {
+    const formData = await Astro.request.formData();
+    const email = formData.get('email');
+    const password = formData.get('password');
+
+    // 1. Autenticar contra Strapi
+    const authResponse = await fetch('http://localhost:1337/api/auth/local', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier: email, password }),
+    });
+
+    if (!authResponse.ok) {
+      const errorData = await authResponse.json();
+      throw new Error(errorData.error?.message || 'Credenciales inválidas');
+    }
+
+    const { jwt } = await authResponse.json();
+
+    // 2. Guardar el JWT en una cookie segura
+    Astro.cookies.set('jwt', jwt, {
+      path: '/',
+      httpOnly: true,
+      secure: !import.meta.env.DEV, // secure en producción
+      maxAge: 60 * 60 * 24 * 30 // 30 días
+    });
+
+    // 3. Obtener el rol del usuario para la redirección
+    const meResponse = await fetch('http://localhost:1337/api/users/me?populate=role', {
+        headers: { 'Authorization': `Bearer ${jwt}` }
+    });
+
+    if (!meResponse.ok) {
+        throw new Error('No se pudo obtener la información del usuario.');
+    }
+
+    const user = await meResponse.json();
+    const userRole = user.role?.name;
+
+    // 4. Redirigir según el rol
+    const roleRedirects: Record<string, string> = {
+      'Recepcionista': '/recepcion/dash_recep',
+      'Encargado': '/encargado/dash_enc',
+      'Mecanico': '/mecanico/dash_mec',
+    };
+
+    const redirectUrl = roleRedirects[userRole];
+
+    if (redirectUrl) {
+      return Astro.redirect(redirectUrl);
+    } else {
+      // Si el rol no está en la lista, redirigir a una página de error o login
+      throw new Error('Rol no autorizado para acceder al sistema.');
+    }
+
+  } catch (error) {
+    errorMessage = error instanceof Error ? error.message : 'Ocurrió un error inesperado.';
+    // Borrar la cookie si algo falló
+    Astro.cookies.delete('jwt', { path: '/' });
+  }
+}
 ---
 
 <!DOCTYPE html>
@@ -21,7 +86,14 @@ import '../styles/global.css';
                 <h1 class="text-3xl font-black text-gray-900 dark:text-white">Iniciar Sesión</h1>
                 <p class="text-neutral-gray-light dark:text-neutral-gray-dark">Ingresa a tu cuenta para continuar</p>
             </div>
-            <form class="space-y-6" action="#" method="POST">
+
+            {errorMessage && (
+                <div class="p-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-gray-800 dark:text-red-400" role="alert">
+                    <span class="font-medium">Error:</span> {errorMessage}
+                </div>
+            )}
+
+            <form class="space-y-6" method="POST">
                 <div>
                     <label for="email" class="text-sm font-medium text-gray-700 dark:text-gray-300">Correo Electrónico</label>
                     <div class="mt-1">
