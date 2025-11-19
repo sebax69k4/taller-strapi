@@ -25,6 +25,24 @@
       "relation": "oneToMany",
       "target": "api::servicio.servicio",
       "mappedBy": "mecenico"
+    },
+    "orden_de_trabajos": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::orden-de-trabajo.orden-de-trabajo",
+      "mappedBy": "mecanico"
+    },
+    "zona_asignada": {
+      "type": "string"
+    },
+    "estado": {
+      "type": "enumeration",
+      "enum": [
+        "\"disponible\", \"ocupado\", \"descanso\", \"ausente\""
+      ]
+    },
+    "ordenes_activas": {
+      "type": "integer"
     }
   }
 }

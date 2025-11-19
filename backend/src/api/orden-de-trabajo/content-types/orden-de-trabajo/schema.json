@@ -1,0 +1,49 @@
+{
+  "kind": "collectionType",
+  "collectionName": "orden_de_trabajos",
+  "info": {
+    "singularName": "orden-de-trabajo",
+    "pluralName": "orden-de-trabajos",
+    "displayName": "orden de trabajo"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "fecha_ingreso": {
+      "type": "date",
+      "required": true
+    },
+    "fecha_estimada": {
+      "type": "date"
+    },
+    "fecha_entrega": {
+      "type": "date"
+    },
+    "estado": {
+      "type": "enumeration",
+      "enum": [
+        " \"ingresado\", \"en_diagnostico\", \"en_reparacion\", \"finalizado\", \"entregado\""
+      ]
+    },
+    "descripcion": {
+      "type": "text"
+    },
+    "diagnostico": {
+      "type": "text"
+    },
+    "vehiculo": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::vehiculo.vehiculo",
+      "inversedBy": "orden_de_trabajos"
+    },
+    "mecanico": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::mecenico.mecenico",
+      "inversedBy": "orden_de_trabajos"
+    }
+  }
+}

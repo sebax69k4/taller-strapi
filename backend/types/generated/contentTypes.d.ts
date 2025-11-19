@@ -483,6 +483,9 @@ export interface ApiMecenicoMecenico extends Struct.CollectionTypeSchema {
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
     especialidad: Schema.Attribute.String;
+    estado: Schema.Attribute.Enumeration<
+      ['"disponible", "ocupado", "descanso", "ausente"']
+    >;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
       'oneToMany',
@@ -490,11 +493,57 @@ export interface ApiMecenicoMecenico extends Struct.CollectionTypeSchema {
     > &
       Schema.Attribute.Private;
     nombre: Schema.Attribute.String;
+    orden_de_trabajos: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::orden-de-trabajo.orden-de-trabajo'
+    >;
+    ordenes_activas: Schema.Attribute.Integer;
     publishedAt: Schema.Attribute.DateTime;
     servicios: Schema.Attribute.Relation<'oneToMany', 'api::servicio.servicio'>;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    zona_asignada: Schema.Attribute.String;
+  };
+}
+
+export interface ApiOrdenDeTrabajoOrdenDeTrabajo
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'orden_de_trabajos';
+  info: {
+    displayName: 'orden de trabajo';
+    pluralName: 'orden-de-trabajos';
+    singularName: 'orden-de-trabajo';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    descripcion: Schema.Attribute.Text;
+    diagnostico: Schema.Attribute.Text;
+    estado: Schema.Attribute.Enumeration<
+      [
+        ' "ingresado", "en_diagnostico", "en_reparacion", "finalizado", "entregado"',
+      ]
+    >;
+    fecha_entrega: Schema.Attribute.Date;
+    fecha_estimada: Schema.Attribute.Date;
+    fecha_ingreso: Schema.Attribute.Date & Schema.Attribute.Required;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::orden-de-trabajo.orden-de-trabajo'
+    > &
+      Schema.Attribute.Private;
+    mecanico: Schema.Attribute.Relation<'manyToOne', 'api::mecenico.mecenico'>;
+    publishedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    vehiculo: Schema.Attribute.Relation<'manyToOne', 'api::vehiculo.vehiculo'>;
   };
 }
 
@@ -521,9 +570,16 @@ export interface ApiRepuestoRepuesto extends Struct.CollectionTypeSchema {
       Schema.Attribute.Private;
     nombre: Schema.Attribute.String;
     precio: Schema.Attribute.Decimal;
+    proveedor: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;
+    servicios: Schema.Attribute.Relation<
+      'manyToMany',
+      'api::servicio.servicio'
+    >;
     sku: Schema.Attribute.String;
     stock: Schema.Attribute.Integer;
+    stock_minimo: Schema.Attribute.Integer;
+    ubicacion: Schema.Attribute.String;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -559,6 +615,10 @@ export interface ApiServicioServicio extends Struct.CollectionTypeSchema {
       Schema.Attribute.Private;
     mecenico: Schema.Attribute.Relation<'manyToOne', 'api::mecenico.mecenico'>;
     publishedAt: Schema.Attribute.DateTime;
+    repuestos: Schema.Attribute.Relation<
+      'manyToMany',
+      'api::repuesto.repuesto'
+    >;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -591,6 +651,10 @@ export interface ApiVehiculoVehiculo extends Struct.CollectionTypeSchema {
     marca: Schema.Attribute.String;
     modelo: Schema.Attribute.String;
     numero_de_chasis: Schema.Attribute.String;
+    orden_de_trabajos: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::orden-de-trabajo.orden-de-trabajo'
+    >;
     patente: Schema.Attribute.String &
       Schema.Attribute.Required &
       Schema.Attribute.Unique;
@@ -1113,6 +1177,7 @@ declare module '@strapi/strapi' {
       'admin::user': AdminUser;
       'api::cliente.cliente': ApiClienteCliente;
       'api::mecenico.mecenico': ApiMecenicoMecenico;
+      'api::orden-de-trabajo.orden-de-trabajo': ApiOrdenDeTrabajoOrdenDeTrabajo;
       'api::repuesto.repuesto': ApiRepuestoRepuesto;
       'api::servicio.servicio': ApiServicioServicio;
       'api::vehiculo.vehiculo': ApiVehiculoVehiculo;

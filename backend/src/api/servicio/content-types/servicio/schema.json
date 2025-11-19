@@ -39,6 +39,12 @@
       "relation": "manyToOne",
       "target": "api::mecenico.mecenico",
       "inversedBy": "servicios"
+    },
+    "repuestos": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::repuesto.repuesto",
+      "mappedBy": "servicios"
     }
   }
 }

@@ -33,6 +33,12 @@
       "relation": "manyToOne",
       "target": "api::cliente.cliente",
       "inversedBy": "vehiculos"
+    },
+    "orden_de_trabajos": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::orden-de-trabajo.orden-de-trabajo",
+      "mappedBy": "vehiculo"
     }
   }
 }

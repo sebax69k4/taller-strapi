@@ -25,6 +25,21 @@
     },
     "precio": {
       "type": "decimal"
+    },
+    "servicios": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::servicio.servicio",
+      "inversedBy": "repuestos"
+    },
+    "stock_minimo": {
+      "type": "integer"
+    },
+    "proveedor": {
+      "type": "string"
+    },
+    "ubicacion": {
+      "type": "string"
     }
   }
 }
