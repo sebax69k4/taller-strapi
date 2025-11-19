@@ -39,6 +39,12 @@
       "relation": "oneToMany",
       "target": "api::orden-de-trabajo.orden-de-trabajo",
       "mappedBy": "vehiculo"
+    },
+    "mecanico": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::mecenico.mecenico",
+      "inversedBy": "vehiculos"
     }
   }
 }

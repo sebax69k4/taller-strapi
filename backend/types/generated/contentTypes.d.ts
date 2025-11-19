@@ -577,6 +577,7 @@ export interface ApiMecenicoMecenico extends Struct.CollectionTypeSchema {
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    vehiculos: Schema.Attribute.Relation<'oneToMany', 'api::vehiculo.vehiculo'>;
     zona: Schema.Attribute.Relation<'manyToOne', 'api::zona.zona'>;
     zona_asignada: Schema.Attribute.String;
     zonas: Schema.Attribute.Relation<'oneToMany', 'api::zona.zona'>;
@@ -779,6 +780,7 @@ export interface ApiVehiculoVehiculo extends Struct.CollectionTypeSchema {
     > &
       Schema.Attribute.Private;
     marca: Schema.Attribute.String;
+    mecanico: Schema.Attribute.Relation<'manyToOne', 'api::mecenico.mecenico'>;
     modelo: Schema.Attribute.String;
     numero_de_chasis: Schema.Attribute.String;
     orden_de_trabajos: Schema.Attribute.Relation<

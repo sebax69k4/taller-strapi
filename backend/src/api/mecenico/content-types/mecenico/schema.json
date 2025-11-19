@@ -64,6 +64,12 @@
       "relation": "oneToMany",
       "target": "api::bitacora.bitacora",
       "mappedBy": "mecanico"
+    },
+    "vehiculos": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::vehiculo.vehiculo",
+      "mappedBy": "mecanico"
     }
   }
 }
