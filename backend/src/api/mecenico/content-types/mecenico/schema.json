@@ -43,6 +43,21 @@
     },
     "ordenes_activas": {
       "type": "integer"
+    },
+    "zona": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::zona.zona",
+      "inversedBy": "mecanicos"
+    },
+    "email": {
+      "type": "email"
+    },
+    "zonas": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::zona.zona",
+      "mappedBy": "mecanico"
     }
   }
 }

@@ -1,0 +1,39 @@
+{
+  "kind": "collectionType",
+  "collectionName": "presupuestos",
+  "info": {
+    "singularName": "presupuesto",
+    "pluralName": "presupuestos",
+    "displayName": "presupuesto"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "fecha_generacion": {
+      "type": "datetime"
+    },
+    "descripcion": {
+      "type": "string"
+    },
+    "monto_total": {
+      "type": "decimal"
+    },
+    "estado_aprobacion": {
+      "type": "enumeration",
+      "enum": [
+        "pendiente",
+        "aprobado",
+        "rechazado",
+        "default:pendiente"
+      ]
+    },
+    "ordenes_trabajo": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::ordenes-trabajo.ordenes-trabajo",
+      "inversedBy": "presupuesto"
+    }
+  }
+}

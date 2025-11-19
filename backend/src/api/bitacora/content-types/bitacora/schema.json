@@ -1,0 +1,29 @@
+{
+  "kind": "collectionType",
+  "collectionName": "bitacoras",
+  "info": {
+    "singularName": "bitacora",
+    "pluralName": "bitacoras",
+    "displayName": "bitacora"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "fecha": {
+      "type": "date",
+      "required": true
+    },
+    "procedimientos": {
+      "type": "string",
+      "required": true
+    },
+    "tiempo": {
+      "type": "decimal"
+    },
+    "observaciones": {
+      "type": "string"
+    }
+  }
+}

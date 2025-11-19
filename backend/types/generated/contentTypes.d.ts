@@ -430,6 +430,37 @@ export interface AdminUser extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiBitacoraBitacora extends Struct.CollectionTypeSchema {
+  collectionName: 'bitacoras';
+  info: {
+    displayName: 'bitacora';
+    pluralName: 'bitacoras';
+    singularName: 'bitacora';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    fecha: Schema.Attribute.Date & Schema.Attribute.Required;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::bitacora.bitacora'
+    > &
+      Schema.Attribute.Private;
+    observaciones: Schema.Attribute.String;
+    procedimientos: Schema.Attribute.String & Schema.Attribute.Required;
+    publishedAt: Schema.Attribute.DateTime;
+    tiempo: Schema.Attribute.Decimal;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiClienteCliente extends Struct.CollectionTypeSchema {
   collectionName: 'clientes';
   info: {
@@ -467,6 +498,42 @@ export interface ApiClienteCliente extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiFacturaFactura extends Struct.CollectionTypeSchema {
+  collectionName: 'facturas';
+  info: {
+    displayName: 'factura';
+    pluralName: 'facturas';
+    singularName: 'factura';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    fecha_emision: Schema.Attribute.Date & Schema.Attribute.Required;
+    iva: Schema.Attribute.Decimal & Schema.Attribute.Required;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::factura.factura'
+    > &
+      Schema.Attribute.Private;
+    numero_factura: Schema.Attribute.String & Schema.Attribute.Unique;
+    ordenes_trabajo: Schema.Attribute.Relation<
+      'oneToOne',
+      'api::ordenes-trabajo.ordenes-trabajo'
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    subtotal: Schema.Attribute.Decimal & Schema.Attribute.Required;
+    total: Schema.Attribute.Decimal & Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiMecenicoMecenico extends Struct.CollectionTypeSchema {
   collectionName: 'mecenicos';
   info: {
@@ -482,6 +549,7 @@ export interface ApiMecenicoMecenico extends Struct.CollectionTypeSchema {
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    email: Schema.Attribute.Email;
     especialidad: Schema.Attribute.String;
     estado: Schema.Attribute.Enumeration<
       ['"disponible", "ocupado", "descanso", "ausente"']
@@ -503,7 +571,9 @@ export interface ApiMecenicoMecenico extends Struct.CollectionTypeSchema {
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    zona: Schema.Attribute.Relation<'manyToOne', 'api::zona.zona'>;
     zona_asignada: Schema.Attribute.String;
+    zonas: Schema.Attribute.Relation<'oneToMany', 'api::zona.zona'>;
   };
 }
 
@@ -544,6 +614,87 @@ export interface ApiOrdenDeTrabajoOrdenDeTrabajo
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
     vehiculo: Schema.Attribute.Relation<'manyToOne', 'api::vehiculo.vehiculo'>;
+    zona: Schema.Attribute.Relation<'manyToOne', 'api::zona.zona'>;
+  };
+}
+
+export interface ApiOrdenesTrabajoOrdenesTrabajo
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'ordenes_trabajos';
+  info: {
+    displayName: 'ordenes_trabajo';
+    pluralName: 'ordenes-trabajos';
+    singularName: 'ordenes-trabajo';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    estado: Schema.Attribute.Enumeration<
+      [
+        'ingresado',
+        'en_diagnostico',
+        'en_raparacion',
+        'finalizado',
+        'entregado',
+      ]
+    >;
+    factura: Schema.Attribute.Relation<'oneToOne', 'api::factura.factura'>;
+    fecha_ingreso: Schema.Attribute.Date;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::ordenes-trabajo.ordenes-trabajo'
+    > &
+      Schema.Attribute.Private;
+    presupuesto: Schema.Attribute.Relation<
+      'oneToOne',
+      'api::presupuesto.presupuesto'
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiPresupuestoPresupuesto extends Struct.CollectionTypeSchema {
+  collectionName: 'presupuestos';
+  info: {
+    displayName: 'presupuesto';
+    pluralName: 'presupuestos';
+    singularName: 'presupuesto';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    descripcion: Schema.Attribute.String;
+    estado_aprobacion: Schema.Attribute.Enumeration<
+      ['pendiente', 'aprobado', 'rechazado', 'default:pendiente']
+    >;
+    fecha_generacion: Schema.Attribute.DateTime;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::presupuesto.presupuesto'
+    > &
+      Schema.Attribute.Private;
+    monto_total: Schema.Attribute.Decimal;
+    ordenes_trabajo: Schema.Attribute.Relation<
+      'oneToOne',
+      'api::ordenes-trabajo.ordenes-trabajo'
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
   };
 }
 
@@ -658,6 +809,37 @@ export interface ApiVehiculoVehiculo extends Struct.CollectionTypeSchema {
     patente: Schema.Attribute.String &
       Schema.Attribute.Required &
       Schema.Attribute.Unique;
+    publishedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiZonaZona extends Struct.CollectionTypeSchema {
+  collectionName: 'zonas';
+  info: {
+    displayName: 'zona';
+    pluralName: 'zonas';
+    singularName: 'zona';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<'oneToMany', 'api::zona.zona'> &
+      Schema.Attribute.Private;
+    mecanico: Schema.Attribute.Relation<'manyToOne', 'api::mecenico.mecenico'>;
+    mecanicos: Schema.Attribute.Relation<'oneToMany', 'api::mecenico.mecenico'>;
+    nombre: Schema.Attribute.String;
+    orden_de_trabajos: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::orden-de-trabajo.orden-de-trabajo'
+    >;
     publishedAt: Schema.Attribute.DateTime;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
@@ -1175,12 +1357,17 @@ declare module '@strapi/strapi' {
       'admin::transfer-token': AdminTransferToken;
       'admin::transfer-token-permission': AdminTransferTokenPermission;
       'admin::user': AdminUser;
+      'api::bitacora.bitacora': ApiBitacoraBitacora;
       'api::cliente.cliente': ApiClienteCliente;
+      'api::factura.factura': ApiFacturaFactura;
       'api::mecenico.mecenico': ApiMecenicoMecenico;
       'api::orden-de-trabajo.orden-de-trabajo': ApiOrdenDeTrabajoOrdenDeTrabajo;
+      'api::ordenes-trabajo.ordenes-trabajo': ApiOrdenesTrabajoOrdenesTrabajo;
+      'api::presupuesto.presupuesto': ApiPresupuestoPresupuesto;
       'api::repuesto.repuesto': ApiRepuestoRepuesto;
       'api::servicio.servicio': ApiServicioServicio;
       'api::vehiculo.vehiculo': ApiVehiculoVehiculo;
+      'api::zona.zona': ApiZonaZona;
       'plugin::content-releases.release': PluginContentReleasesRelease;
       'plugin::content-releases.release-action': PluginContentReleasesReleaseAction;
       'plugin::i18n.locale': PluginI18NLocale;

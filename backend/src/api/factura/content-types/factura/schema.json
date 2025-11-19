@@ -1,0 +1,41 @@
+{
+  "kind": "collectionType",
+  "collectionName": "facturas",
+  "info": {
+    "singularName": "factura",
+    "pluralName": "facturas",
+    "displayName": "factura"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "numero_factura": {
+      "type": "string",
+      "unique": true
+    },
+    "fecha_emision": {
+      "type": "date",
+      "required": true
+    },
+    "subtotal": {
+      "type": "decimal",
+      "required": true
+    },
+    "iva": {
+      "type": "decimal",
+      "required": true
+    },
+    "total": {
+      "type": "decimal",
+      "required": true
+    },
+    "ordenes_trabajo": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::ordenes-trabajo.ordenes-trabajo",
+      "inversedBy": "factura"
+    }
+  }
+}

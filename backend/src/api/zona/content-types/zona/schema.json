@@ -1,0 +1,36 @@
+{
+  "kind": "collectionType",
+  "collectionName": "zonas",
+  "info": {
+    "singularName": "zona",
+    "pluralName": "zonas",
+    "displayName": "zona"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "nombre": {
+      "type": "string"
+    },
+    "orden_de_trabajos": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::orden-de-trabajo.orden-de-trabajo",
+      "mappedBy": "zona"
+    },
+    "mecanicos": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::mecenico.mecenico",
+      "mappedBy": "zona"
+    },
+    "mecanico": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::mecenico.mecenico",
+      "inversedBy": "zonas"
+    }
+  }
+}

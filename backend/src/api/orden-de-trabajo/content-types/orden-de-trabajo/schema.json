@@ -44,6 +44,12 @@
       "relation": "manyToOne",
       "target": "api::mecenico.mecenico",
       "inversedBy": "orden_de_trabajos"
+    },
+    "zona": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::zona.zona",
+      "inversedBy": "orden_de_trabajos"
     }
   }
 }

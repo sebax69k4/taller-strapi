@@ -1,0 +1,40 @@
+{
+  "kind": "collectionType",
+  "collectionName": "ordenes_trabajos",
+  "info": {
+    "singularName": "ordenes-trabajo",
+    "pluralName": "ordenes-trabajos",
+    "displayName": "ordenes_trabajo"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "fecha_ingreso": {
+      "type": "date"
+    },
+    "estado": {
+      "type": "enumeration",
+      "enum": [
+        "ingresado",
+        "en_diagnostico",
+        "en_raparacion",
+        "finalizado",
+        "entregado"
+      ]
+    },
+    "presupuesto": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::presupuesto.presupuesto",
+      "mappedBy": "ordenes_trabajo"
+    },
+    "factura": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::factura.factura",
+      "mappedBy": "ordenes_trabajo"
+    }
+  }
+}
