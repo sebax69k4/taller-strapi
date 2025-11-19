@@ -521,9 +521,9 @@ export interface ApiFacturaFactura extends Struct.CollectionTypeSchema {
     > &
       Schema.Attribute.Private;
     numero_factura: Schema.Attribute.String & Schema.Attribute.Unique;
-    ordenes_trabajo: Schema.Attribute.Relation<
+    orden_de_trabajo: Schema.Attribute.Relation<
       'oneToOne',
-      'api::ordenes-trabajo.ordenes-trabajo'
+      'api::orden-de-trabajo.orden-de-trabajo'
     >;
     publishedAt: Schema.Attribute.DateTime;
     subtotal: Schema.Attribute.Decimal & Schema.Attribute.Required;
@@ -599,6 +599,7 @@ export interface ApiOrdenDeTrabajoOrdenDeTrabajo
         ' "ingresado", "en_diagnostico", "en_reparacion", "finalizado", "entregado"',
       ]
     >;
+    factura: Schema.Attribute.Relation<'oneToOne', 'api::factura.factura'>;
     fecha_entrega: Schema.Attribute.Date;
     fecha_estimada: Schema.Attribute.Date;
     fecha_ingreso: Schema.Attribute.Date & Schema.Attribute.Required;
@@ -609,47 +610,6 @@ export interface ApiOrdenDeTrabajoOrdenDeTrabajo
     > &
       Schema.Attribute.Private;
     mecanico: Schema.Attribute.Relation<'manyToOne', 'api::mecenico.mecenico'>;
-    publishedAt: Schema.Attribute.DateTime;
-    updatedAt: Schema.Attribute.DateTime;
-    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
-      Schema.Attribute.Private;
-    vehiculo: Schema.Attribute.Relation<'manyToOne', 'api::vehiculo.vehiculo'>;
-    zona: Schema.Attribute.Relation<'manyToOne', 'api::zona.zona'>;
-  };
-}
-
-export interface ApiOrdenesTrabajoOrdenesTrabajo
-  extends Struct.CollectionTypeSchema {
-  collectionName: 'ordenes_trabajos';
-  info: {
-    displayName: 'ordenes_trabajo';
-    pluralName: 'ordenes-trabajos';
-    singularName: 'ordenes-trabajo';
-  };
-  options: {
-    draftAndPublish: true;
-  };
-  attributes: {
-    createdAt: Schema.Attribute.DateTime;
-    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
-      Schema.Attribute.Private;
-    estado: Schema.Attribute.Enumeration<
-      [
-        'ingresado',
-        'en_diagnostico',
-        'en_raparacion',
-        'finalizado',
-        'entregado',
-      ]
-    >;
-    factura: Schema.Attribute.Relation<'oneToOne', 'api::factura.factura'>;
-    fecha_ingreso: Schema.Attribute.Date;
-    locale: Schema.Attribute.String & Schema.Attribute.Private;
-    localizations: Schema.Attribute.Relation<
-      'oneToMany',
-      'api::ordenes-trabajo.ordenes-trabajo'
-    > &
-      Schema.Attribute.Private;
     presupuesto: Schema.Attribute.Relation<
       'oneToOne',
       'api::presupuesto.presupuesto'
@@ -658,6 +618,8 @@ export interface ApiOrdenesTrabajoOrdenesTrabajo
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    vehiculo: Schema.Attribute.Relation<'manyToOne', 'api::vehiculo.vehiculo'>;
+    zona: Schema.Attribute.Relation<'manyToOne', 'api::zona.zona'>;
   };
 }
 
@@ -687,9 +649,9 @@ export interface ApiPresupuestoPresupuesto extends Struct.CollectionTypeSchema {
     > &
       Schema.Attribute.Private;
     monto_total: Schema.Attribute.Decimal;
-    ordenes_trabajo: Schema.Attribute.Relation<
+    orden_de_trabajo: Schema.Attribute.Relation<
       'oneToOne',
-      'api::ordenes-trabajo.ordenes-trabajo'
+      'api::orden-de-trabajo.orden-de-trabajo'
     >;
     publishedAt: Schema.Attribute.DateTime;
     updatedAt: Schema.Attribute.DateTime;
@@ -729,7 +691,9 @@ export interface ApiRepuestoRepuesto extends Struct.CollectionTypeSchema {
     >;
     sku: Schema.Attribute.String;
     stock: Schema.Attribute.Integer;
-    stock_minimo: Schema.Attribute.Integer;
+    stock_minimo: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<5>;
     ubicacion: Schema.Attribute.String;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
@@ -1362,7 +1326,6 @@ declare module '@strapi/strapi' {
       'api::factura.factura': ApiFacturaFactura;
       'api::mecenico.mecenico': ApiMecenicoMecenico;
       'api::orden-de-trabajo.orden-de-trabajo': ApiOrdenDeTrabajoOrdenDeTrabajo;
-      'api::ordenes-trabajo.ordenes-trabajo': ApiOrdenesTrabajoOrdenesTrabajo;
       'api::presupuesto.presupuesto': ApiPresupuestoPresupuesto;
       'api::repuesto.repuesto': ApiRepuestoRepuesto;
       'api::servicio.servicio': ApiServicioServicio;

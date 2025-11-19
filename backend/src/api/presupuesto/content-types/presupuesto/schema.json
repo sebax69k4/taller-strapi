@@ -29,11 +29,11 @@
         "default:pendiente"
       ]
     },
-    "ordenes_trabajo": {
+    "orden_de_trabajo": {
       "type": "relation",
       "relation": "oneToOne",
-      "target": "api::ordenes-trabajo.ordenes-trabajo",
-      "inversedBy": "presupuesto"
+      "target": "api::orden-de-trabajo.orden-de-trabajo",
+      "mappedBy": "presupuesto"
     }
   }
 }

@@ -31,10 +31,10 @@
       "type": "decimal",
       "required": true
     },
-    "ordenes_trabajo": {
+    "orden_de_trabajo": {
       "type": "relation",
       "relation": "oneToOne",
-      "target": "api::ordenes-trabajo.ordenes-trabajo",
+      "target": "api::orden-de-trabajo.orden-de-trabajo",
       "inversedBy": "factura"
     }
   }

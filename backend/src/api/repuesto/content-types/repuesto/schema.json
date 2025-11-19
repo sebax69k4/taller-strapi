@@ -33,7 +33,9 @@
       "inversedBy": "repuestos"
     },
     "stock_minimo": {
-      "type": "integer"
+      "type": "integer",
+      "required": true,
+      "default": 5
     },
     "proveedor": {
       "type": "string"

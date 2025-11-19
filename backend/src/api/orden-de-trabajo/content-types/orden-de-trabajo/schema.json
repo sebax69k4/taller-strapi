@@ -50,6 +50,18 @@
       "relation": "manyToOne",
       "target": "api::zona.zona",
       "inversedBy": "orden_de_trabajos"
+    },
+    "presupuesto": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::presupuesto.presupuesto",
+      "inversedBy": "orden_de_trabajo"
+    },
+    "factura": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "api::factura.factura",
+      "mappedBy": "orden_de_trabajo"
     }
   }
 }
