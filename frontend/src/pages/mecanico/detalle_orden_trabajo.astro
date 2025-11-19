@@ -1,5 +1,148 @@
 ---
-import '../../styles/global.css';           
+import '../../styles/global.css';
+
+const jwt = Astro.cookies.get('jwt')?.value;
+if (!jwt) {
+  return Astro.redirect('/login');
+}
+
+// Define interfaces for type safety
+interface Vehiculo {
+  marca: string;
+  modelo: string;
+  anio: number;
+  patente: string;
+  cliente?: {
+    data?: {
+      attributes: {
+        nombre: string;
+        apellido: string;
+        telefono: string;
+        email: string;
+      }
+    }
+  }
+}
+
+interface Repuesto {
+  nombre: string;
+  sku: string;
+  precio: number;
+  stock: number;
+}
+
+interface Bitacora {
+  descripcion: string;
+  fecha: string;
+  createdAt?: string;
+  mecanico?: {
+    data?: {
+      attributes: {
+        nombre: string;
+        apellido: string;
+      }
+    }
+  };
+}
+
+interface Orden {
+  id: number;
+  descripcion_problema: string;
+  estado: string;
+  kilometraje: number;
+  fecha_entrega_estimada: string;
+  mecanico?: { data?: { attributes: { nombre: string; apellido: string; } } };
+  vehiculo?: { data?: { attributes: Vehiculo } };
+  cliente?: { data?: { attributes: { nombre: string; apellido: string; telefono: string; email: string; } } };
+  repuestos?: { data: { id: number; attributes: Repuesto }[] };
+  bitacoras?: { data: { id: number; attributes: Bitacora }[] };
+}
+
+let order: Orden | null = null;
+let error = '';
+let success = '';
+
+const url = new URL(Astro.request.url);
+const orderId = url.searchParams.get('id');
+
+if (!orderId) {
+  error = "No se ha especificado un ID de orden.";
+} else {
+  try {
+    // Handle POST requests for status updates or new log entries
+    if (Astro.request.method === 'POST') {
+      const formData = await Astro.request.formData();
+      const action = formData.get('action');
+
+      if (action === 'updateStatus') {
+        const newStatus = formData.get('status');
+        const res = await fetch(`http://localhost:1337/api/orden-de-trabajos/${orderId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${jwt}` },
+          body: JSON.stringify({ data: { estado: newStatus } })
+        });
+        if (res.ok) success = 'Estado actualizado correctamente.';
+        else throw new Error('No se pudo actualizar el estado.');
+      }
+
+      if (action === 'addLog') {
+        const logNote = formData.get('comment');
+        const meRes = await fetch('http://localhost:1337/api/users/me?populate=mecanico', { headers: { 'Authorization': `Bearer ${jwt}` } });
+        const meData = await meRes.json();
+        const mechanicId = meData.mecanico?.id;
+
+        if (logNote && mechanicId) {
+          const res = await fetch('http://localhost:1337/api/bitacoras', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${jwt}` },
+            body: JSON.stringify({
+              data: {
+                descripcion: logNote,
+                orden_de_trabajo: orderId,
+                mecanico: mechanicId,
+              }
+            })
+          });
+          if (res.ok) success = 'Nota agregada a la bitácora.';
+          else throw new Error('No se pudo agregar la nota.');
+        }
+      }
+       // Redirect to the same page to show updated data
+      return Astro.redirect(Astro.request.url);
+    }
+
+    // Fetch all order data
+    const res = await fetch(`http://localhost:1337/api/orden-de-trabajos/${orderId}?populate[vehiculo][populate][0]=cliente&populate[mecanico]=true&populate[repuestos]=true&populate[bitacoras][populate][0]=mecanico`, {
+      headers: { 'Authorization': `Bearer ${jwt}` }
+    });
+
+    if (!res.ok) {
+      throw new Error('No se pudo cargar la orden de trabajo.');
+    }
+
+    const orderData = await res.json();
+    const fetchedOrder: Orden = { id: orderData.data.id, ...orderData.data.attributes };
+    
+    // Extract client from the nested structure
+    if (fetchedOrder.vehiculo?.data?.attributes.cliente) {
+        fetchedOrder.cliente = fetchedOrder.vehiculo.data.attributes.cliente;
+    }
+    order = fetchedOrder;
+
+  } catch (e: any) {
+    console.error(e);
+    error = e.message;
+  }
+}
+
+// Cost calculation
+const partsSubtotal = order?.repuestos?.data.reduce((sum, item) => sum + (item.attributes.precio || 0), 0) || 0;
+const laborCost = 75.00; // Placeholder
+const taxRate = 0.21;
+const tax = (partsSubtotal + laborCost) * taxRate;
+const totalEstimated = partsSubtotal + laborCost + tax;
+
+const formatCurrency = (amount: number) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(amount);
 ---
 
 <!DOCTYPE html>
@@ -57,7 +200,7 @@ import '../../styles/global.css';
 <span class="material-symbols-outlined">dashboard</span>
 <p class="text-sm font-medium leading-normal">Mis Órdenes</p>
 </a>
-<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/10 text-primary" href="/mecanico/detalle_orden_trabajo">
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/10 text-primary" href={`/mecanico/detalle_orden_trabajo?id=${orderId}`}>
 <span class="material-symbols-outlined text-primary">build</span>
 <p class="text-sm font-medium leading-normal">Detalle Orden</p>
 </a>
@@ -76,7 +219,7 @@ import '../../styles/global.css';
 <span class="material-symbols-outlined">settings</span>
 <p class="text-sm font-medium leading-normal">Configuración</p>
 </a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/login">
 <span class="material-symbols-outlined">logout</span>
 <p class="text-sm font-medium leading-normal">Cerrar Sesión</p>
 </a>
@@ -84,167 +227,164 @@ import '../../styles/global.css';
 </aside>
 <!-- Main Content -->
 <main class="flex-1 p-6 lg:p-8">
-<!-- PageHeading & Status Chips -->
-<div class="flex flex-wrap items-start justify-between gap-4">
-<div class="flex min-w-72 flex-col gap-2">
-<p class="text-gray-900 dark:text-white text-3xl font-black leading-tight tracking-[-0.033em]">Orden: OT-2024-00123</p>
-<p class="text-gray-500 dark:text-gray-400 text-base font-normal leading-normal">Asignado a: Carlos Pérez</p>
-</div>
-<div class="flex items-center gap-3 flex-wrap">
-<div class="flex items-center gap-3">
-<span class="text-sm font-medium text-gray-500 dark:text-gray-400">Estado:</span>
-<button class="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-lg bg-yellow-100 dark:bg-yellow-900/40 pl-4 pr-3 text-yellow-800 dark:text-yellow-300">
-<p class="text-sm font-medium leading-normal">En Progreso</p>
-<span class="material-symbols-outlined text-lg">expand_more</span>
-</button>
-</div>
-<button class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white text-sm font-bold leading-normal tracking-[0.015em] gap-2 hover:bg-gray-300 dark:hover:bg-gray-600">
-<span class="material-symbols-outlined text-lg">print</span>
-<span class="truncate">Imprimir</span>
-</button>
-<button class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold leading-normal tracking-[0.015em] gap-2 hover:bg-primary/90">
-<span class="material-symbols-outlined text-lg">save</span>
-<span class="truncate">Guardar Cambios</span>
-</button>
-</div>
-</div>
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-<!-- Left Column -->
-<div class="lg:col-span-1 flex flex-col gap-6">
-<!-- Customer & Vehicle Info -->
-<div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-<h3 class="text-gray-900 dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] px-5 py-4 border-b border-gray-200 dark:border-gray-700">Información General</h3>
-<div class="p-5 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-5">
-<div class="flex flex-col gap-1">
-<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Nombre Cliente</p>
-<p class="text-gray-800 dark:text-gray-200 text-sm font-medium leading-normal">Juan Rodriguez</p>
-</div>
-<div class="flex flex-col gap-1">
-<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Teléfono</p>
-<p class="text-gray-800 dark:text-gray-200 text-sm font-medium leading-normal">+34 600 123 456</p>
-</div>
-<div class="flex flex-col gap-1">
-<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Vehículo</p>
-<p class="text-gray-800 dark:text-gray-200 text-sm font-medium leading-normal">Toyota Corolla (2021)</p>
-</div>
-<div class="flex flex-col gap-1">
-<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Matrícula</p>
-<p class="text-gray-800 dark:text-gray-200 text-sm font-medium leading-normal">7890 LMN</p>
-</div>
-<div class="flex flex-col gap-1 sm:col-span-2">
-<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Email</p>
-<p class="text-gray-800 dark:text-gray-200 text-sm font-medium leading-normal">juan.r@email.com</p>
-</div>
-<div class="flex flex-col gap-1">
-<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Kilometraje</p>
-<p class="text-gray-800 dark:text-gray-200 text-sm font-medium leading-normal">45,000 km</p>
-</div>
-<div class="flex flex-col gap-1">
-<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Fecha Entrega</p>
-<p class="text-gray-800 dark:text-gray-200 text-sm font-medium leading-normal">28/05/2024</p>
-</div>
-</div>
-</div>
-<!-- Problem Description -->
-<div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-<h3 class="text-gray-900 dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] px-5 py-4 border-b border-gray-200 dark:border-gray-700">Descripción del Problema</h3>
-<p class="p-5 text-gray-600 dark:text-gray-300 text-sm leading-relaxed">El cliente reporta un ruido metálico proveniente del motor al acelerar, especialmente en marchas bajas. También menciona una ligera pérdida de potencia intermitente.</p>
-</div>
-</div>
-<!-- Right Column -->
-<div class="lg:col-span-2 flex flex-col gap-6">
-<!-- Tabs for Log and Parts -->
-<div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-<div class="border-b border-gray-200 dark:border-gray-700">
-<nav aria-label="Tabs" class="-mb-px flex gap-6 px-5">
-<a aria-current="page" class="shrink-0 border-b-2 border-primary px-1 py-4 text-sm font-medium text-primary" href="#">Bitácora</a>
-<a class="shrink-0 border-b-2 border-transparent px-1 py-4 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:border-gray-500 dark:hover:text-gray-200" href="#">Repuestos</a>
-</nav>
-</div>
-<!-- Bitacora Content -->
-<div class="p-5">
-<div class="flow-root">
-<ul class="-mb-8" role="list">
-<li>
-<div class="relative pb-8">
-<span aria-hidden="true" class="absolute left-4 top-4 -ml-px h-full w-0.5 bg-gray-200 dark:bg-gray-700"></span>
-<div class="relative flex space-x-3">
-<div>
-<span class="h-8 w-8 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center ring-8 ring-white dark:ring-gray-800">
-<span class="material-symbols-outlined text-base text-gray-500 dark:text-gray-400">build</span>
-</span>
-</div>
-<div class="flex min-w-0 flex-1 justify-between space-x-4 pt-1.5">
-<div>
-<p class="text-sm text-gray-500 dark:text-gray-400">Diagnóstico inicial completado. Ruido confirmado. <a class="font-medium text-gray-900 dark:text-gray-100" href="#">Carlos Pérez</a></p>
-</div>
-<div class="whitespace-nowrap text-right text-sm text-gray-500 dark:text-gray-400">
-<time datetime="2024-05-27T09:30">hace 2h</time>
-</div>
-</div>
-</div>
-</div>
-</li>
-<li>
-<div class="relative pb-8">
-<div class="relative flex space-x-3">
-<div>
-<span class="h-8 w-8 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center ring-8 ring-white dark:ring-gray-800">
-<span class="material-symbols-outlined text-base text-gray-500 dark:text-gray-400">person_add</span>
-</span>
-</div>
-<div class="flex min-w-0 flex-1 justify-between space-x-4 pt-1.5">
-<div>
-<p class="text-sm text-gray-500 dark:text-gray-400">Orden de trabajo creada y asignada. <a class="font-medium text-gray-900 dark:text-gray-100" href="#">Ana García (Recepción)</a></p>
-</div>
-<div class="whitespace-nowrap text-right text-sm text-gray-500 dark:text-gray-400">
-<time datetime="2024-05-27T08:15">hace 3h</time>
-</div>
-</div>
-</div>
-</div>
-</li>
-</ul>
-</div>
-<div class="mt-6 flex gap-3">
-<img class="inline-block h-10 w-10 rounded-full" data-alt="User avatar" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD2gddlSrcFyexeZnID7NJnyaVYGhLFz2R4acYwhOa6XcK4VLbuuwTVB60FCojvf84FkjQ8k4sMh2zqYRDEjxRoCFaObOPSq9ts8G_iSEyjJNwJkxAy0c93iMdmbzQel6YqqjYJ2h0aMHcUi9qoq6M_0mWqXaN7dftfmDpfP7-mATEXVBRGZ8LSVrw3IAYV5Xa3ifp9GHwo6-4eJUX1r-k6zX6AMpGYnDdosMbI5i5oLkjWviO0GhxRwqsGZarpDTR0cLI3HE93pil1"/>
-<div class="flex-1">
-<label class="sr-only" for="comment">Añadir nota</label>
-<textarea class="block w-full rounded-lg border-0 py-2.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:focus:ring-primary" id="comment" name="comment" placeholder="Añadir una nota a la bitácora..." rows="3"></textarea>
-<div class="mt-2 flex justify-end">
-<button class="inline-flex items-center rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" type="submit">Agregar Nota</button>
-</div>
-</div>
-</div>
-</div>
-</div>
-<!-- Cost Summary -->
-<div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-5">
-<h3 class="text-gray-900 dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] mb-4">Resumen de Costos</h3>
-<div class="space-y-3">
-<div class="flex justify-between text-sm text-gray-600 dark:text-gray-300">
-<span>Subtotal Repuestos</span>
-<span>€0.00</span>
-</div>
-<div class="flex justify-between text-sm text-gray-600 dark:text-gray-300">
-<span>Mano de Obra (1.5h)</span>
-<span>€75.00</span>
-</div>
-<div class="flex justify-between text-sm text-gray-600 dark:text-gray-300">
-<span>IVA (21%)</span>
-<span>€15.75</span>
-</div>
-<div class="border-t border-gray-200 dark:border-gray-700 my-2"></div>
-<div class="flex justify-between text-base font-bold text-gray-900 dark:text-white">
-<span>Total Estimado</span>
-<span>€90.75</span>
-</div>
-</div>
-</div>
-</div>
-</div>
-</div>
+    {error && <p class="text-red-500 bg-red-100 p-4 rounded-lg mb-4">{error}</p>}
+    {success && <p class="text-green-500 bg-green-100 p-4 rounded-lg mb-4">{success}</p>}
+
+    {order ? (
+        <>
+            <!-- PageHeading & Status Chips -->
+            <div class="flex flex-wrap items-start justify-between gap-4">
+                <div class="flex min-w-72 flex-col gap-2">
+                    <p class="text-gray-900 dark:text-white text-3xl font-black leading-tight tracking-[-0.033em]">Orden: OT-{order.id}</p>
+                    <p class="text-gray-500 dark:text-gray-400 text-base font-normal leading-normal">
+                        Asignado a: {order.mecanico?.data?.attributes.nombre || 'No asignado'}
+                    </p>
+                </div>
+                <div class="flex items-center gap-3 flex-wrap">
+                    <form method="POST" class="flex items-center gap-3">
+                        <input type="hidden" name="action" value="updateStatus" />
+                        <span class="text-sm font-medium text-gray-500 dark:text-gray-400">Estado:</span>
+                        <select name="status" class="form-select h-9 rounded-lg bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-300 border-0 focus:ring-0" onchange="this.form.submit()">
+                            <option value="Pendiente" selected={order.estado === 'Pendiente'}>Pendiente</option>
+                            <option value="En Progreso" selected={order.estado === 'En Progreso'}>En Progreso</option>
+                            <option value="Finalizada" selected={order.estado === 'Finalizada'}>Finalizada</option>
+                            <option value="Bloqueada" selected={order.estado === 'Bloqueada'}>Bloqueada</option>
+                        </select>
+                    </form>
+                    <button class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white text-sm font-bold leading-normal tracking-[0.015em] gap-2 hover:bg-gray-300 dark:hover:bg-gray-600" onclick="window.print()">
+                        <span class="material-symbols-outlined text-lg">print</span>
+                        <span class="truncate">Imprimir</span>
+                    </button>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-6">
+                <!-- Left Column -->
+                <div class="lg:col-span-1 flex flex-col gap-6">
+                    <!-- Customer & Vehicle Info -->
+                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                        <h3 class="text-gray-900 dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] px-5 py-4 border-b border-gray-200 dark:border-gray-700">Información General</h3>
+                        <div class="p-5 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-5">
+                            <div class="flex flex-col gap-1">
+                                <p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Nombre Cliente</p>
+                                <p class="text-gray-800 dark:text-gray-200 text-sm font-medium leading-normal">{order.cliente?.data?.attributes.nombre || 'N/A'}</p>
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Teléfono</p>
+                                <p class="text-gray-800 dark:text-gray-200 text-sm font-medium leading-normal">{order.cliente?.data?.attributes.telefono || 'N/A'}</p>
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Vehículo</p>
+                                <p class="text-gray-800 dark:text-gray-200 text-sm font-medium leading-normal">{`${order.vehiculo?.data?.attributes.marca || ''} ${order.vehiculo?.data?.attributes.modelo || ''} (${order.vehiculo?.data?.attributes.anio || ''})`}</p>
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Matrícula</p>
+                                <p class="text-gray-800 dark:text-gray-200 text-sm font-medium leading-normal">{order.vehiculo?.data?.attributes.patente || 'N/A'}</p>
+                            </div>
+                            <div class="flex flex-col gap-1 sm:col-span-2">
+                                <p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Email</p>
+                                <p class="text-gray-800 dark:text-gray-200 text-sm font-medium leading-normal">{order.cliente?.data?.attributes.email || 'N/A'}</p>
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Kilometraje</p>
+                                <p class="text-gray-800 dark:text-gray-200 text-sm font-medium leading-normal">{order.kilometraje ? `${order.kilometraje} km` : 'N/A'}</p>
+                            </div>
+                            <div class="flex flex-col gap-1">
+                                <p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Fecha Entrega</p>
+                                <p class="text-gray-800 dark:text-gray-200 text-sm font-medium leading-normal">{order.fecha_entrega_estimada ? new Date(order.fecha_entrega_estimada).toLocaleDateString() : 'N/A'}</p>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Problem Description -->
+                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                        <h3 class="text-gray-900 dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] px-5 py-4 border-b border-gray-200 dark:border-gray-700">Descripción del Problema</h3>
+                        <p class="p-5 text-gray-600 dark:text-gray-300 text-sm leading-relaxed">{order.descripcion_problema || 'No hay descripción.'}</p>
+                    </div>
+                </div>
+                <!-- Right Column -->
+                <div class="lg:col-span-2 flex flex-col gap-6">
+                    <!-- Tabs for Log and Parts -->
+                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+                        <div class="border-b border-gray-200 dark:border-gray-700">
+                            <nav aria-label="Tabs" class="-mb-px flex gap-6 px-5">
+                                <a aria-current="page" class="shrink-0 border-b-2 border-primary px-1 py-4 text-sm font-medium text-primary" href="#">Bitácora</a>
+                                <a class="shrink-0 border-b-2 border-transparent px-1 py-4 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:border-gray-500 dark:hover:text-gray-200" href={`/mecanico/bitacora_repuestos?id=${orderId}`}>Repuestos</a>
+                            </nav>
+                        </div>
+                        <!-- Bitacora Content -->
+                        <div class="p-5">
+                            <div class="flow-root">
+                                <ul class="-mb-8" role="list">
+                                    {order && order.bitacoras && order.bitacoras.data.length > 0 ? (
+                                        order.bitacoras.data.map((log, index) => (
+                                            <li>
+                                                <div class="relative pb-8">
+                                                    {order && order.bitacoras && index !== order.bitacoras.data.length - 1 && <span aria-hidden="true" class="absolute left-4 top-4 -ml-px h-full w-0.5 bg-gray-200 dark:bg-gray-700"></span>}
+                                                    <div class="relative flex space-x-3">
+                                                        <div>
+                                                            <span class="h-8 w-8 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center ring-8 ring-white dark:ring-gray-800">
+                                                                <span class="material-symbols-outlined text-base text-gray-500 dark:text-gray-400">build</span>
+                                                            </span>
+                                                        </div>
+                                                        <div class="flex min-w-0 flex-1 justify-between space-x-4 pt-1.5">
+                                                            <div>
+                                                                <p class="text-sm text-gray-500 dark:text-gray-400">{log.attributes.descripcion} <a class="font-medium text-gray-900 dark:text-gray-100" href="#">{log.attributes.mecanico?.data?.attributes.nombre || ''}</a></p>
+                                                            </div>
+                                                            <div class="whitespace-nowrap text-right text-sm text-gray-500 dark:text-gray-400">
+                                                                <time datetime={log.attributes.createdAt || ''}>{log.attributes.createdAt ? new Date(log.attributes.createdAt as string).toLocaleString() : 'N/A'}</time>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </li>
+                                        ))
+                                    ) : (
+                                        <p class="text-sm text-gray-500">No hay entradas en la bitácora.</p>
+                                    )}
+                                </ul>
+                            </div>
+                            <form method="POST" class="mt-6 flex gap-3">
+                                <input type="hidden" name="action" value="addLog" />
+                                <div class="flex-1">
+                                    <label class="sr-only" for="comment">Añadir nota</label>
+                                    <textarea class="block w-full rounded-lg border-0 py-2.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6 dark:bg-gray-700 dark:text-white dark:ring-gray-600 dark:focus:ring-primary" id="comment" name="comment" placeholder="Añadir una nota a la bitácora..." rows="3"></textarea>
+                                </div>
+                                <div class="mt-2 flex justify-end">
+                                    <button class="inline-flex items-center rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary/90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary" type="submit">Agregar Nota</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                    <!-- Cost Summary -->
+                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-5">
+                        <h3 class="text-gray-900 dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] mb-4">Resumen de Costos</h3>
+                        <div class="space-y-3">
+                            <div class="flex justify-between text-sm text-gray-600 dark:text-gray-300">
+                                <span>Subtotal Repuestos</span>
+                                <span>{formatCurrency(partsSubtotal)}</span>
+                            </div>
+                            <div class="flex justify-between text-sm text-gray-600 dark:text-gray-300">
+                                <span>Mano de Obra (Estimado)</span>
+                                <span>{formatCurrency(laborCost)}</span>
+                            </div>
+                            <div class="flex justify-between text-sm text-gray-600 dark:text-gray-300">
+                                <span>IVA (21%)</span>
+                                <span>{formatCurrency(tax)}</span>
+                            </div>
+                            <div class="border-t border-gray-200 dark:border-gray-700 my-2"></div>
+                            <div class="flex justify-between text-base font-bold text-gray-900 dark:text-white">
+                                <span>Total Estimado</span>
+                                <span>{formatCurrency(totalEstimated)}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </>
+    ) : (
+        <div class="text-center py-20">
+            <p class="text-lg text-gray-500">{error || "Cargando datos de la orden..."}</p>
+        </div>
+    )}
 </main>
-</div>
 </div>
 </body></html>

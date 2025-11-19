@@ -1,5 +1,77 @@
 ---
 import '../../styles/global.css';
+
+const jwt = Astro.cookies.get('jwt')?.value;
+const orderId = Astro.url.searchParams.get('id');
+let order = null;
+let mechanics = [];
+let zones = [];
+
+if (jwt) {
+  if (!orderId) {
+    return Astro.redirect('/encargado/asig_orden');
+  }
+
+  try {
+    // Handle POST assignment
+    if (Astro.request.method === 'POST') {
+      const formData = await Astro.request.formData();
+      const mechanicId = formData.get('mechanic');
+      const zoneId = formData.get('work-area');
+
+      if (mechanicId && zoneId) {
+        const updateRes = await fetch(`http://localhost:1337/api/orden-de-trabajos/${orderId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${jwt}`
+          },
+          body: JSON.stringify({
+            data: {
+              mecanico: mechanicId,
+              zona: zoneId,
+              estado: 'En Proceso'
+            }
+          })
+        });
+
+        if (updateRes.ok) {
+          return Astro.redirect('/encargado/disp_mec_zonas');
+        }
+      }
+    }
+
+    // Fetch Order
+    const orderRes = await fetch(`http://localhost:1337/api/orden-de-trabajos/${orderId}?populate=cliente&populate=vehiculo&populate=mecanico&populate=zona`, {
+      headers: { 'Authorization': `Bearer ${jwt}` }
+    });
+    const orderData = await orderRes.json();
+    order = orderData.data;
+
+    // Fetch Mechanics
+    const mecRes = await fetch('http://localhost:1337/api/mecanicos', {
+      headers: { 'Authorization': `Bearer ${jwt}` }
+    });
+    const mecData = await mecRes.json();
+    mechanics = mecData.data || [];
+
+    // Fetch Zones
+    const zoneRes = await fetch('http://localhost:1337/api/zonas', {
+      headers: { 'Authorization': `Bearer ${jwt}` }
+    });
+    const zoneData = await zoneRes.json();
+    zones = zoneData.data || [];
+
+  } catch (e) {
+    console.error('Error fetching data:', e);
+  }
+} else {
+  return Astro.redirect('/login');
+}
+
+if (!order) {
+    return Astro.redirect('/encargado/asig_orden');
+}
 ---
 <!DOCTYPE html>
 
@@ -114,7 +186,7 @@ import '../../styles/global.css';
 <div class="flex flex-wrap justify-between gap-4 mb-8">
 <div class="flex min-w-72 flex-col gap-2">
 <p class="text-gray-900 dark:text-white text-3xl font-bold leading-tight tracking-tight">Asignar Orden de Trabajo por Zona</p>
-<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Órdenes &gt; Asignar Orden por Zona #12345</p>
+<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Órdenes &gt; Asignar Orden por Zona #{order.documentId.slice(0, 6)}</p>
 </div>
 </div>
 <!-- Content Cards -->
@@ -127,24 +199,24 @@ import '../../styles/global.css';
 <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
 <div class="flex flex-col gap-1">
 <p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Vehículo</p>
-<p class="text-gray-800 dark:text-gray-200 text-base font-medium leading-normal">Toyota Corolla</p>
+<p class="text-gray-800 dark:text-gray-200 text-base font-medium leading-normal">{order.vehiculo?.marca} {order.vehiculo?.modelo}</p>
 </div>
 <div class="flex flex-col gap-1">
 <p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Cliente</p>
-<p class="text-gray-800 dark:text-gray-200 text-base font-medium leading-normal">Ana García</p>
+<p class="text-gray-800 dark:text-gray-200 text-base font-medium leading-normal">{order.cliente?.nombre} {order.cliente?.apellido}</p>
 </div>
 <div class="flex flex-col gap-1">
 <p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Matrícula</p>
-<p class="text-gray-800 dark:text-gray-200 text-base font-medium leading-normal">XYZ-1234</p>
+<p class="text-gray-800 dark:text-gray-200 text-base font-medium leading-normal">{order.vehiculo?.patente || 'N/A'}</p>
 </div>
 <div class="flex flex-col gap-1">
 <p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Servicio Principal</p>
-<p class="text-gray-800 dark:text-gray-200 text-base font-medium leading-normal">Cambio de aceite y filtros</p>
+<p class="text-gray-800 dark:text-gray-200 text-base font-medium leading-normal">{order.descripcion || 'Mantenimiento General'}</p>
 </div>
 </div>
 </div>
 <!-- Assignment and Planning Card -->
-<div class="bg-white rounded-xl border border-gray-200 dark:bg-gray-900 dark:border-gray-800">
+<form method="POST" class="bg-white rounded-xl border border-gray-200 dark:bg-gray-900 dark:border-gray-800">
 <!-- SectionHeader -->
 <h3 class="text-gray-900 dark:text-white text-lg font-bold leading-tight tracking-tight p-6 border-b border-gray-200 dark:border-gray-800">Asignación y Planificación</h3>
 <!-- Form -->
@@ -153,11 +225,11 @@ import '../../styles/global.css';
 <div class="flex flex-col gap-2">
 <label class="text-gray-700 dark:text-gray-300 text-sm font-medium" for="mechanic">Mecánico</label>
 <div class="relative">
-<select class="w-full pl-4 pr-10 py-2.5 text-sm font-normal text-gray-800 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary dark:focus:border-primary appearance-none" id="mechanic" name="mechanic">
+<select class="w-full pl-4 pr-10 py-2.5 text-sm font-normal text-gray-800 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary dark:focus:border-primary appearance-none" id="mechanic" name="mechanic" required>
 <option disabled="" selected="" value="">Seleccionar mecánico</option>
-<option value="juan">Juan Pérez</option>
-<option value="carlos">Carlos Mendoza</option>
-<option value="luis">Luis Rodríguez</option>
+{mechanics.map((mec: any) => (
+    <option value={mec.documentId} selected={order.mecanico?.documentId === mec.documentId}>{mec.nombre} {mec.apellido}</option>
+))}
 </select>
 <span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none">expand_more</span>
 </div>
@@ -166,11 +238,11 @@ import '../../styles/global.css';
 <div class="flex flex-col gap-2">
 <label class="text-gray-700 dark:text-gray-300 text-sm font-medium" for="work-area">Zona de Trabajo</label>
 <div class="relative">
-<select class="w-full pl-4 pr-10 py-2.5 text-sm font-normal text-gray-800 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary dark:focus:border-primary appearance-none" id="work-area" name="work-area">
+<select class="w-full pl-4 pr-10 py-2.5 text-sm font-normal text-gray-800 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary dark:focus:border-primary appearance-none" id="work-area" name="work-area" required>
 <option disabled="" selected="" value="">Seleccionar zona</option>
-<option value="elevator-1">Elevador 1</option>
-<option value="diagnostics">Zona de Diagnóstico</option>
-<option value="tires">Área de Neumáticos</option>
+{zones.map((zone: any) => (
+    <option value={zone.documentId} selected={order.zona?.documentId === zone.documentId}>{zone.nombre}</option>
+))}
 </select>
 <span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none">expand_more</span>
 </div>
@@ -194,13 +266,13 @@ import '../../styles/global.css';
 </div>
 <!-- Action Buttons -->
 <div class="flex items-center justify-end gap-4 p-6 border-t border-gray-200 dark:border-gray-800">
-<button class="px-4 py-2.5 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700" type="button">Cancelar</button>
+<a href="/encargado/asig_orden" class="px-4 py-2.5 text-sm font-semibold text-gray-700 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700">Cancelar</a>
 <button class="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-primary rounded-lg shadow-sm hover:bg-blue-700" type="submit">
 <span class="material-symbols-outlined" style="font-size: 20px;">assignment_turned_in</span>
                                 Asignar Orden
                             </button>
 </div>
-</div>
+</form>
 </div>
 </div>
 </main>

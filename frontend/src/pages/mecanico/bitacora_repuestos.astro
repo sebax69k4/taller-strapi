@@ -1,17 +1,137 @@
 ---
 import '../../styles/global.css';
+
+const jwt = Astro.cookies.get('jwt')?.value;
+if (!jwt) {
+  return Astro.redirect('/login');
+}
+
+// --- TYPE DEFINITIONS ---
+interface Cliente {
+  nombre: string;
+  apellido: string;
+}
+
+interface Vehiculo {
+  marca: string;
+  modelo: string;
+  anio: number;
+  patente: string;
+  cliente?: { data?: { attributes: Cliente } };
+}
+
+interface Repuesto {
+  id: number;
+  nombre: string;
+  stock: number;
+  precio: number;
+}
+
+interface OrdenDeTrabajo {
+  id: number;
+  descripcion_problema: string;
+  vehiculo?: { data?: { attributes: Vehiculo } };
+  repuestos?: { data: { id: number; attributes: Repuesto }[] };
+}
+
+// --- DATA FETCHING & STATE ---
+let order: OrdenDeTrabajo | null = null;
+let allParts: Repuesto[] = [];
+let error = '';
+let success = '';
+
+const url = new URL(Astro.request.url);
+const orderId = url.searchParams.get('id');
+
+if (!orderId) {
+  error = "No se ha especificado un ID de orden.";
+} else {
+  try {
+    // --- FORM SUBMISSION (POST) ---
+    if (Astro.request.method === 'POST') {
+      const formData = await Astro.request.formData();
+      const description = formData.get('description') as string;
+      const timeSpent = formData.get('time_spent');
+      const usedPartsData = formData.get('used_parts') as string;
+      const usedParts = JSON.parse(usedPartsData); // [{ id: number, quantity: number }]
+
+      const meRes = await fetch('http://localhost:1337/api/users/me?populate=mecanico', { headers: { 'Authorization': `Bearer ${jwt}` } });
+      const meData = await meRes.json();
+      const mechanicId = meData.mecanico?.id;
+
+      if (!mechanicId) throw new Error("No se pudo identificar al mecánico.");
+
+      // 1. Create Bitacora Entry
+      const bitacoraRes = await fetch('http://localhost:1337/api/bitacoras', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${jwt}` },
+        body: JSON.stringify({
+          data: {
+            descripcion: description,
+            tiempo_invertido: timeSpent ? parseFloat(timeSpent.toString()) : 0,
+            orden_de_trabajo: orderId,
+            mecanico: mechanicId,
+            repuestos_utilizados: usedParts, // Store used parts snapshot
+          }
+        })
+      });
+
+      if (!bitacoraRes.ok) throw new Error('Error al guardar la entrada en la bitácora.');
+
+      // 2. Update Order with new parts
+      const orderRes = await fetch(`http://localhost:1337/api/orden-de-trabajos/${orderId}?populate=repuestos`, { headers: { 'Authorization': `Bearer ${jwt}` } });
+      const currentOrderData = await orderRes.json();
+      const existingPartIds = currentOrderData.data.attributes.repuestos.data.map((p: any) => p.id);
+      const newPartIds = usedParts.map((p: { id: number }) => p.id);
+      const allPartIds = [...new Set([...existingPartIds, ...newPartIds])];
+
+      const updateOrderRes = await fetch(`http://localhost:1337/api/orden-de-trabajos/${orderId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${jwt}` },
+          body: JSON.stringify({ data: { repuestos: allPartIds } })
+      });
+
+      if (!updateOrderRes.ok) throw new Error('Error al actualizar los repuestos de la orden.');
+
+      success = 'Entrada guardada y orden actualizada correctamente.';
+      return Astro.redirect(`/mecanico/detalle_orden_trabajo?id=${orderId}&success=${encodeURIComponent(success)}`);
+    }
+
+    // --- INITIAL DATA FETCHING (GET) ---
+    const [orderRes, partsRes] = await Promise.all([
+      fetch(`http://localhost:1337/api/orden-de-trabajos/${orderId}?populate[vehiculo][populate][0]=cliente`, { headers: { 'Authorization': `Bearer ${jwt}` } }),
+      fetch('http://localhost:1337/api/repuestos', { headers: { 'Authorization': `Bearer ${jwt}` } })
+    ]);
+
+    if (!orderRes.ok) throw new Error('No se pudo cargar la orden de trabajo.');
+    if (!partsRes.ok) throw new Error('No se pudieron cargar los repuestos.');
+
+    const orderData = await orderRes.json();
+    order = { id: orderData.data.id, ...orderData.data.attributes };
+
+    const partsData = await partsRes.json();
+    allParts = partsData.data.map((part: any) => ({ id: part.id, ...part.attributes }));
+
+  } catch (e: any) {
+    console.error(e);
+    error = e.message;
+  }
+}
+
+const vehicle = order?.vehiculo?.data?.attributes;
+const client = vehicle?.cliente?.data?.attributes;
 ---
 
 <!DOCTYPE html>
-
-<html class="light" lang="es"><head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Bitácora de Repuestos - Taller Veloz</title>
-<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
-<script>
+<html class="light" lang="es">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>Bitácora de Repuestos - Taller Veloz</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+    <script>
         tailwind.config = {
             darkMode: "class",
             theme: {
@@ -34,175 +154,247 @@ import '../../styles/global.css';
             },
         }
     </script>
-<style>
-        .material-symbols-outlined {
-            font-variation-settings:
-            'FILL' 0,
-            'wght' 400,
-            'GRAD' 0,
-            'opsz' 24
-        }
+    <style>
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24 }
+        [x-cloak] { display: none !important; }
     </style>
+    <script src="//unpkg.com/alpinejs" defer></script>
 </head>
-<body class="font-display bg-background-light dark:bg-background-dark">
+<body class="font-display bg-background-light dark:bg-background-dark text-gray-800 dark:text-gray-200">
 <div class="relative flex min-h-screen w-full">
-<!-- SideNavBar -->
-<aside class="flex w-64 flex-col bg-white dark:bg-gray-900 p-4 border-r border-gray-200 dark:border-gray-800">
-<div class="flex flex-col gap-4">
-<div class="flex items-center gap-3">
-<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://cdn.usegalileo.ai/stability/a4b1f6ac-1498-420f-bb19-91ee46e9ce70.png");'></div>
-<div class="flex flex-col">
-<h1 class="text-gray-900 dark:text-white text-base font-medium leading-normal">Taller Veloz</h1>
-<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Panel Mecánico</p>
+    <!-- SideNavBar -->
+    <aside class="flex w-64 flex-col bg-white dark:bg-gray-900 p-4 border-r border-gray-200 dark:border-gray-800">
+        <div class="flex flex-col gap-4">
+            <div class="flex items-center gap-3">
+                <div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://cdn.usegalileo.ai/stability/a4b1f6ac-1498-420f-bb19-91ee46e9ce70.png");'></div>
+                <div class="flex flex-col">
+                    <h1 class="text-gray-900 dark:text-white text-base font-medium leading-normal">Taller Veloz</h1>
+                    <p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Panel Mecánico</p>
+                </div>
+            </div>
+            <nav class="flex flex-col gap-2 mt-4">
+                <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/mecanico/dash_mec">
+                    <span class="material-symbols-outlined">dashboard</span>
+                    <p class="text-sm font-medium leading-normal">Mis Órdenes</p>
+                </a>
+                <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href={`/mecanico/detalle_orden_trabajo?id=${orderId}`}>
+                    <span class="material-symbols-outlined">build</span>
+                    <p class="text-sm font-medium leading-normal">Detalle Orden</p>
+                </a>
+                <a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/10 text-primary" href={`/mecanico/bitacora_repuestos?id=${orderId}`}>
+                    <span class="material-symbols-outlined text-primary">inventory</span>
+                    <p class="text-sm font-medium leading-normal">Bitácora</p>
+                </a>
+                <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/mecanico/desc_stock">
+                    <span class="material-symbols-outlined">check_circle</span>
+                    <p class="text-sm font-medium leading-normal">Descontar Stock</p>
+                </a>
+            </nav>
+        </div>
+        <div class="mt-auto flex flex-col gap-2">
+            <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
+                <span class="material-symbols-outlined">logout</span>
+                <p class="text-sm font-medium leading-normal">Cerrar Sesión</p>
+            </a>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 p-6 lg:p-8">
+        {error && <p class="text-red-500 bg-red-100 p-4 rounded-lg mb-4">{error}</p>}
+        {success && <p class="text-green-500 bg-green-100 p-4 rounded-lg mb-4">{success}</p>}
+
+        {order ? (
+            <div x-data={`partsManager(${JSON.stringify(allParts)})`}>
+                <form method="POST">
+                    <!-- PageHeading -->
+                    <div class="flex flex-wrap justify-between gap-3 pt-4 mb-6">
+                        <div class="flex min-w-72 flex-col gap-2">
+                            <p class="text-[#0d121b] dark:text-gray-100 text-3xl sm:text-4xl font-black leading-tight tracking-[-0.033em]">Registrar Avance en Orden #{order.id}</p>
+                            <p class="text-gray-500 dark:text-gray-400 text-base font-normal leading-normal">Añade una nueva entrada a la bitácora de servicio.</p>
+                        </div>
+                    </div>
+
+                    <!-- Card -->
+                    <div class="p-6 bg-white dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 mb-8">
+                        <div class="flex flex-col sm:flex-row items-start sm:items-stretch justify-between gap-6">
+                            <div class="flex flex-col gap-3 flex-[2_2_0px]">
+                                <p class="text-[#0d121b] dark:text-white text-xl font-bold leading-tight">{vehicle ? `${vehicle.marca} ${vehicle.modelo} ${vehicle.anio}` : 'Vehículo no especificado'} - {vehicle?.patente || 'S/P'}</p>
+                                <div class="space-y-1.5">
+                                    <p class="text-gray-600 dark:text-gray-300 text-sm font-normal leading-normal"><span class="font-medium text-gray-800 dark:text-gray-200">Cliente:</span> {client ? `${client.nombre} ${client.apellido}` : 'Cliente no especificado'}</p>
+                                    <p class="text-gray-600 dark:text-gray-300 text-sm font-normal leading-normal"><span class="font-medium text-gray-800 dark:text-gray-200">Servicio:</span> {order.descripcion_problema}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col gap-8 bg-white dark:bg-gray-800/50 p-6 rounded-xl border border-gray-200 dark:border-gray-700">
+                        <h2 class="text-[#0d121b] dark:text-white text-[22px] font-bold leading-tight tracking-[-0.015em]">Detalles de la Tarea</h2>
+                        <div class="flex flex-col md:flex-row gap-6">
+                            <div class="flex flex-1">
+                                <label class="flex flex-col w-full">
+                                    <p class="text-[#0d121b] dark:text-gray-200 text-base font-medium leading-normal pb-2">Descripción de Acciones Realizadas</p>
+                                    <textarea name="description" class="form-input flex w-full min-w-0 flex-1 resize-y overflow-hidden rounded-lg text-[#0d121b] dark:text-gray-100 focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-[#cfd7e7] dark:border-gray-600 bg-background-light dark:bg-background-dark focus:border-primary dark:focus:border-primary min-h-36 placeholder:text-gray-400 dark:placeholder:text-gray-500 p-[15px] text-base font-normal leading-normal" placeholder="Ej: Se desmontaron las pinzas de freno, se limpiaron y se instalaron nuevas pastillas..." required></textarea>
+                                </label>
+                            </div>
+                            <div class="flex">
+                                <label class="flex flex-col w-full md:w-48">
+                                    <p class="text-[#0d121b] dark:text-gray-200 text-base font-medium leading-normal pb-2">Tiempo Invertido (hrs)</p>
+                                    <input name="time_spent" class="form-input flex w-full min-w-0 flex-1 rounded-lg text-[#0d121b] dark:text-gray-100 focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-[#cfd7e7] dark:border-gray-600 bg-background-light dark:bg-background-dark focus:border-primary dark:focus:border-primary h-12 placeholder:text-gray-400 dark:placeholder:text-gray-500 px-4 text-base font-normal leading-normal" min="0" placeholder="Ej: 2.5" step="0.1" type="number"/>
+                                </label>
+                            </div>
+                        </div>
+
+                        <h2 class="text-[#0d121b] dark:text-white text-[22px] font-bold leading-tight tracking-[-0.015em] pt-5 border-t border-gray-200 dark:border-gray-700">Repuestos Utilizados</h2>
+                        <div class="flex flex-col gap-4">
+                            <label class="flex flex-col w-full">
+                                <p class="text-[#0d121b] dark:text-gray-200 text-base font-medium leading-normal pb-2">Buscar Repuestos</p>
+                                <div class="relative">
+                                    <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500">search</span>
+                                    <input type="search" x-model="search" @input.debounce.300ms="filterParts" class="form-input w-full rounded-lg pl-10" placeholder="Buscar por nombre o código..."/>
+                                </div>
+                            </label>
+                            <!-- Search Results -->
+                            <div x-show="search.length > 0 && filteredParts.length > 0" x-cloak class="border rounded-lg p-2 max-h-60 overflow-y-auto">
+                                <template x-for="part in filteredParts" :key="part.id">
+                                    <div @click="addPart(part)" class="cursor-pointer p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md flex justify-between">
+                                        <span x-text="part.nombre"></span>
+                                        <span class="text-sm text-gray-500" x-text="`Stock: ${part.stock}`"></span>
+                                    </div>
+                                </template>
+                            </div>
+
+                            <!-- Added parts list -->
+                            <div class="mt-4 flow-root">
+                                <div class="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
+                                    <div class="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
+                                        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                                            <thead>
+                                                <tr>
+                                                    <th class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 dark:text-white sm:pl-0">Repuesto</th>
+                                                    <th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Stock Disp.</th>
+                                                    <th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Cantidad a Usar</th>
+                                                    <th class="relative py-3.5 pl-3 pr-4 sm:pr-0"></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                                                <template x-if="usedParts.length === 0">
+                                                    <tr><td colspan="4" class="text-center py-4 text-gray-500">No se han agregado repuestos.</td></tr>
+                                                </template>
+                                                <template x-for="usedPart in usedParts" :key="usedPart.id">
+                                                    <tr>
+                                                        <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 dark:text-white sm:pl-0" x-text="usedPart.nombre"></td>
+                                                        <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300">
+                                                            <span x-text="usedPart.stock" :class="{'text-red-500 font-bold': usedPart.stock < 5}"></span>
+                                                        </td>
+                                                        <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300">
+                                                            <div class="flex items-center gap-2">
+                                                                <button type="button" @click="decrementQuantity(usedPart.id)" class="flex items-center justify-center size-7 rounded-md border border-gray-300 dark:border-gray-600">-</button>
+                                                                <span class="w-8 text-center font-medium text-gray-900 dark:text-white" x-text="usedPart.quantity"></span>
+                                                                <button type="button" @click="incrementQuantity(usedPart.id)" class="flex items-center justify-center size-7 rounded-md border border-gray-300 dark:border-gray-600">+</button>
+                                                            </div>
+                                                        </td>
+                                                        <td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-0">
+                                                            <button type="button" @click="removePart(usedPart.id)" class="text-red-600 hover:text-red-800 p-1">
+                                                                <span class="material-symbols-outlined text-xl">delete</span>
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                </template>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Hidden input to store used parts data for form submission -->
+                    <input type="hidden" name="used_parts" :value="JSON.stringify(usedParts.map(p => ({ id: p.id, quantity: p.quantity })))">
+
+                    <!-- Action Buttons -->
+                    <div class="flex flex-col sm:flex-row items-center justify-end gap-3 pt-6 pb-8">
+                        <a href={`/mecanico/detalle_orden_trabajo?id=${orderId}`} class="flex w-full sm:w-auto max-w-xs cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 bg-gray-200/80 dark:bg-gray-700/80 text-gray-800 dark:text-gray-200 hover:bg-gray-300/80 dark:hover:bg-gray-600/80 gap-2 text-base font-bold leading-normal tracking-[0.015em] min-w-0 px-6 text-center">Cancelar</a>
+                        <button type="submit" class="flex w-full sm:w-auto max-w-xs cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 bg-primary text-white hover:bg-primary/90 gap-2 text-base font-bold leading-normal tracking-[0.015em] min-w-0 px-6">Guardar Entrada</button>
+                    </div>
+                </form>
+            </div>
+        ) : (
+            <div class="text-center py-20">
+                <p class="text-lg text-gray-500">{error || "Cargando datos..."}</p>
+            </div>
+        )}
+    </main>
 </div>
-</div>
-<nav class="flex flex-col gap-2 mt-4">
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/mecanico/dash_mec">
-<span class="material-symbols-outlined">dashboard</span>
-<p class="text-sm font-medium leading-normal">Mis Órdenes</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/mecanico/detalle_orden_trabajo">
-<span class="material-symbols-outlined">build</span>
-<p class="text-sm font-medium leading-normal">Detalle Orden</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/10 text-primary" href="/mecanico/bitacora_repuestos">
-<span class="material-symbols-outlined text-primary">inventory</span>
-<p class="text-sm font-medium leading-normal">Bitácora</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/mecanico/desc_stock">
-<span class="material-symbols-outlined">check_circle</span>
-<p class="text-sm font-medium leading-normal">Descontar Stock</p>
-</a>
-</nav>
-</div>
-<div class="mt-auto flex flex-col gap-2">
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
-<span class="material-symbols-outlined">settings</span>
-<p class="text-sm font-medium leading-normal">Configuración</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
-<span class="material-symbols-outlined">logout</span>
-<p class="text-sm font-medium leading-normal">Cerrar Sesión</p>
-</a>
-</div>
-</aside>
-<!-- Main Content -->
-<main class="flex-1 p-6 lg:p-8">
-<!-- PageHeading -->
-<div class="flex flex-wrap justify-between gap-3 pt-4">
-<div class="flex min-w-72 flex-col gap-2">
-<p class="text-[#0d121b] dark:text-gray-100 text-3xl sm:text-4xl font-black leading-tight tracking-[-0.033em]">Registrar Avance en Orden #ORD-00123</p>
-<p class="text-gray-500 dark:text-gray-400 text-base font-normal leading-normal">Añade una nueva entrada a la bitácora de servicio.</p>
-</div>
-</div>
-<!-- Card -->
-<div class="p-6 bg-white dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
-<div class="flex flex-col sm:flex-row items-start sm:items-stretch justify-between gap-6">
-<div class="flex flex-col gap-3 flex-[2_2_0px]">
-<p class="text-[#0d121b] dark:text-white text-xl font-bold leading-tight">Toyota Corolla 2018 - ABC-1234</p>
-<div class="space-y-1.5">
-<p class="text-gray-600 dark:text-gray-300 text-sm font-normal leading-normal"><span class="font-medium text-gray-800 dark:text-gray-200">Cliente:</span> Juan Pérez</p>
-<p class="text-gray-600 dark:text-gray-300 text-sm font-normal leading-normal"><span class="font-medium text-gray-800 dark:text-gray-200">Servicio:</span> Cambio de frenos delanteros</p>
-</div>
-</div>
-<div class="w-full sm:w-auto bg-center bg-no-repeat aspect-video bg-cover rounded-lg flex-1 min-w-0 sm:min-w-[200px] max-w-xs" data-alt="Image of a Toyota Corolla" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuC_M5TwgVuepcKZVNGlbNSvS2MH_Mo7PE4hTcuWweNfSbV8_MmzItlkLQx15oTG6ZP2M6hE-2ZsxW1G06PmW3EiR-4o84xvqyixMjI44OSjioSWhDSjvC5y1ZpFl8g_2QUhIogm3iD9YhdYSrB5HnqBH1xuc8EKE1lNBsJPlVlxD1xRuGLOmqfqqFnePZPCdmmDS_9xcsIKDurIFJY0lqiHZSwmKV6Hie8dstAVs3fN47lEX2m5MzK4ovKwZqoo9O_rwa82xBghcT5M");'></div>
-</div>
-</div>
-<div class="flex flex-col gap-8 bg-white dark:bg-gray-800/50 p-6 rounded-xl border border-gray-200 dark:border-gray-700">
-<!-- SectionHeader -->
-<h2 class="text-[#0d121b] dark:text-white text-[22px] font-bold leading-tight tracking-[-0.015em]">Detalles de la Tarea</h2>
-<!-- Form fields -->
-<div class="flex flex-col md:flex-row gap-6">
-<!-- TextField -->
-<div class="flex flex-1">
-<label class="flex flex-col w-full">
-<p class="text-[#0d121b] dark:text-gray-200 text-base font-medium leading-normal pb-2">Descripción de Acciones Realizadas</p>
-<textarea class="form-input flex w-full min-w-0 flex-1 resize-y overflow-hidden rounded-lg text-[#0d121b] dark:text-gray-100 focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-[#cfd7e7] dark:border-gray-600 bg-background-light dark:bg-background-dark focus:border-primary dark:focus:border-primary min-h-36 placeholder:text-gray-400 dark:placeholder:text-gray-500 p-[15px] text-base font-normal leading-normal" placeholder="Ej: Se desmontaron las pinzas de freno, se limpiaron y se instalaron nuevas pastillas..."></textarea>
-</label>
-</div>
-<!-- Time Input -->
-<div class="flex">
-<label class="flex flex-col w-full md:w-48">
-<p class="text-[#0d121b] dark:text-gray-200 text-base font-medium leading-normal pb-2">Tiempo Invertido (hrs)</p>
-<input class="form-input flex w-full min-w-0 flex-1 rounded-lg text-[#0d121b] dark:text-gray-100 focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-[#cfd7e7] dark:border-gray-600 bg-background-light dark:bg-background-dark focus:border-primary dark:focus:border-primary h-12 placeholder:text-gray-400 dark:placeholder:text-gray-500 px-4 text-base font-normal leading-normal" min="0" placeholder="Ej: 2.5" step="0.5" type="number"/>
-</label>
-</div>
-</div>
-<!-- SectionHeader -->
-<h2 class="text-[#0d121b] dark:text-white text-[22px] font-bold leading-tight tracking-[-0.015em] pt-5 border-t border-gray-200 dark:border-gray-700">Repuestos Utilizados</h2>
-<!-- Search and add parts section -->
-<div class="flex flex-col gap-4">
-<label class="flex flex-col w-full">
-<p class="text-[#0d121b] dark:text-gray-200 text-base font-medium leading-normal pb-2">Buscar Repuestos</p>
-<div class="relative">
-<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500">search</span>
-<input class="form-input flex w-full min-w-0 flex-1 rounded-lg text-[#0d121b] dark:text-gray-100 focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-[#cfd7e7] dark:border-gray-600 bg-background-light dark:bg-background-dark focus:border-primary dark:focus:border-primary h-12 placeholder:text-gray-400 dark:placeholder:text-gray-500 pl-10 pr-4 text-base font-normal leading-normal" placeholder="Buscar por nombre o código de pieza..." type="search"/>
-</div>
-</label>
-<!-- Added parts list -->
-<div class="mt-4 flow-root">
-<div class="-mx-4 -my-2 overflow-x-auto sm:-mx-6 lg:-mx-8">
-<div class="inline-block min-w-full py-2 align-middle sm:px-6 lg:px-8">
-<table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-<thead>
-<tr>
-<th class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 dark:text-white sm:pl-0" scope="col">Repuesto</th>
-<th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white" scope="col">Stock</th>
-<th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white" scope="col">Cantidad</th>
-<th class="relative py-3.5 pl-3 pr-4 sm:pr-0" scope="col">
-<span class="sr-only">Remover</span>
-</th>
-</tr>
-</thead>
-<tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-<tr>
-<td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 dark:text-white sm:pl-0">Pastillas de Freno Delanteras (Set)</td>
-<td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300">12 sets</td>
-<td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300">
-<div class="flex items-center gap-2">
-<button class="flex items-center justify-center size-7 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600">-</button>
-<span class="w-8 text-center font-medium text-gray-900 dark:text-white">1</span>
-<button class="flex items-center justify-center size-7 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600">+</button>
-</div>
-</td>
-<td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-0">
-<button class="text-red-600 hover:text-red-800 dark:text-red-500 dark:hover:text-red-400 p-1">
-<span class="material-symbols-outlined text-xl">delete</span>
-</button>
-</td>
-</tr>
-<tr>
-<td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 dark:text-white sm:pl-0">Líquido de Frenos DOT 4 (1L)</td>
-<td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300">
-<span class="inline-flex items-center rounded-md bg-red-100 dark:bg-red-900/50 px-2 py-1 text-xs font-medium text-red-700 dark:text-red-400 ring-1 ring-inset ring-red-600/10 dark:ring-red-500/30">Stock bajo: 2</span>
-</td>
-<td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300">
-<div class="flex items-center gap-2">
-<button class="flex items-center justify-center size-7 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600">-</button>
-<span class="w-8 text-center font-medium text-gray-900 dark:text-white">1</span>
-<button class="flex items-center justify-center size-7 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600">+</button>
-</div>
-</td>
-<td class="relative whitespace-nowrap py-4 pl-3 pr-4 text-right text-sm font-medium sm:pr-0">
-<button class="text-red-600 hover:text-red-800 dark:text-red-500 dark:hover:text-red-400 p-1">
-<span class="material-symbols-outlined text-xl">delete</span>
-</button>
-</td>
-</tr>
-</tbody>
-</table>
-</div>
-</div>
-</div>
-</div>
-</div>
-<!-- Action Buttons -->
-<div class="flex flex-col sm:flex-row items-center justify-end gap-3 pt-2 pb-8">
-<button class="flex w-full sm:w-auto max-w-xs cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 bg-gray-200/80 dark:bg-gray-700/80 text-gray-800 dark:text-gray-200 hover:bg-gray-300/80 dark:hover:bg-gray-600/80 gap-2 text-base font-bold leading-normal tracking-[0.015em] min-w-0 px-6">Cancelar</button>
-<button class="flex w-full sm:w-auto max-w-xs cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 bg-primary text-white hover:bg-primary/90 gap-2 text-base font-bold leading-normal tracking-[0.015em] min-w-0 px-6">Guardar Entrada</button>
-</div>
-</div>
-</main>
-</div>
-</div>
-</body></html>
+
+<script>
+    /**
+     * @typedef {object} Part
+     * @property {number} id
+     * @property {string} nombre
+     * @property {number} stock
+     * @property {number} [quantity]
+     */
+
+    /**
+     * Manages the state and logic for searching, adding, and managing parts for a work order.
+     * @param {Part[]} allParts - The initial list of all available parts.
+     * @returns {import('alpinejs').AlpineComponent<{allParts: Part[], search: string, filteredParts: Part[], usedParts: (Part & {quantity: number})[]}>}
+     */
+    function partsManager(allParts: any[]) {
+        return {
+            allParts: allParts,
+            search: '',
+            filteredParts: [] as any[],
+            usedParts: [] as any[], // Array of Part objects with an added 'quantity' property
+
+            init() {
+                console.log('Alpine parts manager initialized.');
+            },
+
+            filterParts() {
+                if (this.search === '') {
+                    this.filteredParts = [];
+                    return;
+                }
+                this.filteredParts = this.allParts.filter((part: any) =>
+                    part.nombre.toLowerCase().includes(this.search.toLowerCase()) &&
+                    !this.usedParts.some((used: any) => used.id === part.id)
+                );
+            },
+
+            /** @param {Part} part */
+            addPart(part: any) {
+                if (!this.usedParts.some((p: any) => p.id === part.id)) {
+                    this.usedParts.push({ ...part, quantity: 1 });
+                    this.search = '';
+                    this.filteredParts = [];
+                }
+            },
+
+            /** @param {number} partId */
+            removePart(partId: number) {
+                this.usedParts = this.usedParts.filter((p: any) => p.id !== partId);
+            },
+
+            /** @param {number} partId */
+            incrementQuantity(partId: number) {
+                const part = this.usedParts.find((p: any) => p.id === partId);
+                if (part && part.quantity < part.stock) {
+                    part.quantity++;
+                }
+            },
+
+            /** @param {number} partId */
+            decrementQuantity(partId: number) {
+                const part = this.usedParts.find((p: any) => p.id === partId);
+                if (part && part.quantity > 1) {
+                    part.quantity--;
+                }
+            }
+        }
+    }
+</script>
+
+</body>
+</html>

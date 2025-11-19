@@ -1,5 +1,71 @@
 ---
 import '../../styles/global.css';
+
+const jwt = Astro.cookies.get('jwt')?.value;
+let lowStockItems = [];
+let totalCritical = 0;
+let pendingOrders = 0; // Placeholder or fetch if possible
+
+if (jwt) {
+  try {
+    // Handle Restock POST
+    if (Astro.request.method === 'POST') {
+      const formData = await Astro.request.formData();
+      const repuestoId = formData.get('repuestoId');
+      const addAmount = parseInt(formData.get('amount')?.toString() || '0');
+
+      if (repuestoId && addAmount > 0) {
+        // 1. Get current stock
+        const currentRes = await fetch(`http://localhost:1337/api/repuestos/${repuestoId}`, {
+          headers: { 'Authorization': `Bearer ${jwt}` }
+        });
+        
+        if (currentRes.ok) {
+            const currentData = await currentRes.json();
+            const currentStock = currentData.data.attributes.stock || 0;
+            const newStock = currentStock + addAmount;
+
+            // 2. Update stock
+            await fetch(`http://localhost:1337/api/repuestos/${repuestoId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${jwt}`
+            },
+            body: JSON.stringify({
+                data: { stock: newStock }
+            })
+            });
+        }
+      }
+    }
+
+    // Fetch Repuestos (fetching all to filter by stock_minimo correctly in JS)
+    // Optimization: Filter by a safe upper bound on server side first, e.g., stock <= 50
+    const res = await fetch('http://localhost:1337/api/repuestos?filters[stock][$lte]=50&pagination[limit]=100', {
+      headers: { 'Authorization': `Bearer ${jwt}` }
+    });
+    const data = await res.json();
+    const allRepuestos = data.data || [];
+
+    // Filter strictly where stock <= stock_minimo
+    lowStockItems = allRepuestos.filter((item: any) => {
+        const stock = item.attributes.stock || 0;
+        const min = item.attributes.stock_minimo || 5; // Default to 5 if not set
+        return stock <= min;
+    }).map((item: any) => ({
+        id: item.id,
+        ...item.attributes
+    }));
+
+    totalCritical = lowStockItems.length;
+
+  } catch (e) {
+    console.error('Error fetching stock alerts:', e);
+  }
+} else {
+  return Astro.redirect('/login');
+}
 ---
 <!DOCTYPE html>
 
@@ -133,11 +199,11 @@ import '../../styles/global.css';
 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
 <div class="flex flex-col gap-2 rounded-xl p-6 border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/50">
 <p class="text-[#0d121b] dark:text-gray-300 text-base font-medium leading-normal">Total de Repuestos Críticos</p>
-<p class="text-[#0d121b] dark:text-white tracking-tight text-3xl font-bold leading-tight">14</p>
+<p class="text-[#0d121b] dark:text-white tracking-tight text-3xl font-bold leading-tight">{totalCritical}</p>
 </div>
 <div class="flex flex-col gap-2 rounded-xl p-6 border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/50">
 <p class="text-[#0d121b] dark:text-gray-300 text-base font-medium leading-normal">Pedidos Pendientes</p>
-<p class="text-[#0d121b] dark:text-white tracking-tight text-3xl font-bold leading-tight">3</p>
+<p class="text-[#0d121b] dark:text-white tracking-tight text-3xl font-bold leading-tight">0</p>
 </div>
 </div>
 <!-- SearchBar and Filters -->
@@ -165,66 +231,36 @@ import '../../styles/global.css';
 </tr>
 </thead>
 <tbody>
+{lowStockItems.length > 0 ? lowStockItems.map((item: any) => (
 <tr class="border-b border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
 <td class="px-4 py-3 align-middle">
-<span class="inline-flex items-center gap-2 rounded-full bg-red-100 dark:bg-red-900/50 px-3 py-1 text-sm font-medium text-red-700 dark:text-red-300">
-<span class="h-2 w-2 rounded-full bg-red-500"></span>
-                                        Crítico
+<span class={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium ${
+    item.stock === 0 ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300' : 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-300'
+}`}>
+<span class={`h-2 w-2 rounded-full ${item.stock === 0 ? 'bg-red-500' : 'bg-yellow-500'}`}></span>
+                                        {item.stock === 0 ? 'Crítico' : 'Bajo'}
                                     </span>
 </td>
-<td class="px-4 py-3 align-middle text-[#0d121b] dark:text-white text-sm font-normal">Filtro de Aceite B-452</td>
-<td class="px-4 py-3 align-middle text-center text-red-600 dark:text-red-400 text-sm font-bold">2</td>
-<td class="px-4 py-3 align-middle text-center text-[#4c669a] dark:text-gray-400 text-sm font-normal">5</td>
-<td class="px-4 py-3 align-middle text-[#4c669a] dark:text-gray-400 text-sm font-normal">AutoPartes Express</td>
+<td class="px-4 py-3 align-middle text-[#0d121b] dark:text-white text-sm font-normal">
+    <div>{item.nombre}</div>
+    <div class="text-xs text-gray-500">{item.sku}</div>
+</td>
+<td class="px-4 py-3 align-middle text-center text-red-600 dark:text-red-400 text-sm font-bold">{item.stock}</td>
+<td class="px-4 py-3 align-middle text-center text-[#4c669a] dark:text-gray-400 text-sm font-normal">{item.stock_minimo}</td>
+<td class="px-4 py-3 align-middle text-[#4c669a] dark:text-gray-400 text-sm font-normal">{item.proveedor || 'N/A'}</td>
 <td class="px-4 py-3 text-right align-middle">
-<button class="text-primary dark:text-blue-400 text-sm font-bold tracking-[0.015em] hover:underline">Reabastecer</button>
+    <form method="POST" class="flex items-center justify-end gap-2">
+        <input type="hidden" name="repuestoId" value={item.id} />
+        <input type="number" name="amount" value="10" min="1" class="w-16 h-8 text-sm border rounded px-2 dark:bg-gray-800 dark:border-gray-700" />
+        <button type="submit" class="text-primary dark:text-blue-400 text-sm font-bold tracking-[0.015em] hover:underline">Reabastecer</button>
+    </form>
 </td>
 </tr>
-<tr class="border-b border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
-<td class="px-4 py-3 align-middle">
-<span class="inline-flex items-center gap-2 rounded-full bg-red-100 dark:bg-red-900/50 px-3 py-1 text-sm font-medium text-red-700 dark:text-red-300">
-<span class="h-2 w-2 rounded-full bg-red-500"></span>
-                                        Crítico
-                                    </span>
-</td>
-<td class="px-4 py-3 align-middle text-[#0d121b] dark:text-white text-sm font-normal">Pastillas de Freno Delanteras T-800</td>
-<td class="px-4 py-3 align-middle text-center text-red-600 dark:text-red-400 text-sm font-bold">4</td>
-<td class="px-4 py-3 align-middle text-center text-[#4c669a] dark:text-gray-400 text-sm font-normal">8</td>
-<td class="px-4 py-3 align-middle text-[#4c669a] dark:text-gray-400 text-sm font-normal">Frenos Seguros S.A.</td>
-<td class="px-4 py-3 text-right align-middle">
-<button class="text-primary dark:text-blue-400 text-sm font-bold tracking-[0.015em] hover:underline">Reabastecer</button>
-</td>
-</tr>
-<tr class="border-b border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
-<td class="px-4 py-3 align-middle">
-<span class="inline-flex items-center gap-2 rounded-full bg-yellow-100 dark:bg-yellow-900/50 px-3 py-1 text-sm font-medium text-yellow-800 dark:text-yellow-300">
-<span class="h-2 w-2 rounded-full bg-yellow-500"></span>
-                                        Bajo
-                                    </span>
-</td>
-<td class="px-4 py-3 align-middle text-[#0d121b] dark:text-white text-sm font-normal">Bujía de Iridio NGK-340</td>
-<td class="px-4 py-3 align-middle text-center text-yellow-700 dark:text-yellow-400 text-sm font-bold">12</td>
-<td class="px-4 py-3 align-middle text-center text-[#4c669a] dark:text-gray-400 text-sm font-normal">10</td>
-<td class="px-4 py-3 align-middle text-[#4c669a] dark:text-gray-400 text-sm font-normal">MotorTech</td>
-<td class="px-4 py-3 text-right align-middle">
-<button class="text-primary dark:text-blue-400 text-sm font-bold tracking-[0.015em] hover:underline">Reabastecer</button>
-</td>
-</tr>
-<tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-<td class="px-4 py-3 align-middle">
-<span class="inline-flex items-center gap-2 rounded-full bg-red-100 dark:bg-red-900/50 px-3 py-1 text-sm font-medium text-red-700 dark:text-red-300">
-<span class="h-2 w-2 rounded-full bg-red-500"></span>
-                                        Crítico
-                                    </span>
-</td>
-<td class="px-4 py-3 align-middle text-[#0d121b] dark:text-white text-sm font-normal">Correa de Distribución G-210</td>
-<td class="px-4 py-3 align-middle text-center text-red-600 dark:text-red-400 text-sm font-bold">1</td>
-<td class="px-4 py-3 align-middle text-center text-[#4c669a] dark:text-gray-400 text-sm font-normal">3</td>
-<td class="px-4 py-3 align-middle text-[#4c669a] dark:text-gray-400 text-sm font-normal">Componentes Duraderos</td>
-<td class="px-4 py-3 text-right align-middle">
-<button class="text-primary dark:text-blue-400 text-sm font-bold tracking-[0.015em] hover:underline">Reabastecer</button>
-</td>
-</tr>
+)) : (
+    <tr>
+        <td colspan="6" class="px-4 py-8 text-center text-gray-500">No hay repuestos con stock bajo.</td>
+    </tr>
+)}
 </tbody>
 </table>
 </div>

@@ -1,5 +1,79 @@
 ---
 import '../../styles/global.css';
+
+const jwt = Astro.cookies.get('jwt')?.value;
+const orderId = Astro.url.searchParams.get('id');
+let order = null;
+
+if (jwt) {
+  if (!orderId) {
+    return Astro.redirect('/encargado/trabajos_en_curso');
+  }
+
+  try {
+    const query = new URLSearchParams({
+        'populate[cliente]': '*',
+        'populate[vehiculo]': '*',
+        'populate[mecanico]': '*',
+        'populate[repuestos]': '*',
+        'populate[bitacoras]': '*'
+    });
+
+    const res = await fetch(`http://localhost:1337/api/orden-de-trabajos/${orderId}?${query.toString()}`, {
+      headers: {
+        'Authorization': `Bearer ${jwt}`
+      }
+    });
+    
+    if (res.ok) {
+      const data = await res.json();
+      order = data.data;
+    } else {
+      console.error('Failed to fetch order details');
+    }
+  } catch (e) {
+    console.error('Error fetching order:', e);
+  }
+} else {
+  return Astro.redirect('/login');
+}
+
+if (!order) {
+  return Astro.redirect('/encargado/trabajos_en_curso');
+}
+
+const formatDate = (dateString: string) => {
+  if (!dateString) return 'N/A';
+  return new Date(dateString).toLocaleDateString('es-ES', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
+
+const getStatusColor = (status: string) => {
+    switch (status) {
+        case 'ingresado': return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+        case 'en_diagnostico': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
+        case 'en_reparacion': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
+        case 'finalizado': return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
+        case 'entregado': return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300';
+        default: return 'bg-gray-100 text-gray-800';
+    }
+};
+
+const getStatusLabel = (status: string) => {
+    return status ? status.replace('_', ' ').toUpperCase() : 'DESCONOCIDO';
+};
+
+// Calculate total from parts
+const partsTotal = order.repuestos?.reduce((acc: number, part: any) => acc + (part.precio || 0), 0) || 0;
+const total = partsTotal; 
+const iva = total * 0.21;
+const grandTotal = total + iva;
+
 --- 
 
 <!DOCTYPE html>
@@ -118,24 +192,24 @@ import '../../styles/global.css';
 <div>
 <!-- Breadcrumbs -->
 <div class="flex flex-wrap items-center gap-2">
-<a class="text-gray-500 dark:text-gray-400 text-base font-medium leading-normal hover:text-primary" href="#">Órdenes</a>
+<a class="text-gray-500 dark:text-gray-400 text-base font-medium leading-normal hover:text-primary" href="/encargado/trabajos_en_curso">Órdenes</a>
 <span class="text-gray-400 dark:text-gray-500 text-base font-medium leading-normal">/</span>
-<span class="text-gray-800 dark:text-gray-200 text-base font-medium leading-normal">Orden #12345</span>
+<span class="text-gray-800 dark:text-gray-200 text-base font-medium leading-normal">Orden #{order.documentId.slice(0, 6)}</span>
 </div>
 <div class="flex items-center gap-3 mt-2">
-<h1 class="text-3xl font-bold text-gray-900 dark:text-white">Orden de Trabajo #12345</h1>
+<h1 class="text-3xl font-bold text-gray-900 dark:text-white">Orden de Trabajo #{order.documentId.slice(0, 6)}</h1>
 <!-- Chip -->
-<div class="flex h-8 shrink-0 items-center justify-center gap-x-2 rounded-full bg-green-100 dark:bg-green-900/40 px-3">
-<span class="w-2 h-2 rounded-full bg-green-500"></span>
-<p class="text-green-700 dark:text-green-300 text-sm font-medium leading-normal">Finalizada</p>
+<div class={`flex h-8 shrink-0 items-center justify-center gap-x-2 rounded-full px-3 ${getStatusColor(order.estado)}`}>
+<span class="w-2 h-2 rounded-full bg-current"></span>
+<p class="text-sm font-medium leading-normal">{getStatusLabel(order.estado)}</p>
 </div>
 </div>
 </div>
 <!-- Toolbar -->
 <div class="flex gap-2">
-<button class="flex items-center justify-center gap-2 p-2 h-10 w-10 rounded-lg text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700/50 border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700">
+<a href={`/encargado/asignar_orden_zona?id=${order.documentId}`} class="flex items-center justify-center gap-2 p-2 h-10 w-10 rounded-lg text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700/50 border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700">
 <span class="material-symbols-outlined">edit</span>
-</button>
+</a>
 <button class="flex items-center justify-center gap-2 p-2 h-10 w-10 rounded-lg text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700/50 border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700">
 <span class="material-symbols-outlined">print</span>
 </button>
@@ -155,15 +229,15 @@ import '../../styles/global.css';
 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
 <div>
 <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">CLIENTE</h3>
-<p class="font-medium text-gray-800 dark:text-gray-200">Ana Torres</p>
-<p class="text-gray-600 dark:text-gray-300">ana.torres@example.com</p>
-<p class="text-gray-600 dark:text-gray-300">+34 612 345 678</p>
+<p class="font-medium text-gray-800 dark:text-gray-200">{order.cliente?.nombre} {order.cliente?.apellido}</p>
+<p class="text-gray-600 dark:text-gray-300">{order.cliente?.email}</p>
+<p class="text-gray-600 dark:text-gray-300">{order.cliente?.telefono}</p>
 </div>
 <div>
 <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">VEHÍCULO</h3>
-<p class="font-medium text-gray-800 dark:text-gray-200">Toyota Corolla (2021)</p>
-<p class="text-gray-600 dark:text-gray-300">Matrícula: 5432 JKL</p>
-<p class="text-gray-600 dark:text-gray-300">VIN: YK1234567890ABCDE</p>
+<p class="font-medium text-gray-800 dark:text-gray-200">{order.vehiculo?.marca} {order.vehiculo?.modelo} ({order.vehiculo?.anio})</p>
+<p class="text-gray-600 dark:text-gray-300">Matrícula: {order.vehiculo?.patente}</p>
+<p class="text-gray-600 dark:text-gray-300">VIN: {order.vehiculo?.vin || 'N/A'}</p>
 </div>
 </div>
 </div>
@@ -181,37 +255,32 @@ import '../../styles/global.css';
 </tr>
 </thead>
 <tbody>
+{order.repuestos?.map((part: any) => (
 <tr class="border-b border-gray-200 dark:border-gray-700">
-<td class="py-3">Filtro de aceite Bosch P3245</td>
+<td class="py-3">{part.nombre}</td>
 <td class="py-3 text-center">1</td>
-<td class="py-3 text-right">€15.00</td>
-<td class="py-3 text-right">€15.00</td>
+<td class="py-3 text-right">€{part.precio}</td>
+<td class="py-3 text-right">€{part.precio}</td>
 </tr>
-<tr class="border-b border-gray-200 dark:border-gray-700">
-<td class="py-3">Aceite sintético 5W-30 (Litro)</td>
-<td class="py-3 text-center">4</td>
-<td class="py-3 text-right">€22.50</td>
-<td class="py-3 text-right">€90.00</td>
-</tr>
-<tr class="border-b border-gray-200 dark:border-gray-700">
-<td class="py-3">Mano de obra: Cambio de aceite y filtros</td>
-<td class="py-3 text-center">1</td>
-<td class="py-3 text-right">€50.00</td>
-<td class="py-3 text-right">€50.00</td>
-</tr>
+))}
+{(!order.repuestos || order.repuestos.length === 0) && (
+    <tr class="border-b border-gray-200 dark:border-gray-700">
+        <td class="py-3 text-gray-500 italic" colspan="4">No hay repuestos asignados</td>
+    </tr>
+)}
 </tbody>
 <tfoot>
 <tr>
 <td class="pt-4 text-right font-medium text-gray-600 dark:text-gray-300" colspan="3">Subtotal</td>
-<td class="pt-4 text-right font-medium text-gray-800 dark:text-gray-200">€155.00</td>
+<td class="pt-4 text-right font-medium text-gray-800 dark:text-gray-200">€{total.toFixed(2)}</td>
 </tr>
 <tr>
 <td class="py-1 text-right font-medium text-gray-600 dark:text-gray-300" colspan="3">IVA (21%)</td>
-<td class="py-1 text-right font-medium text-gray-800 dark:text-gray-200">€32.55</td>
+<td class="py-1 text-right font-medium text-gray-800 dark:text-gray-200">€{iva.toFixed(2)}</td>
 </tr>
 <tr>
 <td class="pt-2 text-right text-lg font-bold text-gray-900 dark:text-white" colspan="3">Total</td>
-<td class="pt-2 text-right text-lg font-bold text-gray-900 dark:text-white">€187.55</td>
+<td class="pt-2 text-right text-lg font-bold text-gray-900 dark:text-white">€{grandTotal.toFixed(2)}</td>
 </tr>
 </tfoot>
 </table>
@@ -225,20 +294,22 @@ import '../../styles/global.css';
 <h2 class="text-xl font-bold text-gray-900 dark:text-white pb-4 mb-4 border-b border-gray-200 dark:border-gray-700">Resumen de la Orden</h2>
 <div class="space-y-4 text-sm">
 <div class="flex justify-between">
-<span class="text-gray-500 dark:text-gray-400">Fecha de Creación:</span>
-<span class="font-medium text-gray-800 dark:text-gray-200">15 Julio, 2024</span>
+<span class="text-gray-500 dark:text-gray-400">Fecha de Ingreso:</span>
+<span class="font-medium text-gray-800 dark:text-gray-200">{formatDate(order.fecha_ingreso)}</span>
 </div>
 <div class="flex justify-between">
 <span class="text-gray-500 dark:text-gray-400">Mecánico Asignado:</span>
-<span class="font-medium text-gray-800 dark:text-gray-200">Carlos Pérez</span>
+<span class="font-medium text-gray-800 dark:text-gray-200">
+    {order.mecanico ? `${order.mecanico.nombre} ${order.mecanico.apellido}` : 'Sin asignar'}
+</span>
 </div>
 <div class="flex justify-between">
 <span class="text-gray-500 dark:text-gray-400">Entrega Estimada:</span>
-<span class="font-medium text-gray-800 dark:text-gray-200">17 Julio, 2024</span>
+<span class="font-medium text-gray-800 dark:text-gray-200">{formatDate(order.fecha_estimada)}</span>
 </div>
 <div>
-<span class="text-gray-500 dark:text-gray-400">Problema Inicial:</span>
-<p class="font-medium text-gray-800 dark:text-gray-200 mt-1">Revisión periódica y cambio de aceite. El cliente reporta un ruido leve al frenar.</p>
+<span class="text-gray-500 dark:text-gray-400">Descripción:</span>
+<p class="font-medium text-gray-800 dark:text-gray-200 mt-1">{order.descripcion}</p>
 </div>
 </div>
 </div>
@@ -246,46 +317,28 @@ import '../../styles/global.css';
 <div class="bg-white dark:bg-[#18202F] p-6 rounded-xl border border-gray-200 dark:border-gray-700">
 <h2 class="text-xl font-bold text-gray-900 dark:text-white pb-4 border-b border-gray-200 dark:border-gray-700">Historial y Bitácora</h2>
 <div class="mt-4 space-y-6">
+
+{order.bitacoras?.map((bitacora: any) => (
 <div class="relative flex gap-4">
 <div class="absolute left-[11px] top-10 h-full w-0.5 bg-gray-200 dark:bg-gray-700"></div>
-<div class="z-10 flex h-6 w-6 items-center justify-center rounded-full bg-green-500 text-white">
-<span class="material-symbols-outlined !text-[16px]">check</span>
+<div class="z-10 flex h-6 w-6 items-center justify-center rounded-full bg-blue-500 text-white">
+<span class="material-symbols-outlined !text-[16px]">history</span>
 </div>
 <div>
-<p class="font-medium text-gray-800 dark:text-gray-200">Orden Finalizada</p>
-<p class="text-xs text-gray-500 dark:text-gray-400">16 Julio, 2024 - 17:30</p>
-<p class="text-sm text-gray-600 dark:text-gray-300 mt-1">Vehículo listo para entrega. Cliente notificado.</p>
+<p class="font-medium text-gray-800 dark:text-gray-200">{bitacora.procedimientos}</p>
+<p class="text-xs text-gray-500 dark:text-gray-400">{formatDate(bitacora.fecha)}</p>
+<p class="text-sm text-gray-600 dark:text-gray-300 mt-1">{bitacora.observaciones}</p>
 </div>
 </div>
-<div class="relative flex gap-4">
-<div class="absolute left-[11px] top-10 h-full w-0.5 bg-gray-200 dark:bg-gray-700"></div>
-<div class="z-10 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-white">
-<span class="material-symbols-outlined !text-[16px]">build</span>
-</div>
-<div>
-<p class="font-medium text-gray-800 dark:text-gray-200">Cambio de Estado: En Reparación</p>
-<p class="text-xs text-gray-500 dark:text-gray-400">16 Julio, 2024 - 11:00</p>
-<p class="text-sm text-gray-600 dark:text-gray-300 mt-1">Se procede con el cambio de aceite y filtros.</p>
-</div>
-</div>
-<div class="relative flex gap-4">
-<div class="absolute left-[11px] top-10 h-full w-0.5 bg-gray-200 dark:bg-gray-700"></div>
-<div class="z-10 flex h-6 w-6 items-center justify-center rounded-full bg-yellow-500 text-white">
-<span class="material-symbols-outlined !text-[16px]">search</span>
-</div>
-<div>
-<p class="font-medium text-gray-800 dark:text-gray-200">Cambio de Estado: Diagnóstico</p>
-<p class="text-xs text-gray-500 dark:text-gray-400">15 Julio, 2024 - 14:20</p>
-<p class="text-sm text-gray-600 dark:text-gray-300 mt-1">Se confirma que el ruido al frenar se debe a pastillas de freno gastadas. Cliente aprueba reemplazo.</p>
-</div>
-</div>
+))}
+
 <div class="relative flex gap-4">
 <div class="z-10 flex h-6 w-6 items-center justify-center rounded-full bg-gray-400 text-white">
 <span class="material-symbols-outlined !text-[16px]">add</span>
 </div>
 <div>
 <p class="font-medium text-gray-800 dark:text-gray-200">Orden Creada</p>
-<p class="text-xs text-gray-500 dark:text-gray-400">15 Julio, 2024 - 12:05</p>
+<p class="text-xs text-gray-500 dark:text-gray-400">{formatDate(order.createdAt)}</p>
 <p class="text-sm text-gray-600 dark:text-gray-300 mt-1">Vehículo recibido en el taller.</p>
 </div>
 </div>

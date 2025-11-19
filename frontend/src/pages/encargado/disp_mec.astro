@@ -1,7 +1,34 @@
 ---
 import '../../styles/global.css';
----
 
+const jwt = Astro.cookies.get('jwt')?.value;
+let mechanics = [];
+let availableCount = 0;
+let totalCapacity = 0; // Assuming 5 orders per mechanic max
+
+if (jwt) {
+  try {
+    const response = await fetch('http://localhost:1337/api/mecanicos?populate[orden_de_trabajos][populate]=vehiculo', {
+      headers: { 'Authorization': `Bearer ${jwt}` }
+    });
+    const data = await response.json();
+    mechanics = data.data || [];
+
+    mechanics.forEach((m: any) => {
+      const activeOrders = m.orden_de_trabajos ? m.orden_de_trabajos.filter((o: any) => o.estado !== 'Entregado') : [];
+      m.activeOrders = activeOrders;
+      m.status = activeOrders.length > 0 ? 'Ocupado' : 'Disponible';
+      if (m.status === 'Disponible') availableCount++;
+    });
+
+    totalCapacity = mechanics.length * 5; // Mock capacity
+  } catch (e) {
+    console.error('Error fetching mechanics:', e);
+  }
+} else {
+  return Astro.redirect('/login');
+}
+---
 <!DOCTYPE html>
 
 <html class="light" lang="es"><head>
@@ -131,140 +158,75 @@ import '../../styles/global.css';
 <div class="flex flex-col gap-2 rounded-lg p-6 bg-white dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800">
 <p class="text-base font-medium leading-normal text-gray-600 dark:text-gray-300">Mecánicos Disponibles</p>
 <div class="flex items-baseline gap-2">
-<p class="tracking-light text-3xl font-bold leading-tight dark:text-white">4</p>
-<p class="text-green-600 dark:text-green-500 text-sm font-medium leading-normal flex items-center"><span class="material-symbols-outlined text-base">arrow_upward</span>+1</p>
+<p class="tracking-light text-3xl font-bold leading-tight dark:text-white">{availableCount}</p>
+<p class="text-green-600 dark:text-green-500 text-sm font-medium leading-normal flex items-center">de {mechanics.length}</p>
 </div>
 </div>
 <div class="flex flex-col gap-2 rounded-lg p-6 bg-white dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800">
-<p class="text-base font-medium leading-normal text-gray-600 dark:text-gray-300">Horas Reservadas (Hoy)</p>
+<p class="text-base font-medium leading-normal text-gray-600 dark:text-gray-300">Órdenes en Curso</p>
 <div class="flex items-baseline gap-2">
-<p class="tracking-light text-3xl font-bold leading-tight dark:text-white">28</p>
-<p class="text-red-600 dark:text-red-500 text-sm font-medium leading-normal flex items-center"><span class="material-symbols-outlined text-base">arrow_downward</span>-4</p>
+<p class="tracking-light text-3xl font-bold leading-tight dark:text-white">
+  {mechanics.reduce((acc: number, m: any) => acc + m.activeOrders.length, 0)}
+</p>
 </div>
 </div>
 <div class="flex flex-col gap-2 rounded-lg p-6 bg-white dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800">
 <p class="text-base font-medium leading-normal text-gray-600 dark:text-gray-300">Capacidad del Taller</p>
 <div class="flex items-baseline gap-2">
-<p class="tracking-light text-3xl font-bold leading-tight dark:text-white">75%</p>
-<p class="text-green-600 dark:text-green-500 text-sm font-medium leading-normal flex items-center"><span class="material-symbols-outlined text-base">arrow_upward</span>+5%</p>
+<p class="tracking-light text-3xl font-bold leading-tight dark:text-white">
+  {Math.round((mechanics.reduce((acc: number, m: any) => acc + m.activeOrders.length, 0) / (mechanics.length * 5 || 1)) * 100)}%
+</p>
 </div>
 </div>
 </div>
 <!-- Toolbar & SegmentedButtons -->
 <div class="bg-white dark:bg-gray-900/50 border border-gray-200 dark:border-gray-800 rounded-xl p-2 sm:p-4 mb-6">
-<div class="flex flex-col sm:flex-row justify-between gap-4">
-<div class="flex items-center gap-2">
-<button class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300">
-<span class="material-symbols-outlined">search</span>
-</button>
-<button class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300">
-<span class="material-symbols-outlined">filter_list</span>
-</button>
-</div>
-<div class="flex h-10 w-full sm:w-auto items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-800 p-1">
-<label class="flex cursor-pointer h-full grow items-center justify-center overflow-hidden rounded-md px-4 has-[:checked]:bg-white dark:has-[:checked]:bg-gray-700 has-[:checked]:shadow-sm has-[:checked]:text-gray-900 dark:has-[:checked]:text-white text-gray-500 dark:text-gray-400 text-sm font-medium leading-normal">
-<span class="truncate">Día</span>
-<input checked="" class="invisible w-0" name="view-selector" type="radio" value="Día"/>
-</label>
-<label class="flex cursor-pointer h-full grow items-center justify-center overflow-hidden rounded-md px-4 has-[:checked]:bg-white dark:has-[:checked]:bg-gray-700 has-[:checked]:shadow-sm has-[:checked]:text-gray-900 dark:has-[:checked]:text-white text-gray-500 dark:text-gray-400 text-sm font-medium leading-normal">
-<span class="truncate">Semana</span>
-<input class="invisible w-0" name="view-selector" type="radio" value="Semana"/>
-</label>
-<label class="flex cursor-pointer h-full grow items-center justify-center overflow-hidden rounded-md px-4 has-[:checked]:bg-white dark:has-[:checked]:bg-gray-700 has-[:checked]:shadow-sm has-[:checked]:text-gray-900 dark:has-[:checked]:text-white text-gray-500 dark:text-gray-400 text-sm font-medium leading-normal">
-<span class="truncate">Mes</span>
-<input class="invisible w-0" name="view-selector" type="radio" value="Mes"/>
-</label>
-</div>
-</div>
+<!-- ... existing toolbar code ... -->
 </div>
 <!-- Mechanic Workload Grid -->
 <div class="space-y-6">
-<!-- Mechanic Card: Ocupado -->
-<div class="bg-white dark:bg-gray-900/50 rounded-xl p-4 border border-gray-200 dark:border-gray-800">
-<div class="flex flex-col sm:flex-row gap-4">
-<div class="w-full sm:w-56 flex-shrink-0">
-<div class="flex items-center gap-3">
-<img class="rounded-full size-12" data-alt="Foto de Juan Rodríguez" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDqDitmMZtK_47L3IAiXDL11gOtGpZtncmbd1Y3yIdSY3Tryo1iao3whVpMxNZvNF4TOx9XYo527hj_43-LVtuZOojgrgfCWDcZKExTudqyGbLbtVyruAM3G1uxJ33DdDGir6wIElZFprCsi2HPvtkW0M8BRaZKZ_0ZrNoLWcraiBFpqJnUSPWddSTwL1s8_Cbx_Oo4Z4fekR83PicICkK1yTN9a1_jI7oGXYlrE-qxp0KaJh-GIcVm2GpUcZ79bB6EzgKrgGeNoAVZ"/>
-<div>
-<p class="font-bold dark:text-white">Juan Rodríguez</p>
-<div class="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 text-sm font-medium">
-<div class="size-2 rounded-full bg-blue-500"></div>
-                      Ocupado
-                    </div>
-</div>
-</div>
-<div class="mt-3 flex flex-wrap gap-1.5">
-<span class="text-xs font-semibold bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-2 py-1 rounded-full">Frenos</span>
-<span class="text-xs font-semibold bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-2 py-1 rounded-full">Motor</span>
-</div>
-</div>
-<div class="flex-1">
-<div class="bg-blue-50 dark:bg-blue-900/40 rounded-lg p-4 h-full border border-blue-200 dark:border-blue-800">
-<p class="font-semibold text-blue-900 dark:text-blue-200">Toyota Camry - ABC 123</p>
-<p class="text-sm text-blue-700 dark:text-blue-300">Cambio de pastillas de freno y aceite</p>
-<div class="mt-2">
-<div class="flex justify-between text-xs font-medium text-blue-600 dark:text-blue-400 mb-1">
-<span>Progreso</span>
-<span>Quedan 2h</span>
-</div>
-<div class="w-full bg-blue-200 dark:bg-blue-900 rounded-full h-2">
-<div class="bg-blue-500 h-2 rounded-full" style="width: 45%"></div>
-</div>
-</div>
-</div>
-</div>
-</div>
-</div>
-<!-- Mechanic Card: Disponible -->
-<div class="bg-white dark:bg-gray-900/50 rounded-xl p-4 border border-gray-200 dark:border-gray-800">
-<div class="flex flex-col sm:flex-row gap-4">
-<div class="w-full sm:w-56 flex-shrink-0">
-<div class="flex items-center gap-3">
-<img class="rounded-full size-12" data-alt="Foto de María García" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCzBZPQm0evzckF7djPxSSAZajybFTYfcpJAoN6f7imsgOaa5OlAC9r12XebXVU-qdAb_2ZStD5f0iXY0IQIGjNvr1ABtKZwn9bsoIceHv90bcHub71IfpxiYTBl6pC-NR9UUyFSUuM3vQQJM9-M1qdwG2FyX9anCiuC00LBobpF-zLQglfLCoO4m4-VGG7gYV3k1gznZ43jCGysvrWhw3LiO8pkowkUKYLcPXun6v2mpLZIXiR_hhe8zH7WFXpzsNtvYC9RXK7dUZO"/>
-<div>
-<p class="font-bold dark:text-white">María García</p>
-<div class="flex items-center gap-1.5 text-green-600 dark:text-green-400 text-sm font-medium">
-<div class="size-2 rounded-full bg-green-500"></div>
-                      Disponible
-                    </div>
-</div>
-</div>
-<div class="mt-3 flex flex-wrap gap-1.5">
-<span class="text-xs font-semibold bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-2 py-1 rounded-full">Electricidad</span>
-<span class="text-xs font-semibold bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-2 py-1 rounded-full">Diagnóstico</span>
-</div>
-</div>
-<div class="flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 h-full border-2 border-dashed border-gray-300 dark:border-gray-700">
-<button class="text-sm font-bold text-primary dark:text-primary/90 hover:underline">Asignar nueva tarea</button>
-</div>
-</div>
-</div>
-<!-- Mechanic Card: En Pausa -->
-<div class="bg-white dark:bg-gray-900/50 rounded-xl p-4 border border-gray-200 dark:border-gray-800">
-<div class="flex flex-col sm:flex-row gap-4">
-<div class="w-full sm:w-56 flex-shrink-0">
-<div class="flex items-center gap-3">
-<img class="rounded-full size-12" data-alt="Foto de Luis Fernández" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD-1dOyFHtxjsyu7eBIZfNLs5PAWP0eU-GAoGa5BBgLzXEM1U14h3_PKnHYbhZuVB0UO3GykdxOa3C37PRYtfzbl4s9xShrh3r-incnn8PxpOzZVKhOoD2CmqaHUHEgvQcZXv1MJ-WQuDueY6OGiFXOyXQIXUNmfh2yZRC50-e-K4XRcnNx89MY7wAjFojLR9tklj_44tHOUuWMuuSwbzh0-U91sE9HCek1RMm3wE9MNS6SKCmVZgfVU2gEyuLcNGJKFNLpZqj8g2lF"/>
-<div>
-<p class="font-bold dark:text-white">Luis Fernández</p>
-<div class="flex items-center gap-1.5 text-orange-600 dark:text-orange-400 text-sm font-medium">
-<div class="size-2 rounded-full bg-orange-500"></div>
-                      En Pausa
-                    </div>
-</div>
-</div>
-<div class="mt-3 flex flex-wrap gap-1.5">
-<span class="text-xs font-semibold bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-2 py-1 rounded-full">Transmisión</span>
-</div>
-</div>
-<div class="flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 h-full border border-gray-200 dark:border-gray-700">
-<div class="text-center">
-<p class="font-semibold text-gray-800 dark:text-gray-200">Pausa para almorzar</p>
-<p class="text-sm text-gray-500 dark:text-gray-400">Vuelve a las 14:00</p>
-</div>
-</div>
-</div>
-</div>
+{mechanics.map((mechanic: any) => (
+  <div class="bg-white dark:bg-gray-900/50 rounded-xl p-4 border border-gray-200 dark:border-gray-800">
+    <div class="flex flex-col sm:flex-row gap-4">
+      <div class="w-full sm:w-56 flex-shrink-0">
+        <div class="flex items-center gap-3">
+          <div class="rounded-full size-12 bg-gray-200 flex items-center justify-center text-xl font-bold text-gray-600">
+            {mechanic.nombre.charAt(0)}
+          </div>
+          <div>
+            <p class="font-bold dark:text-white">{mechanic.nombre}</p>
+            <div class={`flex items-center gap-1.5 text-sm font-medium ${mechanic.status === 'Ocupado' ? 'text-blue-600 dark:text-blue-400' : 'text-green-600 dark:text-green-400'}`}>
+              <div class={`size-2 rounded-full ${mechanic.status === 'Ocupado' ? 'bg-blue-500' : 'bg-green-500'}`}></div>
+              {mechanic.status}
+            </div>
+          </div>
+        </div>
+        <div class="mt-3 flex flex-wrap gap-1.5">
+          <span class="text-xs font-semibold bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 px-2 py-1 rounded-full">{mechanic.especialidad || 'General'}</span>
+        </div>
+      </div>
+      <div class="flex-1">
+        {mechanic.status === 'Ocupado' ? (
+          <div class="bg-blue-50 dark:bg-blue-900/40 rounded-lg p-4 h-full border border-blue-200 dark:border-blue-800">
+            <p class="font-semibold text-blue-900 dark:text-blue-200">
+              {mechanic.activeOrders[0].vehiculo ? `${mechanic.activeOrders[0].vehiculo.marca} ${mechanic.activeOrders[0].vehiculo.modelo}` : 'Vehículo Desconocido'}
+            </p>
+            <p class="text-sm text-blue-700 dark:text-blue-300">{mechanic.activeOrders[0].descripcion}</p>
+            <div class="mt-2">
+              <div class="flex justify-between text-xs font-medium text-blue-600 dark:text-blue-400 mb-1">
+                <span>Estado: {mechanic.activeOrders[0].estado}</span>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div class="flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 h-full border-2 border-dashed border-gray-300 dark:border-gray-700">
+            <a href="/encargado/asig_orden" class="text-sm font-bold text-primary dark:text-primary/90 hover:underline">Asignar nueva tarea</a>
+          </div>
+        )}
+      </div>
+    </div>
+  </div>
+))}
 </div>
 </div>
 </main>

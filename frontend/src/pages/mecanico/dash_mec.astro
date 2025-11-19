@@ -1,5 +1,89 @@
 ---
 import '../../styles/global.css';
+
+const jwt = Astro.cookies.get('jwt')?.value;
+
+if (!jwt) {
+  return Astro.redirect('/login');
+}
+
+interface Order {
+  id: number;
+  descripcion: string;
+  estado: string;
+  createdAt: string;
+  vehiculo?: {
+    data?: {
+      attributes: {
+        marca: string;
+        modelo: string;
+        imagen_url?: string;
+      }
+    }
+  }
+}
+
+let assignedOrders: Order[] = [];
+let filteredOrders: Order[] = [];
+let mechanicName = "Mecánico";
+let error = '';
+
+// Status mapping for colors and text
+const statusConfig: { [key: string]: { color: string; label: string } } = {
+  'Pendiente': { color: '#007BFF', label: 'Pendiente' },
+  'En Progreso': { color: '#FFC107', label: 'En Progreso' },
+  'Finalizada': { color: '#28A745', label: 'Finalizada' },
+  'Bloqueada': { color: '#DC3545', label: 'Bloqueada' },
+  'Entregado': { color: '#6c757d', label: 'Entregado' },
+};
+
+try {
+  // 1. Get current user to find the related mechanic
+  const meRes = await fetch('http://localhost:1337/api/users/me?populate=mecanico', {
+    headers: { 'Authorization': `Bearer ${jwt}` }
+  });
+
+  if (!meRes.ok) throw new Error('No se pudo obtener la información del usuario.');
+  
+  const meData = await meRes.json();
+  
+  const mechanicId = meData.mecanico?.id;
+  if (meData.mecanico?.nombre) {
+      mechanicName = meData.mecanico.nombre;
+  }
+
+  if (!mechanicId) {
+    error = 'Este usuario no está asociado a ningún mecánico.';
+  } else {
+    // 2. Fetch work orders for this mechanic
+    const ordersUrl = new URL('http://localhost:1337/api/orden-de-trabajos');
+    ordersUrl.searchParams.set('filters[mecanico][id][$eq]', mechanicId);
+    ordersUrl.searchParams.set('populate', 'vehiculo');
+    ordersUrl.searchParams.set('sort', 'createdAt:desc');
+
+    const ordersRes = await fetch(ordersUrl.toString(), {
+      headers: { 'Authorization': `Bearer ${jwt}` }
+    });
+
+    if (!ordersRes.ok) throw new Error('No se pudieron cargar las órdenes de trabajo.');
+
+    const ordersData = await ordersRes.json();
+    assignedOrders = ordersData.data.map((order: any) => ({ id: order.id, ...order.attributes }));
+  }
+
+} catch (e: any) {
+  console.error('Error en el dashboard del mecánico:', e);
+  error = e.message || 'Error de conexión con el servidor.';
+}
+
+// 3. Filter orders based on query param
+const statusFilter = Astro.url.searchParams.get('status');
+if (statusFilter && statusFilter !== 'Todas') {
+  filteredOrders = assignedOrders.filter((order: Order) => order.estado === statusFilter);
+} else {
+  filteredOrders = assignedOrders;
+}
+
 ---
 <!DOCTYPE html>
 
@@ -67,7 +151,7 @@ import '../../styles/global.css';
 <span class="material-symbols-outlined">settings</span>
 <p class="text-sm font-medium leading-normal">Configuración</p>
 </a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/login">
 <span class="material-symbols-outlined">logout</span>
 <p class="text-sm font-medium leading-normal">Cerrar Sesión</p>
 </a>
@@ -78,97 +162,55 @@ import '../../styles/global.css';
 <div class="flex flex-wrap justify-between items-center gap-4 px-4 sm:px-10">
 <div class="flex min-w-72 flex-col gap-2">
 <p class="text-3xl lg:text-4xl font-black leading-tight tracking-[-0.033em] text-gray-900 dark:text-white">Mis Órdenes de Trabajo</p>
-<p class="text-base font-normal leading-normal text-gray-500 dark:text-gray-400">Un resumen de tus órdenes de trabajo asignadas.</p>
+<p class="text-base font-normal leading-normal text-gray-500 dark:text-gray-400">Hola {mechanicName}, aquí tienes un resumen de tus órdenes asignadas.</p>
 </div>
 </div>
-<div class="flex gap-2 sm:gap-3 px-4 sm:px-10 overflow-x-auto pb-2">
-<button class="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-lg bg-primary text-white pl-4 pr-4">
-<p class="text-sm font-medium leading-normal">Todas</p>
-</button>
-<button class="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-lg bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 pl-4 pr-4">
-<p class="text-gray-900 dark:text-gray-200 text-sm font-medium leading-normal">Pendiente</p>
-</button>
-<button class="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-lg bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 pl-4 pr-4">
-<p class="text-gray-900 dark:text-gray-200 text-sm font-medium leading-normal">En Progreso</p>
-</button>
-<button class="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-lg bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 pl-4 pr-4">
-<p class="text-gray-900 dark:text-gray-200 text-sm font-medium leading-normal">Finalizada</p>
-</button>
-<button class="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-lg bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 pl-4 pr-4">
-<p class="text-gray-900 dark:text-gray-200 text-sm font-medium leading-normal">Bloqueada</p>
-</button>
+
+{error && <p class="text-red-500 px-4 sm:px-10 mt-4">{error}</p>}
+
+<div class="flex gap-2 sm:gap-3 px-4 sm:px-10 overflow-x-auto py-4">
+    <a href="/mecanico/dash_mec?status=Todas" class={`flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-lg px-4 text-sm font-medium leading-normal ${!statusFilter || statusFilter === 'Todas' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-900 dark:text-gray-200'}`}>Todas</a>
+    {Object.keys(statusConfig).filter(s => s !== 'Entregado').map(status => (
+        <a href={`/mecanico/dash_mec?status=${status}`} class={`flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-lg px-4 text-sm font-medium leading-normal ${statusFilter === status ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-900 dark:text-gray-200'}`}>{status}</a>
+    ))}
 </div>
+
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 px-4 sm:px-10">
-<div class="flex flex-col items-stretch justify-start rounded-xl shadow-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 overflow-hidden">
-<div class="w-full bg-center bg-no-repeat aspect-[16/9] bg-cover" data-alt="Ford Focus with open hood in a workshop" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuD2-jfsW6IPepGl0qO7Z3qAH9DXOQFWvP926LiAmmgEUQfRYHYkyZtFZ30FOIg-FHHEvg8tB0GcnjXicxMJjxyWkAcnhzplzmDSzVpu5hd87ebauk0cSEZNg5JRF26yCwmwWtpE-JtJ7rES0tMZxjFEJb5Vfg6Jyhsr0qr5QcvDXeegIdonQsZz2mLN9e4LafMVSgI4EWvCIor1tgOv2UGG6jxyORKllZ_Jm3aoOwVjq4vdZmjibIUBHvs4uWaiuLSpotXPgZWUKlzU");'></div>
-<div class="flex w-full grow flex-col items-stretch justify-center gap-3 p-4">
-<div class="flex items-center gap-2">
-<span class="inline-block h-2 w-2 rounded-full bg-[#FFC107]"></span>
-<p class="text-[#FFC107] text-sm font-medium leading-normal">En Progreso</p>
-</div>
-<p class="text-lg font-bold leading-tight tracking-[-0.015em] text-gray-900 dark:text-white">OT-1138 - Ford Focus</p>
-<div class="flex flex-col gap-1">
-<p class="text-base font-normal leading-normal text-gray-500 dark:text-gray-400">Cambio de aceite y filtros.</p>
-<p class="text-sm font-normal leading-normal text-gray-400 dark:text-gray-500">Asignada: 15/07/2024 - Estimada: 16/07/2024</p>
-</div>
-<button class="flex mt-2 w-full max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-primary text-white text-sm font-medium leading-normal hover:bg-primary/90">
-<span class="truncate">Ver Detalles</span>
-</button>
-</div>
-</div>
-<div class="flex flex-col items-stretch justify-start rounded-xl shadow-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 overflow-hidden">
-<div class="w-full bg-center bg-no-repeat aspect-[16/9] bg-cover" data-alt="Renault Clio tire being changed" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuAAo6d7X1bDjjsoCQLLlWWJ5crJuRfhXz8odQowiRN5kSYn_MrQTgvGuuMzE_iqysAizumUSD50Dt2_23UOLm3OXIQiEktSO78q6FYwKmS98m9KexDuWtUMEOzQz6feqkve_4JN3qY-ZlH5gfbaH41rDT1sq_EHsUQcmacTsl5ilNhdgqNyVqUXLSb-BKarVnzkQs6-B65izi-B5dBRolK281XjxGVD7wXLK_mZsgEy_eyHVLuy_vy8hfneWNiwahdNkdvaAcSU4vU2");'></div>
-<div class="flex w-full grow flex-col items-stretch justify-center gap-3 p-4">
-<div class="flex items-center gap-2">
-<span class="inline-block h-2 w-2 rounded-full bg-[#007BFF]"></span>
-<p class="text-[#007BFF] text-sm font-medium leading-normal">Pendiente</p>
-</div>
-<p class="text-lg font-bold leading-tight tracking-[-0.015em] text-gray-900 dark:text-white">OT-1139 - Renault Clio</p>
-<div class="flex flex-col gap-1">
-<p class="text-base font-normal leading-normal text-gray-500 dark:text-gray-400">Revisión de frenos delanteros.</p>
-<p class="text-sm font-normal leading-normal text-gray-400 dark:text-gray-500">Asignada: 14/07/2024 - Estimada: 15/07/2024</p>
-</div>
-<button class="flex mt-2 w-full max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-primary text-white text-sm font-medium leading-normal hover:bg-primary/90">
-<span class="truncate">Ver Detalles</span>
-</button>
-</div>
-</div>
-<div class="flex flex-col items-stretch justify-start rounded-xl shadow-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 overflow-hidden">
-<div class="w-full bg-center bg-no-repeat aspect-[16/9] bg-cover" data-alt="Volkswagen Golf ready for pickup in the workshop" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBOnmhOhaaRkw9_jMbEx_Df7rAhpoSz13LDq3YGhxt_xpjMkh-7t-HhKcDGWAf8qoTlEaAj8FhvuVdqHHzegShPtVDDCKSsVS0TGw08VjMSDWsVzsPsYs9qdzX3bLQmlb6pdhWC5nKnUhbErb6HjSManY8nS8S8xDgGfrBUatp2kD5DkGVDBJOu7yd9KdkMzIuV7lcr_XtcbCMOWeC-PnLBw9e7zrOapNYVD1sVUmSOCOoCt01uQuYUYHJFmbeI3oec2j27lfcAqoWr");'></div>
-<div class="flex w-full grow flex-col items-stretch justify-center gap-3 p-4">
-<div class="flex items-center gap-2">
-<span class="inline-block h-2 w-2 rounded-full bg-[#28A745]"></span>
-<p class="text-[#28A745] text-sm font-medium leading-normal">Finalizada</p>
-</div>
-<p class="text-lg font-bold leading-tight tracking-[-0.015em] text-gray-900 dark:text-white">OT-1135 - VW Golf</p>
-<div class="flex flex-col gap-1">
-<p class="text-base font-normal leading-normal text-gray-500 dark:text-gray-400">Servicio completo de 100.000km.</p>
-<p class="text-sm font-normal leading-normal text-gray-400 dark:text-gray-500">Asignada: 12/07/2024 - Finalizada: 14/07/2024</p>
-</div>
-<button class="flex mt-2 w-full max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-primary text-white text-sm font-medium leading-normal hover:bg-primary/90">
-<span class="truncate">Ver Detalles</span>
-</button>
-</div>
-</div>
-<div class="flex flex-col items-stretch justify-start rounded-xl shadow-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 overflow-hidden">
-<div class="w-full bg-center bg-no-repeat aspect-[16/9] bg-cover" data-alt="Mechanic inspecting an engine bay" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuCC7zqYeRYBEcdrwfhyvcLe7ErMi4Gm0s1Vff-cEfZOluqVmmBPaCwa1obLYsJfqKBFh0ziZ74vWqpjM_fYJNe_nWtQObPw1_dOeqHXRypMnujBToTx-D2mB03NMoznOK5H2SLFXmpXjVBMsrjcLMEYC82gZ_RlY5JIQ_0HF-9iEGS_hBNyRvJQyyopbqhl-_ZLawpIkmbwWDc4D-EReMrt7jES9fbhZ0BGfAFmzCw9qkdmr7fdNaa2Ig-FCd0NA4uFjVcQ-MiRR1t_");'></div>
-<div class="flex w-full grow flex-col items-stretch justify-center gap-3 p-4">
-<div class="flex items-center gap-2">
-<span class="inline-block h-2 w-2 rounded-full bg-[#DC3545]"></span>
-<p class="text-[#DC3545] text-sm font-medium leading-normal">Bloqueada</p>
-</div>
-<p class="text-lg font-bold leading-tight tracking-[-0.015em] text-gray-900 dark:text-white">OT-1137 - Peugeot 208</p>
-<div class="flex flex-col gap-1">
-<p class="text-base font-normal leading-normal text-gray-500 dark:text-gray-400">Diagnóstico de fallo de motor. A la espera de repuesto.</p>
-<p class="text-sm font-normal leading-normal text-gray-400 dark:text-gray-500">Asignada: 15/07/2024 - Estimada: 19/07/2024</p>
-</div>
-<button class="flex mt-2 w-full max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-primary text-white text-sm font-medium leading-normal hover:bg-primary/90">
-<span class="truncate">Ver Detalles</span>
-</button>
-</div>
-</div>
+    {filteredOrders.length > 0 ? (
+        filteredOrders.map((order: Order) => {
+            const statusInfo = statusConfig[order.estado] || { color: '#6c757d', label: order.estado };
+            const vehicle = order.vehiculo?.data?.attributes;
+            const vehicleName = vehicle ? `${vehicle.marca} ${vehicle.modelo}` : 'Vehículo no especificado';
+            const imageUrl = vehicle?.imagen_url || 'https://cdn.usegalileo.ai/stability/64938e55-2324-4692-a43a-99badb3a964a.png';
+
+            return (
+                <div class="flex flex-col items-stretch justify-start rounded-xl shadow-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 overflow-hidden">
+                    <div class="w-full bg-center bg-no-repeat aspect-[16/9] bg-cover" style={`background-image: url("${imageUrl}");`}></div>
+                    <div class="flex w-full grow flex-col items-stretch justify-center gap-3 p-4">
+                        <div class="flex items-center gap-2">
+                            <span class="inline-block h-2 w-2 rounded-full" style={`background-color: ${statusInfo.color}`}></span>
+                            <p class="text-sm font-medium leading-normal" style={`color: ${statusInfo.color}`}>{statusInfo.label}</p>
+                        </div>
+                        <p class="text-lg font-bold leading-tight tracking-[-0.015em] text-gray-900 dark:text-white">OT-{order.id} - {vehicleName}</p>
+                        <div class="flex flex-col gap-1">
+                            <p class="text-base font-normal leading-normal text-gray-500 dark:text-gray-400">{order.descripcion || 'Sin descripción.'}</p>
+                            <p class="text-sm font-normal leading-normal text-gray-400 dark:text-gray-500">
+                                Asignada: {new Date(order.createdAt).toLocaleDateString()}
+                            </p>
+                        </div>
+                        <a href={`/mecanico/detalle_orden_trabajo?id=${order.id}`} class="flex mt-2 w-full max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-primary text-white text-sm font-medium leading-normal hover:bg-primary/90">
+                            <span class="truncate">Ver Detalles</span>
+                        </a>
+                    </div>
+                </div>
+            )
+        })
+    ) : (
+        <div class="col-span-full text-center py-10">
+            <p class="text-gray-500 dark:text-gray-400">No tienes órdenes de trabajo asignadas con este estado.</p>
+        </div>
+    )}
 </div>
 </main>
-</div>
 </div>
 </body></html>

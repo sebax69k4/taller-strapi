@@ -1,16 +1,76 @@
 ---
 import '../../styles/global.css';
+
+const jwt = Astro.cookies.get('jwt')?.value;
+if (!jwt) {
+  return Astro.redirect('/login');
+}
+
+// --- TYPE DEFINITIONS ---
+interface Vehiculo {
+    marca: string;
+    modelo: string;
+}
+
+interface Order {
+    id: number;
+    attributes: {
+        createdAt: string;
+        vehiculo?: {
+            data?: {
+                id: number;
+                attributes: Vehiculo;
+            }
+        }
+    }
+}
+
+// --- DATA FETCHING & STATE ---
+let activeOrdersCount = 0;
+let vehiclesCount = 0;
+let pendingOrdersCount = 0;
+let recentOrders: Order[] = [];
+let error = '';
+
+try {
+    const [activeOrdersRes, vehiclesRes, pendingOrdersRes, recentOrdersRes] = await Promise.all([
+        fetch('http://localhost:1337/api/orden-de-trabajos?filters[estado][$ne]=Entregado&pagination[pageSize]=1', { headers: { 'Authorization': `Bearer ${jwt}` } }),
+        fetch('http://localhost:1337/api/vehiculos?pagination[pageSize]=1', { headers: { 'Authorization': `Bearer ${jwt}` } }),
+        fetch('http://localhost:1337/api/orden-de-trabajos?filters[estado][$eq]=Pendiente&pagination[pageSize]=1', { headers: { 'Authorization': `Bearer ${jwt}` } }),
+        fetch('http://localhost:1337/api/orden-de-trabajos?sort[0]=createdAt:desc&pagination[limit]=5&populate=vehiculo', { headers: { 'Authorization': `Bearer ${jwt}` } })
+    ]);
+
+    if (!activeOrdersRes.ok || !vehiclesRes.ok || !pendingOrdersRes.ok || !recentOrdersRes.ok) {
+        throw new Error('Hubo un problema al cargar los datos del dashboard.');
+    }
+
+    const activeOrdersData = await activeOrdersRes.json();
+    activeOrdersCount = activeOrdersData.meta?.pagination?.total || 0;
+
+    const vehiclesData = await vehiclesRes.json();
+    vehiclesCount = vehiclesData.meta?.pagination?.total || 0;
+
+    const pendingOrdersData = await pendingOrdersRes.json();
+    pendingOrdersCount = pendingOrdersData.meta?.pagination?.total || 0;
+
+    const recentOrdersData = await recentOrdersRes.json();
+    recentOrders = recentOrdersData.data || [];
+
+} catch (e: any) {
+    console.error('Error fetching dashboard data:', e);
+    error = e.message;
+}
 ---
 <!DOCTYPE html>
-
-<html class="light" lang="es"><head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Dashboard - Taller Veloz</title>
-<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
-<script>
+<html class="light" lang="es">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>Dashboard - Taller Veloz</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+    <script>
         tailwind.config = {
             darkMode: "class",
             theme: {
@@ -23,207 +83,171 @@ import '../../styles/global.css';
                     fontFamily: {
                         "display": ["Inter", "sans-serif"]
                     },
-                    borderRadius: {
-                        "DEFAULT": "0.25rem",
-                        "lg": "0.5rem",
-                        "xl": "0.75rem",
+                     borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "0.75rem",
+                        "xl": "1rem",
                         "full": "9999px"
                     },
                 },
             },
         }
     </script>
-<style>
+    <style>
         .material-symbols-outlined {
             font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
             font-size: 24px;
         }
-        body {
-            background: linear-gradient(135deg, #f6f6f8 0%, #e9ecef 100%);
-        }
-        .tab-btn {
-            transition: all 0.2s ease;
-        }
-        .tab-btn:hover {
-            background-color: rgba(19, 91, 236, 0.05);
-        }
-        .tab-btn[aria-selected="true"] {
-            border-bottom: 2px solid #135bec;
-        }
-        [role="tabpanel"] {
-            animation: fadeIn 0.3s ease;
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
     </style>
 </head>
-<body class="font-display">
-<div class="relative flex h-auto min-h-screen w-full flex-col bg-background-light dark:bg-background-dark group/design-root overflow-x-hidden">
-<div class="flex flex-row min-h-screen">
+<body class="font-display bg-background-light dark:bg-background-dark">
+<div class="relative flex min-h-screen w-full">
 <!-- SideNavBar -->
-<div class="flex flex-col gap-4 p-4 bg-white dark:bg-background-dark border-r border-gray-200 dark:border-gray-800 w-64">
-<div class="flex gap-3 items-center">
-<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" data-alt="Taller Veloz company logo" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBLBxtiaKaUP1j5IVvSQnTffGZb3q01Hx1ZSaIDCFmywtshsIYp7T81C4Y59YgJaV5vS43qcjoZ_qSSIcPk0yczUccj4gzzYnV-TKRtRz1Nw1kjNhXXBH5NbN9xzWRNCVE6XHxFxdvdScnhgAwXXFJotXuXHD1wReviw0OEQWdT1E5NEXerLJZ7d1lkP-NNzSgHMyA0qfkonCTGIlLKM7CGtVn2CeZyOAogiQqjodrF0Z4p8DEohweswQZowub1fM-WzBmZ9BN_y7at");'></div>
-<div class="flex flex-col">
-<h1 class="text-gray-900 dark:text-white text-base font-medium leading-normal">Taller Veloz</h1>
-<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Gestión de Taller</p>
-</div>
-</div>
-<div class="flex flex-col gap-2 mt-4">
-<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/10 text-primary" href="/recepcion/dash_recep">
-<span class="material-symbols-outlined text-primary">dashboard</span>
-<p class="text-sm font-medium leading-normal">Dashboard</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/recepcion/crear_cliente">
-<span class="material-symbols-outlined">person_add</span>
-<p class="text-sm font-medium leading-normal">Crear Cliente</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/recepcion/crear_vehiculo">
-<span class="material-symbols-outlined">directions_car</span>
-<p class="text-sm font-medium leading-normal">Crear Vehículo</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/recepcion/crear_orden">
-<span class="material-symbols-outlined">post_add</span>
-<p class="text-sm font-medium leading-normal">Crear Orden</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/recepcion/list_c_y_v">
-<span class="material-symbols-outlined">group</span>
-<p class="text-sm font-medium leading-normal">Listar C y V</p>
-</a>
-</div>
-<div class="mt-auto flex flex-col gap-2">
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
-<span class="material-symbols-outlined">settings</span>
-<p class="text-sm font-medium leading-normal">Configuración</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
-<span class="material-symbols-outlined">logout</span>
-<p class="text-sm font-medium leading-normal">Cerrar Sesión</p>
-</a>
-</div>
-</div>
+<aside class="flex w-64 flex-col gap-4 p-4 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800">
+    <div class="flex gap-3 items-center">
+        <div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://cdn.usegalileo.ai/stability/a4b1f6ac-1498-420f-bb19-91ee46e9ce70.png");'></div>
+        <div class="flex flex-col">
+            <h1 class="text-gray-900 dark:text-white text-base font-medium">Taller Veloz</h1>
+            <p class="text-gray-500 dark:text-gray-400 text-sm">Panel Recepción</p>
+        </div>
+    </div>
+    <nav class="flex flex-col gap-2 mt-4">
+        <a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/10 text-primary" href="/recepcion/dash_recep">
+            <span class="material-symbols-outlined">dashboard</span>
+            <p class="text-sm font-medium">Dashboard</p>
+        </a>
+        <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/recepcion/crear_cliente">
+            <span class="material-symbols-outlined">person_add</span>
+            <p class="text-sm font-medium">Crear Cliente</p>
+        </a>
+        <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/recepcion/crear_vehiculo">
+            <span class="material-symbols-outlined">directions_car</span>
+            <p class="text-sm font-medium">Crear Vehículo</p>
+        </a>
+        <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/recepcion/crear_orden">
+            <span class="material-symbols-outlined">post_add</span>
+            <p class="text-sm font-medium">Crear Orden</p>
+        </a>
+        <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/recepcion/list_c_y_v">
+            <span class="material-symbols-outlined">group</span>
+            <p class="text-sm font-medium">Listar C y V</p>
+        </a>
+    </nav>
+    <div class="mt-auto flex flex-col gap-2">
+        <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/login">
+            <span class="material-symbols-outlined">logout</span>
+            <p class="text-sm font-medium">Cerrar Sesión</p>
+        </a>
+    </div>
+</aside>
+
 <!-- Main Content -->
-<div class="flex-1 flex flex-col">
-<!-- TopNavBar -->
-<header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-gray-200 dark:border-gray-800 px-10 py-3 bg-white dark:bg-background-dark">
-<label class="flex flex-col min-w-40 !h-10 max-w-64">
-<div class="flex w-full flex-1 items-stretch rounded-lg h-full">
-<div class="text-gray-500 dark:text-gray-400 flex border-none bg-background-light dark:bg-gray-800 items-center justify-center pl-4 rounded-l-lg border-r-0">
-<span class="material-symbols-outlined">search</span>
-</div>
-<input class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-r-lg text-gray-900 dark:text-white focus:outline-0 focus:ring-0 border-none bg-background-light dark:bg-gray-800 focus:border-none h-full placeholder:text-gray-500 dark:placeholder:text-gray-400 px-4 text-base font-normal leading-normal" placeholder="Buscar orden, cliente..." value=""/>
-</div>
-</label>
-<div class="flex flex-1 justify-end gap-4 items-center">
-<button class="flex max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 w-10 bg-background-light dark:bg-gray-800 text-gray-900 dark:text-white gap-2 text-sm font-bold leading-normal tracking-[0.015em] min-w-0">
-<span class="material-symbols-outlined">notifications</span>
-</button>
-<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" data-alt="User profile picture" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuDj1Azpl0z3L4E85pnUU2LFwYALC2D8Eoeb7bZ3KAqo5gUHmax9-dFPJeVyb2UIe53lmGrwTwJiavjztLmZlisRYCA7ocBLDwcjO_8-dIRLDxP8hFGDXSNBueERZakZ5eXv7lkUvwoArPtvHnjCIivvXac_FUqGWff5maoonjaZrDFkqZbPEZXHWvI8cLovw-ezh1-Fu7iv5ythp69L9XTwMRuaEp1PWpHBTzm5DDUa-UUfP6TL4LRaVXp0rUnwE5q4H6RmBw9IYd3g");'></div>
-</div>
-</header>
-<!-- Page Content Area -->
-<main class="flex-1 p-8">
-<!-- PageHeading -->
-<div class="flex flex-wrap justify-between gap-3 p-4">
-<div class="flex min-w-72 flex-col gap-2">
-<p class="text-gray-900 dark:text-white text-3xl font-bold tracking-tight">¡Bienvenido, Recepcionista!</p>
-<p class="text-gray-500 dark:text-gray-400 text-base font-normal leading-normal">Aquí tienes un resumen de la actividad de hoy y accesos rápidos.</p>
-</div>
-</div>
-<!-- SectionHeader -->
-<h2 class="text-gray-900 dark:text-white text-[22px] font-bold leading-tight tracking-[-0.015em] px-4 pb-3 pt-5">Accesos Rápidos</h2>
-<!-- TextGrid (Quick Actions) -->
-<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 p-4">
-<div class="flex flex-1 gap-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 flex-col hover:border-primary dark:hover:border-primary transition-all cursor-pointer">
-<div class="text-primary"><span class="material-symbols-outlined">person_add</span></div>
-<div class="flex flex-col gap-1">
-<h2 class="text-gray-900 dark:text-white text-base font-bold leading-tight">Crear Cliente</h2>
-<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Registra una nueva persona</p>
-</div>
-</div>
-<div class="flex flex-1 gap-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 flex-col hover:border-primary dark:hover:border-primary transition-all cursor-pointer">
-<div class="text-primary"><span class="material-symbols-outlined">directions_car</span></div>
-<div class="flex flex-col gap-1">
-<h2 class="text-gray-900 dark:text-white text-base font-bold leading-tight">Crear Vehículo</h2>
-<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Añade un vehículo a un cliente</p>
-</div>
-</div>
-<div class="flex flex-1 gap-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 flex-col hover:border-primary dark:hover:border-primary transition-all cursor-pointer">
-<div class="text-primary"><span class="material-symbols-outlined">post_add</span></div>
-<div class="flex flex-col gap-1">
-<h2 class="text-gray-900 dark:text-white text-base font-bold leading-tight">Crear Orden de Trabajo</h2>
-<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Abre una orden de reparación</p>
-</div>
-</div>
-<div class="flex flex-1 gap-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 flex-col hover:border-primary dark:hover:border-primary transition-all cursor-pointer">
-<div class="text-primary"><span class="material-symbols-outlined">manage_search</span></div>
-<div class="flex flex-col gap-1">
-<h2 class="text-gray-900 dark:text-white text-base font-bold leading-tight">Ver Clientes y Vehículos</h2>
-<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Busca y gestiona la base de datos</p>
-</div>
-</div>
-</div>
-<!-- KPI / Summary Cards -->
-<h2 class="text-gray-900 dark:text-white text-[22px] font-bold leading-tight tracking-[-0.015em] px-4 pb-3 pt-8">Resumen de Hoy</h2>
-<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 p-4">
-<div class="bg-white dark:bg-gray-900 p-6 rounded-xl border border-gray-200 dark:border-gray-800 flex flex-col gap-2">
-<div class="flex items-center gap-3">
-<span class="material-symbols-outlined text-gray-500 dark:text-gray-400">build_circle</span>
-<h3 class="text-base text-gray-600 dark:text-gray-300 font-medium">Órdenes de Trabajo Activas</h3>
-</div>
-<p class="text-4xl font-bold text-gray-900 dark:text-white">15</p>
-</div>
-<div class="bg-white dark:bg-gray-900 p-6 rounded-xl border border-gray-200 dark:border-gray-800 flex flex-col gap-2">
-<div class="flex items-center gap-3">
-<span class="material-symbols-outlined text-gray-500 dark:text-gray-400">garage</span>
-<h3 class="text-base text-gray-600 dark:text-gray-300 font-medium">Vehículos en Taller</h3>
-</div>
-<p class="text-4xl font-bold text-gray-900 dark:text-white">8</p>
-</div>
-<div class="bg-white dark:bg-gray-900 p-6 rounded-xl border border-gray-200 dark:border-gray-800 flex flex-col gap-2">
-<div class="flex items-center gap-3">
-<span class="material-symbols-outlined text-gray-500 dark:text-gray-400">event_available</span>
-<h3 class="text-base text-gray-600 dark:text-gray-300 font-medium">Citas Programadas</h3>
-</div>
-<p class="text-4xl font-bold text-gray-900 dark:text-white">12</p>
-</div>
-</div>
-<!-- Recent Activity Feed -->
-<h2 class="text-gray-900 dark:text-white text-[22px] font-bold leading-tight tracking-[-0.015em] px-4 pb-3 pt-8">Actividad Reciente</h2>
-<div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 m-4 overflow-hidden">
-<div class="overflow-x-auto">
-<table class="w-full text-left">
-<thead class="border-b border-gray-200 dark:border-gray-800">
-<tr>
-<th class="px-6 py-3 text-sm font-semibold text-gray-600 dark:text-gray-300">Acción</th>
-<th class="px-6 py-3 text-sm font-semibold text-gray-600 dark:text-gray-300">Detalle</th>
-<th class="px-6 py-3 text-sm font-semibold text-gray-600 dark:text-gray-300">Fecha</th>
-</tr>
-</thead>
-<tbody>
-<tr class="border-b border-gray-200 dark:border-gray-800">
-<td class="px-6 py-4 text-sm text-gray-800 dark:text-gray-200">Nueva Orden de Trabajo</td>
-<td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">#1024 - Ford Focus (AB123CD)</td>
-<td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">Hace 15 minutos</td>
-</tr>
-<tr class="border-b border-gray-200 dark:border-gray-800">
-<td class="px-6 py-4 text-sm text-gray-800 dark:text-gray-200">Nuevo Cliente Registrado</td>
-<td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">Ana Torres</td>
-<td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">Hace 1 hora</td>
-</tr>
-<tr>
-<td class="px-6 py-4 text-sm text-gray-800 dark:text-gray-200">Actualización de Orden</td>
-<td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">#1022 - Estado: Finalizado</td>
-<td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">Hace 3 horas</td>
-</tr>
-</tbody>
-</table>
-</div>
-</div>
+<main class="flex-1 p-8 flex flex-col gap-8">
+    {error && <p class="text-red-500 bg-red-100 p-4 rounded-lg">{error}</p>}
+    
+    <div class="flex flex-wrap justify-between items-center gap-4">
+        <div>
+            <h1 class="text-gray-900 dark:text-white text-3xl font-bold">¡Bienvenido, Recepcionista!</h1>
+            <p class="text-gray-500 dark:text-gray-400">Aquí tienes un resumen de la actividad y accesos rápidos.</p>
+        </div>
+    </div>
+
+    <div>
+        <h2 class="text-gray-900 dark:text-white text-xl font-bold mb-4">Accesos Rápidos</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+            <a href="/recepcion/crear_cliente" class="flex flex-col gap-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 hover:border-primary dark:hover:border-primary transition-all">
+                <div class="text-primary"><span class="material-symbols-outlined">person_add</span></div>
+                <div>
+                    <h3 class="text-gray-900 dark:text-white font-bold">Crear Cliente</h3>
+                    <p class="text-gray-500 dark:text-gray-400 text-sm">Registra una nueva persona</p>
+                </div>
+            </a>
+            <a href="/recepcion/crear_vehiculo" class="flex flex-col gap-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 hover:border-primary dark:hover:border-primary transition-all">
+                <div class="text-primary"><span class="material-symbols-outlined">directions_car</span></div>
+                <div>
+                    <h3 class="text-gray-900 dark:text-white font-bold">Crear Vehículo</h3>
+                    <p class="text-gray-500 dark:text-gray-400 text-sm">Añade un vehículo a un cliente</p>
+                </div>
+            </a>
+            <a href="/recepcion/crear_orden" class="flex flex-col gap-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 hover:border-primary dark:hover:border-primary transition-all">
+                <div class="text-primary"><span class="material-symbols-outlined">post_add</span></div>
+                <div>
+                    <h3 class="text-gray-900 dark:text-white font-bold">Crear Orden de Trabajo</h3>
+                    <p class="text-gray-500 dark:text-gray-400 text-sm">Abre una orden de reparación</p>
+                </div>
+            </a>
+            <a href="/recepcion/list_c_y_v" class="flex flex-col gap-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 hover:border-primary dark:hover:border-primary transition-all">
+                <div class="text-primary"><span class="material-symbols-outlined">manage_search</span></div>
+                <div>
+                    <h3 class="text-gray-900 dark:text-white font-bold">Ver Clientes y Vehículos</h3>
+                    <p class="text-gray-500 dark:text-gray-400 text-sm">Busca y gestiona la base de datos</p>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <div>
+        <h2 class="text-gray-900 dark:text-white text-xl font-bold mb-4">Resumen General</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div class="bg-white dark:bg-gray-900 p-6 rounded-xl border border-gray-200 dark:border-gray-800 flex flex-col gap-2">
+                <div class="flex items-center gap-3">
+                    <span class="material-symbols-outlined text-gray-500">build_circle</span>
+                    <h3 class="text-base text-gray-600 dark:text-gray-300 font-medium">Órdenes Activas</h3>
+                </div>
+                <p class="text-4xl font-bold text-gray-900 dark:text-white">{activeOrdersCount}</p>
+            </div>
+            <div class="bg-white dark:bg-gray-900 p-6 rounded-xl border border-gray-200 dark:border-gray-800 flex flex-col gap-2">
+                <div class="flex items-center gap-3">
+                    <span class="material-symbols-outlined text-gray-500">garage</span>
+                    <h3 class="text-base text-gray-600 dark:text-gray-300 font-medium">Vehículos Registrados</h3>
+                </div>
+                <p class="text-4xl font-bold text-gray-900 dark:text-white">{vehiclesCount}</p>
+            </div>
+            <div class="bg-white dark:bg-gray-900 p-6 rounded-xl border border-gray-200 dark:border-gray-800 flex flex-col gap-2">
+                <div class="flex items-center gap-3">
+                    <span class="material-symbols-outlined text-gray-500">pending_actions</span>
+                    <h3 class="text-base text-gray-600 dark:text-gray-300 font-medium">Órdenes Pendientes</h3>
+                </div>
+                <p class="text-4xl font-bold text-gray-900 dark:text-white">{pendingOrdersCount}</p>
+            </div>
+        </div>
+    </div>
+
+    <div>
+        <h2 class="text-gray-900 dark:text-white text-xl font-bold mb-4">Actividad Reciente</h2>
+        <div class="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left">
+                    <thead class="border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50">
+                        <tr>
+                            <th class="px-6 py-3 text-sm font-semibold text-gray-600 dark:text-gray-300">Acción</th>
+                            <th class="px-6 py-3 text-sm font-semibold text-gray-600 dark:text-gray-300">Detalle</th>
+                            <th class="px-6 py-3 text-sm font-semibold text-gray-600 dark:text-gray-300">Fecha</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {recentOrders.map((order: Order) => (
+                          <tr class="border-b border-gray-200 dark:border-gray-700 last:border-b-0">
+                            <td class="px-6 py-4 text-sm text-gray-800 dark:text-gray-200">Nueva Orden de Trabajo</td>
+                            <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
+                              #OT-{order.id} - {order.attributes.vehiculo?.data ? `${order.attributes.vehiculo.data.attributes.marca} ${order.attributes.vehiculo.data.attributes.modelo}` : 'Vehículo no asignado'}
+                            </td>
+                            <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
+                              {new Date(order.attributes.createdAt).toLocaleString('es-ES')}
+                            </td>
+                          </tr>
+                        ))}
+                        {recentOrders.length === 0 && (
+                          <tr>
+                            <td colspan="3" class="px-6 py-4 text-sm text-center text-gray-500">No hay actividad reciente.</td>
+                          </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 </main>
 </div>
-</div>
-</div>
-</body></html>
+</body>
+</html>

@@ -1,9 +1,118 @@
 ---
 import '../../styles/global.css';
---- 
-<!DOCTYPE html>
 
-<html class="light" lang="es"><head>
+interface InvoiceItem {
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+}
+
+const jwt = Astro.cookies.get('jwt')?.value;
+
+if (!jwt) {
+  return Astro.redirect('/login');
+}
+
+let completedOrders = [];
+let selectedOrder = null;
+let invoiceData = {
+  number: `FACT-${new Date().getFullYear()}-${Math.floor(Math.random() * 10000)}`,
+  date: new Date().toISOString().split('T')[0],
+  clientName: '',
+  clientAddress: '',
+  clientPhone: '',
+  vehicle: '',
+  items: [] as InvoiceItem[],
+  subtotal: 0,
+  tax: 0,
+  total: 0,
+  notes: 'Pago requerido a la recepción de la factura. Gracias por su confianza.'
+};
+
+try {
+  // Fetch completed orders (Entregado)
+  const response = await fetch('http://localhost:1337/api/orden-de-trabajos?filters[estado][$eq]=Entregado&populate=vehiculo.cliente', {
+    headers: {
+      'Authorization': `Bearer ${jwt}`
+    }
+  });
+  const data = await response.json();
+  completedOrders = data.data || [];
+
+  // Check for selected order
+  const url = new URL(Astro.request.url);
+  const selectedId = url.searchParams.get('id');
+
+  if (selectedId) {
+    const orderResponse = await fetch(`http://localhost:1337/api/orden-de-trabajos/${selectedId}?populate=vehiculo.cliente,repuestos,presupuesto`, {
+      headers: {
+        'Authorization': `Bearer ${jwt}`
+      }
+    });
+    const orderData = await orderResponse.json();
+    selectedOrder = orderData.data;
+
+    if (selectedOrder) {
+      const client = selectedOrder.vehiculo?.cliente;
+      const vehicle = selectedOrder.vehiculo;
+      const repuestos = selectedOrder.repuestos || [];
+      const presupuesto = selectedOrder.presupuesto;
+
+      invoiceData.clientName = client?.nombre || 'Cliente Desconocido';
+      invoiceData.clientAddress = client?.direccion || 'Dirección no disponible'; // Assuming address exists or using placeholder
+      invoiceData.clientPhone = client?.telefono || 'Sin teléfono';
+      invoiceData.vehicle = `${vehicle?.marca} ${vehicle?.modelo} (${vehicle?.anio}) - ${vehicle?.patente}`;
+
+      // Build items from repuestos
+      let items = repuestos.map((r: any) => ({
+        description: r.nombre,
+        quantity: 1, // Assuming 1 for now as relation is many-to-many without quantity field in pivot
+        unitPrice: r.precio || 0,
+        total: r.precio || 0
+      }));
+
+      // Add labor/service item if budget exists
+      if (presupuesto && presupuesto.monto_total) {
+        const partsTotal = items.reduce((sum: number, item: any) => sum + item.total, 0);
+        const labor = parseFloat(presupuesto.monto_total) - partsTotal;
+        if (labor > 0) {
+          items.push({
+            description: 'Mano de Obra / Servicios',
+            quantity: 1,
+            unitPrice: labor,
+            total: labor
+          });
+        }
+      } else if (items.length === 0) {
+          // Fallback if no parts and no budget
+          items.push({
+              description: 'Servicio de Taller (Detalles en Orden)',
+              quantity: 1,
+              unitPrice: 0,
+              total: 0
+          });
+      }
+
+      invoiceData.items = items;
+      invoiceData.subtotal = items.reduce((sum: number, item: any) => sum + item.total, 0);
+      invoiceData.tax = invoiceData.subtotal * 0.21; // 21% IVA
+      invoiceData.total = invoiceData.subtotal + invoiceData.tax;
+    }
+  }
+
+} catch (error) {
+  console.error('Error fetching data:', error);
+}
+
+// Format currency
+const formatCurrency = (amount: number) => {
+  return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(amount);
+};
+---
+<!DOCTYPE html>
+<html class="light" lang="es">
+<head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>Generar Factura - Taller Veloz</title>
@@ -113,137 +222,97 @@ import '../../styles/global.css';
 <div class="flex flex-wrap items-center justify-between gap-4 mb-8">
 <p class="text-gray-900 dark:text-white text-4xl font-black leading-tight tracking-[-0.033em]">Crear Nueva Factura</p>
 <div class="flex items-center gap-2">
-<button class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700">Cancelar</button>
-<button class="px-4 py-2 text-sm font-medium text-primary bg-primary/20 dark:bg-primary/30 dark:text-white rounded-lg hover:bg-primary/30 dark:hover:bg-primary/40">Guardar Borrador</button>
-<button class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary/90 flex items-center gap-2">
-<span class="material-symbols-outlined text-base">picture_as_pdf</span>
-              Generar PDF y Guardar
+<button class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700" onclick="window.location.href='/encargado/dash_enc'">Cancelar</button>
+<button class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary/90 flex items-center gap-2" onclick="window.print()">
+<span class="material-symbols-outlined text-base">print</span>
+              Imprimir / Guardar PDF
             </button>
 </div>
 </div>
 <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
 <!-- Left Column: Form -->
-<div class="lg:col-span-3 flex flex-col gap-6">
+<div class="lg:col-span-3 flex flex-col gap-6 print:hidden">
 <!-- SearchBar -->
 <div class="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800">
 <p class="text-gray-900 dark:text-white text-base font-medium leading-normal pb-3">1. Seleccionar Orden de Trabajo Completada</p>
-<label class="flex flex-col min-w-40 h-12 w-full">
-<div class="flex w-full flex-1 items-stretch rounded-lg h-full">
-<div class="text-gray-500 dark:text-gray-400 flex bg-background-light dark:bg-background-dark items-center justify-center pl-4 rounded-l-lg border border-gray-300 dark:border-gray-700 border-r-0">
-<span class="material-symbols-outlined">search</span>
-</div>
-<input class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-r-lg text-gray-900 dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-gray-300 dark:border-gray-700 bg-background-light dark:bg-background-dark h-full placeholder:text-gray-500 dark:placeholder:text-gray-400 px-4 text-base font-normal leading-normal" placeholder="Buscar por número de orden o nombre de cliente" value="OT-2024-03-152 - Juan Pérez"/>
-</div>
-</label>
-</div>
-<!-- Invoice Details -->
-<div class="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800">
-<h2 class="text-gray-900 dark:text-white text-[22px] font-bold leading-tight tracking-[-0.015em] pb-4">Detalles de la Factura</h2>
-<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-<label class="flex flex-col">
-<p class="text-gray-900 dark:text-white text-sm font-medium leading-normal pb-2">Número de Factura</p>
-<input class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-gray-900 dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-gray-300 dark:border-gray-700 bg-background-light dark:bg-background-dark h-12 placeholder:text-gray-500 dark:placeholder:text-gray-400 p-3 text-base font-normal leading-normal" value="FACT-2024-0078"/>
-</label>
-<label class="flex flex-col">
-<p class="text-gray-900 dark:text-white text-sm font-medium leading-normal pb-2">Fecha de Emisión</p>
-<input class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-gray-900 dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-gray-300 dark:border-gray-700 bg-background-light dark:bg-background-dark h-12 placeholder:text-gray-500 dark:placeholder:text-gray-400 p-3 text-base font-normal leading-normal" type="date" value="2024-07-26"/>
-</label>
+<div class="flex flex-col gap-2 max-h-60 overflow-y-auto">
+    {completedOrders.length === 0 ? (
+        <p class="text-gray-500 text-sm">No hay órdenes completadas pendientes de facturar.</p>
+    ) : (
+        completedOrders.map((order: any) => (
+            <a href={`?id=${order.documentId}`} class={`flex items-center justify-between p-3 rounded-lg border ${selectedOrder?.documentId === order.documentId ? 'border-primary bg-primary/5' : 'border-gray-200 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800'}`}>
+                <div>
+                    <p class="font-medium text-gray-900 dark:text-white">Orden #{order.documentId.slice(-6)}</p>
+                    <p class="text-sm text-gray-500">{order.vehiculo?.cliente?.nombre} - {order.vehiculo?.marca} {order.vehiculo?.modelo}</p>
+                </div>
+                <span class="material-symbols-outlined text-gray-400">chevron_right</span>
+            </a>
+        ))
+    )}
 </div>
 </div>
-<!-- Client Details -->
-<div class="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800">
-<h2 class="text-gray-900 dark:text-white text-[22px] font-bold leading-tight tracking-[-0.015em] pb-4">Información del Cliente</h2>
-<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-gray-700 dark:text-gray-300">
-<div>
-<p class="font-semibold text-gray-900 dark:text-white">Juan Pérez</p>
-<p>Calle Falsa 123, 28080 Madrid</p>
-<p>+34 600 123 456</p>
+
+{selectedOrder && (
+    <>
+    <!-- Invoice Details -->
+    <div class="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800">
+    <h2 class="text-gray-900 dark:text-white text-[22px] font-bold leading-tight tracking-[-0.015em] pb-4">Detalles de la Factura</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <label class="flex flex-col">
+    <p class="text-gray-900 dark:text-white text-sm font-medium leading-normal pb-2">Número de Factura</p>
+    <input class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-gray-900 dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-gray-300 dark:border-gray-700 bg-background-light dark:bg-background-dark h-12 placeholder:text-gray-500 dark:placeholder:text-gray-400 p-3 text-base font-normal leading-normal" value={invoiceData.number} readonly/>
+    </label>
+    <label class="flex flex-col">
+    <p class="text-gray-900 dark:text-white text-sm font-medium leading-normal pb-2">Fecha de Emisión</p>
+    <input class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-gray-900 dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-gray-300 dark:border-gray-700 bg-background-light dark:bg-background-dark h-12 placeholder:text-gray-500 dark:placeholder:text-gray-400 p-3 text-base font-normal leading-normal" type="date" value={invoiceData.date} readonly/>
+    </label>
+    </div>
+    </div>
+    <!-- Client Details -->
+    <div class="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800">
+    <h2 class="text-gray-900 dark:text-white text-[22px] font-bold leading-tight tracking-[-0.015em] pb-4">Información del Cliente</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-gray-700 dark:text-gray-300">
+    <div>
+    <p class="font-semibold text-gray-900 dark:text-white">{invoiceData.clientName}</p>
+    <p>{invoiceData.clientAddress}</p>
+    <p>{invoiceData.clientPhone}</p>
+    </div>
+    <div>
+    <p class="font-semibold text-gray-900 dark:text-white">Vehículo</p>
+    <p>{invoiceData.vehicle}</p>
+    </div>
+    </div>
+    </div>
+    </>
+)}
 </div>
-<div>
-<p class="font-semibold text-gray-900 dark:text-white">Vehículo</p>
-<p>Toyota Corolla (2022)</p>
-<p>Matrícula: 1234 ABC</p>
-</div>
-</div>
-</div>
-<!-- Line Items -->
-<div class="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800">
-<h2 class="text-gray-900 dark:text-white text-[22px] font-bold leading-tight tracking-[-0.015em] pb-4">Conceptos Facturados</h2>
-<div class="overflow-x-auto">
-<table class="w-full text-sm text-left">
-<thead class="text-xs text-gray-500 dark:text-gray-400 uppercase bg-background-light dark:bg-gray-800">
-<tr>
-<th class="px-4 py-3" scope="col">Descripción</th>
-<th class="px-4 py-3 text-center" scope="col">Cant.</th>
-<th class="px-4 py-3 text-right" scope="col">P. Unitario</th>
-<th class="px-4 py-3 text-right" scope="col">Total</th>
-<th class="px-4 py-3" scope="col"></th>
-</tr>
-</thead>
-<tbody>
-<tr class="border-b dark:border-gray-800">
-<td class="px-4 py-3"><input class="form-input w-full bg-transparent border-0 focus:ring-0 p-0 text-gray-900 dark:text-white" type="text" value="Cambio de aceite y filtro"/></td>
-<td class="px-4 py-3"><input class="form-input w-16 text-center bg-transparent border-0 focus:ring-0 p-0 text-gray-900 dark:text-white" type="number" value="1"/></td>
-<td class="px-4 py-3"><input class="form-input w-24 text-right bg-transparent border-0 focus:ring-0 p-0 text-gray-900 dark:text-white" type="text" value="€75.00"/></td>
-<td class="px-4 py-3 text-right text-gray-900 dark:text-white">€75.00</td>
-<td class="px-4 py-3 text-center"><button class="text-gray-400 hover:text-red-500"><span class="material-symbols-outlined text-base">delete</span></button></td>
-</tr>
-<tr class="border-b dark:border-gray-800">
-<td class="px-4 py-3"><input class="form-input w-full bg-transparent border-0 focus:ring-0 p-0 text-gray-900 dark:text-white" type="text" value="Filtro de aceite Bosch"/></td>
-<td class="px-4 py-3"><input class="form-input w-16 text-center bg-transparent border-0 focus:ring-0 p-0 text-gray-900 dark:text-white" type="number" value="1"/></td>
-<td class="px-4 py-3"><input class="form-input w-24 text-right bg-transparent border-0 focus:ring-0 p-0 text-gray-900 dark:text-white" type="text" value="€15.50"/></td>
-<td class="px-4 py-3 text-right text-gray-900 dark:text-white">€15.50</td>
-<td class="px-4 py-3 text-center"><button class="text-gray-400 hover:text-red-500"><span class="material-symbols-outlined text-base">delete</span></button></td>
-</tr>
-<tr class="border-b dark:border-gray-800">
-<td class="px-4 py-3"><input class="form-input w-full bg-transparent border-0 focus:ring-0 p-0 text-gray-900 dark:text-white" type="text" value="Pastillas de freno delanteras"/></td>
-<td class="px-4 py-3"><input class="form-input w-16 text-center bg-transparent border-0 focus:ring-0 p-0 text-gray-900 dark:text-white" type="number" value="2"/></td>
-<td class="px-4 py-3"><input class="form-input w-24 text-right bg-transparent border-0 focus:ring-0 p-0 text-gray-900 dark:text-white" type="text" value="€45.00"/></td>
-<td class="px-4 py-3 text-right text-gray-900 dark:text-white">€90.00</td>
-<td class="px-4 py-3 text-center"><button class="text-gray-400 hover:text-red-500"><span class="material-symbols-outlined text-base">delete</span></button></td>
-</tr>
-</tbody>
-</table>
-</div>
-<button class="mt-4 px-4 py-2 text-sm font-medium text-primary dark:text-white bg-primary/20 dark:bg-primary/30 rounded-lg hover:bg-primary/30 dark:hover:bg-primary/40 flex items-center gap-2">
-<span class="material-symbols-outlined text-base">add</span>
-                Añadir Concepto
-              </button>
-</div>
-<!-- Notes -->
-<div class="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800">
-<label class="flex flex-col">
-<p class="text-gray-900 dark:text-white text-base font-medium leading-normal pb-2">Notas y Términos de Pago</p>
-<textarea class="form-textarea flex w-full min-w-0 flex-1 resize-y overflow-hidden rounded-lg text-gray-900 dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-gray-300 dark:border-gray-700 bg-background-light dark:bg-background-dark placeholder:text-gray-500 dark:placeholder:text-gray-400 p-3 text-base font-normal leading-normal" placeholder="Ej: Pago a 30 días. Garantía de 3 meses en piezas y mano de obra..." rows="3">Pago requerido a la recepción de la factura. Gracias por su confianza.</textarea>
-</label>
-</div>
-</div>
+
 <!-- Right Column: Live Preview -->
-<div class="lg:col-span-2">
-<div class="sticky top-8 bg-white dark:bg-gray-900 shadow-lg rounded-xl border border-gray-200 dark:border-gray-800">
-<div class="p-6 border-b border-gray-200 dark:border-gray-800">
+<div class="lg:col-span-2 print:col-span-5 print:w-full">
+<div class="sticky top-8 bg-white dark:bg-gray-900 shadow-lg rounded-xl border border-gray-200 dark:border-gray-800 print:shadow-none print:border-0">
+<div class="p-6 border-b border-gray-200 dark:border-gray-800 print:hidden">
 <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Previsualización de Factura</h3>
 </div>
-<div class="p-8 aspect-[210/297] text-sm text-gray-800 dark:text-gray-200">
+<div class="p-8 aspect-[210/297] text-sm text-gray-800 dark:text-gray-200 print:aspect-auto">
 <!-- Invoice Preview Content -->
 <div class="flex justify-between items-start mb-8">
 <div>
-<h1 class="text-xl font-bold text-gray-900 dark:text-white">Taller AutoFix</h1>
-<p>Pol. Ind. La Estación, Nave 5</p>
-<p>45001, Toledo</p>
-<p>NIF: B12345678</p>
+<h1 class="text-xl font-bold text-gray-900 dark:text-white">Taller Veloz</h1>
+<p>Av. Principal 123</p>
+<p>Santiago, Chile</p>
+<p>RUT: 76.123.456-K</p>
 </div>
 <div class="text-right">
 <h2 class="text-2xl font-bold text-gray-900 dark:text-white">FACTURA</h2>
-<p class="text-gray-500 dark:text-gray-400">#FACT-2024-0078</p>
-<p>Fecha: 26/07/2024</p>
+<p class="text-gray-500 dark:text-gray-400">#{invoiceData.number}</p>
+<p>Fecha: {invoiceData.date}</p>
 </div>
 </div>
 <div class="mb-8">
 <h3 class="font-semibold text-gray-900 dark:text-white border-b pb-1 mb-2">Facturar a:</h3>
-<p>Juan Pérez</p>
-<p>Calle Falsa 123</p>
-<p>28080, Madrid</p>
+<p>{invoiceData.clientName}</p>
+<p>{invoiceData.clientAddress}</p>
+<p>{invoiceData.clientPhone}</p>
 </div>
 <table class="w-full mb-8">
 <thead class="bg-gray-100 dark:bg-gray-800">
@@ -255,45 +324,35 @@ import '../../styles/global.css';
 </tr>
 </thead>
 <tbody>
-<tr class="border-b dark:border-gray-800">
-<td class="p-2">Cambio de aceite y filtro</td>
-<td class="text-center p-2">1</td>
-<td class="text-right p-2">€75.00</td>
-<td class="text-right p-2">€75.00</td>
-</tr>
-<tr class="border-b dark:border-gray-800">
-<td class="p-2">Filtro de aceite Bosch</td>
-<td class="text-center p-2">1</td>
-<td class="text-right p-2">€15.50</td>
-<td class="text-right p-2">€15.50</td>
-</tr>
-<tr class="border-b dark:border-gray-800">
-<td class="p-2">Pastillas de freno delanteras</td>
-<td class="text-center p-2">2</td>
-<td class="text-right p-2">€45.00</td>
-<td class="text-right p-2">€90.00</td>
-</tr>
+    {invoiceData.items.map((item: InvoiceItem) => (
+        <tr class="border-b dark:border-gray-800">
+        <td class="p-2">{item.description}</td>
+        <td class="text-center p-2">{item.quantity}</td>
+        <td class="text-right p-2">{formatCurrency(item.unitPrice)}</td>
+        <td class="text-right p-2">{formatCurrency(item.total)}</td>
+        </tr>
+    ))}
 </tbody>
 </table>
 <div class="flex justify-end">
 <div class="w-1/2">
 <div class="flex justify-between text-gray-700 dark:text-gray-300">
 <p>Subtotal</p>
-<p>€180.50</p>
+<p>{formatCurrency(invoiceData.subtotal)}</p>
 </div>
 <div class="flex justify-between text-gray-700 dark:text-gray-300">
 <p>IVA (21%)</p>
-<p>€37.91</p>
+<p>{formatCurrency(invoiceData.tax)}</p>
 </div>
 <div class="flex justify-between font-bold text-gray-900 dark:text-white mt-2 pt-2 border-t dark:border-gray-700">
 <p>Total a Pagar</p>
-<p>€218.41</p>
+<p>{formatCurrency(invoiceData.total)}</p>
 </div>
 </div>
 </div>
 <div class="mt-8 text-xs text-gray-500 dark:text-gray-400">
 <p class="font-semibold">Notas:</p>
-<p>Pago requerido a la recepción de la factura. Gracias por su confianza.</p>
+<p>{invoiceData.notes}</p>
 </div>
 </div>
 </div>

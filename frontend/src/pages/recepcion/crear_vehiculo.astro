@@ -1,175 +1,239 @@
 ---
 import '../../styles/global.css';
+
+// TypeScript Interfaces for Strapi Data
+interface ClienteAttributes {
+  nombre: string;
+  apellido: string;
+  rut: string;
+  createdAt: string;
+  updatedAt: string;
+  publishedAt: string;
+}
+
+interface Cliente {
+  id: number;
+  nombre: string;
+  apellido: string;
+  rut: string;
+  attributes?: ClienteAttributes;
+}
+
+const token = Astro.cookies.get('jwt')?.value;
+
+if (!token) {
+  return Astro.redirect('/login');
+}
+
+let message = Astro.url.searchParams.get('message');
+let messageType = Astro.url.searchParams.get('type');
+let clientes: Cliente[] = [];
+
+try {
+    const response = await fetch('http://localhost:1337/api/clientes?sort=nombre:asc', {
+        headers: {
+            'Authorization': `Bearer ${token}`
+        }
+    });
+
+    if (!response.ok) {
+        throw new Error('Network response was not ok');
+    }
+
+    const data = await response.json();
+    // Flatten the data for easier use
+    clientes = data.data.map((item: any) => ({
+        id: item.id,
+        ...item.attributes
+    }));
+
+} catch (error: any) {
+    console.error('Error fetching clients:', error);
+    message = 'Error al cargar la lista de clientes. ' + error.message;
+    messageType = 'error';
+}
+
+
+if (Astro.request.method === 'POST') {
+  try {
+    const formData = await Astro.request.formData();
+    const clienteId = formData.get('cliente');
+    const patente = formData.get('patente');
+    const marca = formData.get('marca');
+    const modelo = formData.get('modelo');
+    const anio = formData.get('anio');
+    const vin = formData.get('vin');
+
+    // Basic validation
+    if (!clienteId || !patente || !marca || !modelo || !anio) {
+        return Astro.redirect(`/recepcion/crear_vehiculo?message=${encodeURIComponent('Todos los campos obligatorios deben ser completados.')}&type=error`);
+    }
+
+    const response = await fetch('http://localhost:1337/api/vehiculos', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        data: {
+          patente,
+          marca,
+          modelo,
+          anio: parseInt(anio as string, 10), // Ensure anio is a number
+          vin,
+          cliente: clienteId
+        }
+      })
+    });
+
+    const responseData = await response.json();
+
+    if (response.ok) {
+      const successMessage = `Vehículo con patente "${patente}" creado y asociado exitosamente.`;
+      return Astro.redirect(`/recepcion/crear_vehiculo?message=${encodeURIComponent(successMessage)}&type=success`);
+    } else {
+      const errorMessage = responseData.error?.message || 'Error desconocido al crear el vehículo.';
+      return Astro.redirect(`/recepcion/crear_vehiculo?message=${encodeURIComponent(errorMessage)}&type=error`);
+    }
+  } catch (error: any) {
+    return Astro.redirect(`/recepcion/crear_vehiculo?message=${encodeURIComponent('Error de conexión: ' + error.message)}&type=error`);
+  }
+}
 ---
 <!DOCTYPE html>
-
-<html class="light" lang="es"><head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Añadir Nuevo Vehículo</title>
-<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&amp;display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
-<script>
-  (function(){
-    const cfgJson = '{"darkMode":"class","theme":{"extend":{"colors":{"primary":"#135bec","background-light":"#f6f6f8","background-dark":"#101622","text-light":"#0d121b","text-dark":"#f8f9fc","subtext-light":"#4c669a","subtext-dark":"#a1b1d2","border-light":"#cfd7e7","border-dark":"#344161","card-light":"#ffffff","card-dark":"#1a2333"},"fontFamily":{"display":["Inter","sans-serif"]},"borderRadius":{"DEFAULT":"0.5rem","lg":"0.75rem","xl":"1rem","full":"9999px"}}}}';
-    try{
-      const cfg = JSON.parse(cfgJson);
-      window.tailwind = window.tailwind || {};
-      window.tailwind.config = Object.assign(window.tailwind.config || {}, cfg);
-    }catch(e){
-      console.error('Failed to parse tailwind config', e);
-    }
-  })();
-</script>
-<style>
-  .material-symbols-outlined {
-    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-    font-size: 24px;
-  }
-  body {
-    background: linear-gradient(135deg, #f6f6f8 0%, #e9ecef 100%);
-  }
-  .form-input:focus, .form-select:focus {
-    box-shadow: 0 0 0 3px rgba(19, 91, 236, 0.1);
-    transition: box-shadow 0.2s;
-  }
-  button:hover {
-    transform: translateY(-1px);
-    transition: all 0.2s;
-  }
-  select {
-    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
-    background-position: right 0.5rem center;
-    background-repeat: no-repeat;
-    background-size: 1.5em 1.5em;
-  }
-</style>
+<html class="light" lang="es">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>Añadir Nuevo Vehículo</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+    <style>
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        [x-cloak] { display: none !important; }
+    </style>
+    <script src="//unpkg.com/alpinejs" defer></script>
 </head>
-<body class="font-display">
-<div class="relative flex h-auto min-h-screen w-full flex-col bg-background-light dark:bg-background-dark group/design-root overflow-x-hidden">
-<div class="flex flex-row min-h-screen">
+<body class="font-display bg-background-light dark:bg-background-dark">
+<div class="relative flex min-h-screen w-full">
 <!-- SideNavBar -->
-<div class="flex flex-col gap-4 p-4 bg-white dark:bg-background-dark border-r border-gray-200 dark:border-gray-800 w-64">
-<div class="flex gap-3 items-center">
-<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" data-alt="Taller Veloz company logo" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBLBxtiaKaUP1j5IVvSQnTffGZb3q01Hx1ZSaIDCFmywtshsIYp7T81C4Y59YgJaV5vS43qcjoZ_qSSIcPk0yczUccj4gzzYnV-TKRtRz1Nw1kjNhXXBH5NbN9xzWRNCVE6XHxFxdvdScnhgAwXXFJotXuXHD1wReviw0OEQWdT1E5NEXerLJZ7d1lkP-NNzSgHMyA0qfkonCTGIlLKM7CGtVn2CeZyOAogiQqjodrF0Z4p8DEohweswQZowub1fM-WzBmZ9BN_y7at");'></div>
-<div class="flex flex-col">
-<h1 class="text-gray-900 dark:text-white text-base font-medium leading-normal">Taller Veloz</h1>
-<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Gestión de Taller</p>
-</div>
-</div>
-<div class="flex flex-col gap-2 mt-4">
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/recepcion/dash_recep">
-<span class="material-symbols-outlined">dashboard</span>
-<p class="text-sm font-medium leading-normal">Dashboard</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/recepcion/crear_cliente">
-<span class="material-symbols-outlined">person_add</span>
-<p class="text-sm font-medium leading-normal">Crear Cliente</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/10 text-primary" href="/recepcion/crear_vehiculo">
-<span class="material-symbols-outlined text-primary">directions_car</span>
-<p class="text-sm font-medium leading-normal">Crear Vehículo</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/recepcion/crear_orden">
-<span class="material-symbols-outlined">post_add</span>
-<p class="text-sm font-medium leading-normal">Crear Orden</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/recepcion/list_c_y_v">
-<span class="material-symbols-outlined">group</span>
-<p class="text-sm font-medium leading-normal">Listar C y V</p>
-</a>
-</div>
-<div class="mt-auto flex flex-col gap-2">
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
-<span class="material-symbols-outlined">settings</span>
-<p class="text-sm font-medium leading-normal">Configuración</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
-<span class="material-symbols-outlined">logout</span>
-<p class="text-sm font-medium leading-normal">Cerrar Sesión</p>
-</a>
-</div>
-</div>
+<aside class="flex w-64 flex-col gap-4 p-4 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800">
+    <div class="flex gap-3 items-center">
+        <div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://cdn.usegalileo.ai/stability/a4b1f6ac-1498-420f-bb19-91ee46e9ce70.png");'></div>
+        <div class="flex flex-col">
+            <h1 class="text-gray-900 dark:text-white text-base font-medium">Taller Veloz</h1>
+            <p class="text-gray-500 dark:text-gray-400 text-sm">Panel Recepción</p>
+        </div>
+    </div>
+    <nav class="flex flex-col gap-2 mt-4">
+        <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/recepcion/dash_recep">
+            <span class="material-symbols-outlined">dashboard</span>
+            <p class="text-sm font-medium">Dashboard</p>
+        </a>
+        <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/recepcion/crear_cliente">
+            <span class="material-symbols-outlined">person_add</span>
+            <p class="text-sm font-medium">Crear Cliente</p>
+        </a>
+        <a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/10 text-primary" href="/recepcion/crear_vehiculo">
+            <span class="material-symbols-outlined text-primary">directions_car</span>
+            <p class="text-sm font-medium">Crear Vehículo</p>
+        </a>
+        <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/recepcion/crear_orden">
+            <span class="material-symbols-outlined">post_add</span>
+            <p class="text-sm font-medium">Crear Orden</p>
+        </a>
+        <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/recepcion/list_c_y_v">
+            <span class="material-symbols-outlined">group</span>
+            <p class="text-sm font-medium">Listar C y V</p>
+        </a>
+    </nav>
+    <div class="mt-auto flex flex-col gap-2">
+        <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/login">
+            <span class="material-symbols-outlined">logout</span>
+            <p class="text-sm font-medium">Cerrar Sesión</p>
+        </a>
+    </div>
+</aside>
+
 <!-- Main Content -->
-<div class="flex-1 flex flex-col">
 <main class="flex-1 p-8">
-<div class="w-full max-w-4xl mx-auto">
-<!-- Breadcrumbs -->
-<div class="flex flex-wrap gap-2 mb-4">
-<a class="text-subtext-light dark:text-subtext-dark text-sm font-medium leading-normal hover:text-primary" href="#">Clientes</a>
-<span class="text-subtext-light dark:text-subtext-dark text-sm font-medium leading-normal">/</span>
-<a class="text-subtext-light dark:text-subtext-dark text-sm font-medium leading-normal hover:text-primary" href="#">Juan Pérez</a>
-<span class="text-subtext-light dark:text-subtext-dark text-sm font-medium leading-normal">/</span>
-<span class="text-text-light dark:text-text-dark text-sm font-medium leading-normal">Añadir Vehículo</span>
-</div>
-<!-- PageHeading -->
-<div class="flex flex-wrap justify-between gap-3 mb-8">
-<h1 class="text-text-light dark:text-text-dark text-3xl font-black leading-tight tracking-tight min-w-72">Añadir Nuevo Vehículo a Cliente</h1>
-</div>
-<!-- Form Card -->
-<div class="bg-card-light dark:bg-card-dark rounded-lg p-8 border border-border-light dark:border-border-dark">
-<form class="space-y-8">
-<!-- Section 1: Client Selection -->
-<div>
-<h2 class="text-text-light dark:text-text-dark text-xl font-bold leading-tight tracking-tight mb-4">Selección de Cliente</h2>
-<label class="flex flex-col">
-<p class="text-text-light dark:text-text-dark text-sm font-medium leading-normal pb-2">Cliente Existente</p>
-<select class="form-select w-full min-w-0 flex-1 resize-none overflow-hidden rounded-DEFAULT text-text-light dark:text-text-dark focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark focus:border-primary h-12 placeholder:text-subtext-light dark:placeholder:text-subtext-dark px-3 text-base font-normal leading-normal">
-<option selected="" value="juan-perez">Juan Pérez (71.456.987-Z)</option>
-<option value="two">Ana García (23.567.123-A)</option>
-<option value="three">Carlos Sanchez (45.890.321-B)</option>
-</select>
-<p class="text-xs text-subtext-light dark:text-subtext-dark mt-1">El vehículo se asociará a este cliente.</p>
-</label>
-</div>
-<div class="border-t border-border-light dark:border-border-dark"></div>
-<!-- Section 2: Vehicle Details -->
-<div>
-<h2 class="text-text-light dark:text-text-dark text-xl font-bold leading-tight tracking-tight mb-6">Detalles del Vehículo</h2>
-<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-<!-- Matrícula -->
-<label class="flex flex-col">
-<p class="text-text-light dark:text-text-dark text-sm font-medium leading-normal pb-2">Matrícula</p>
-<input class="form-input w-full min-w-0 flex-1 resize-none overflow-hidden rounded-DEFAULT text-text-light dark:text-text-dark focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark focus:border-primary h-12 placeholder:text-subtext-light dark:placeholder:text-subtext-dark px-3 text-base font-normal leading-normal" placeholder="1234ABC" type="text"/>
-</label>
-<!-- Marca -->
-<label class="flex flex-col">
-<p class="text-text-light dark:text-text-dark text-sm font-medium leading-normal pb-2">Marca</p>
-<input class="form-input w-full min-w-0 flex-1 resize-none overflow-hidden rounded-DEFAULT text-text-light dark:text-text-dark focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark focus:border-primary h-12 placeholder:text-subtext-light dark:placeholder:text-subtext-dark px-3 text-base font-normal leading-normal" placeholder="Ej: Ford" type="text"/>
-</label>
-<!-- Modelo -->
-<label class="flex flex-col">
-<p class="text-text-light dark:text-text-dark text-sm font-medium leading-normal pb-2">Modelo</p>
-<input class="form-input w-full min-w-0 flex-1 resize-none overflow-hidden rounded-DEFAULT text-text-light dark:text-text-dark focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark focus:border-primary h-12 placeholder:text-subtext-light dark:placeholder:text-subtext-dark px-3 text-base font-normal leading-normal" placeholder="Ej: Focus" type="text"/>
-</label>
-<!-- Año -->
-<label class="flex flex-col">
-<p class="text-text-light dark:text-text-dark text-sm font-medium leading-normal pb-2">Año de Fabricación</p>
-<input class="form-input w-full min-w-0 flex-1 resize-none overflow-hidden rounded-DEFAULT text-text-light dark:text-text-dark focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark focus:border-primary h-12 placeholder:text-subtext-light dark:placeholder:text-subtext-dark px-3 text-base font-normal leading-normal" placeholder="2024" type="number"/>
-</label>
-<!-- VIN -->
-<label class="flex flex-col md:col-span-2">
-<p class="text-text-light dark:text-text-dark text-sm font-medium leading-normal pb-2">Número de Bastidor (VIN)</p>
-<input class="form-input w-full min-w-0 flex-1 resize-none overflow-hidden rounded-DEFAULT text-text-light dark:text-text-dark focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-border-light dark:border-border-dark bg-background-light dark:bg-background-dark focus:border-primary h-12 placeholder:text-subtext-light dark:placeholder:text-subtext-dark px-3 text-base font-normal leading-normal" placeholder="Ej: WFOAFOCHPBU12345" type="text"/>
-</label>
-</div>
-</div>
-<div class="border-t border-border-light dark:border-border-dark"></div>
-<!-- Action Area -->
-<div class="flex items-center justify-end gap-4 pt-2">
-<button class="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-11 px-6 bg-transparent text-subtext-light dark:text-subtext-dark text-sm font-bold leading-normal tracking-[0.015em] hover:bg-primary/10" type="button">
-<span class="truncate">Cancelar</span>
-</button>
-<button class="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-11 px-6 bg-primary text-white text-sm font-bold leading-normal tracking-[0.015em] hover:bg-primary/90" type="submit">
-<span class="truncate">Guardar Vehículo</span>
-</button>
-</div>
-</form>
-</div>
-</div>
+    <div class="w-full max-w-3xl mx-auto">
+        <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm" x-data="{ message: '{{ message }}', messageType: '{{ messageType }}' }">
+            <div class="p-6 sm:p-8">
+                <div class="flex flex-col gap-2 mb-8">
+                    <h1 class="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-slate-50">Añadir Nuevo Vehículo</h1>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">Seleccione un cliente y complete los detalles para registrar un nuevo vehículo.</p>
+                </div>
+
+                <template x-if="message">
+                    <div x-show="message" x-transition class="p-4 my-6 rounded-lg text-sm" :class="{ 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300': messageType === 'success', 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300': messageType === 'error' }" role="alert">
+                        <span x-text="message"></span>
+                    </div>
+                </template>
+
+                <form method="POST" class="space-y-8">
+                    <!-- Client Selection -->
+                    <div>
+                        <h2 class="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-4">1. Selección de Cliente</h2>
+                        <label class="flex flex-col">
+                            <p class="text-sm font-medium text-slate-700 dark:text-slate-300 pb-2">Cliente Existente</p>
+                            <select name="cliente" class="form-select w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark focus:border-primary focus:ring-primary dark:text-slate-200" required>
+                                <option value="" disabled selected>Seleccione un cliente...</option>
+                                {clientes.map((cliente) => (
+                                    <option value={cliente.id}>{cliente.nombre} {cliente.apellido} ({cliente.rut})</option>
+                                ))}
+                            </select>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-2">El vehículo se asociará a este cliente. Si el cliente no existe, <a href="/recepcion/crear_cliente" class="text-primary hover:underline">créelo aquí</a>.</p>
+                        </label>
+                    </div>
+
+                    <div class="border-t border-slate-200 dark:border-slate-700"></div>
+
+                    <!-- Vehicle Details -->
+                    <div>
+                        <h2 class="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-6">2. Detalles del Vehículo</h2>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                            <div class="flex flex-col">
+                                <label class="text-sm font-medium text-slate-700 dark:text-slate-300 pb-2" for="patente">Patente</label>
+                                <input name="patente" id="patente" class="form-input w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-primary dark:text-slate-200" placeholder="ABCD12" type="text" required/>
+                            </div>
+                            <div class="flex flex-col">
+                                <label class="text-sm font-medium text-slate-700 dark:text-slate-300 pb-2" for="marca">Marca</label>
+                                <input name="marca" id="marca" class="form-input w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-primary dark:text-slate-200" placeholder="Ej: Toyota" type="text" required/>
+                            </div>
+                            <div class="flex flex-col">
+                                <label class="text-sm font-medium text-slate-700 dark:text-slate-300 pb-2" for="modelo">Modelo</label>
+                                <input name="modelo" id="modelo" class="form-input w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-primary dark:text-slate-200" placeholder="Ej: Yaris" type="text" required/>
+                            </div>
+                            <div class="flex flex-col">
+                                <label class="text-sm font-medium text-slate-700 dark:text-slate-300 pb-2" for="anio">Año</label>
+                                <input name="anio" id="anio" class="form-input w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-primary dark:text-slate-200" placeholder="Ej: 2022" type="number" min="1900" max={new Date().getFullYear() + 1} required/>
+                            </div>
+                            <div class="flex flex-col sm:col-span-2">
+                                <label class="text-sm font-medium text-slate-700 dark:text-slate-300 pb-2" for="vin">Nº de Chasis (VIN)</label>
+                                <input name="vin" id="vin" class="form-input w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-primary dark:text-slate-200" placeholder="Opcional" type="text"/>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="border-t border-slate-200 dark:border-slate-700"></div>
+
+                    <!-- Action Area -->
+                    <div class="flex justify-end gap-4 pt-2">
+                        <a href="/recepcion/dash_recep" class="inline-flex items-center justify-center rounded-lg bg-white dark:bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 ring-1 ring-inset ring-slate-300 dark:ring-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                            Cancelar
+                        </a>
+                        <button class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90" type="submit">
+                            <span class="material-symbols-outlined mr-2 text-base">add_circle</span>
+                            Guardar Vehículo
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 </main>
 </div>
-</div>
-</div>
-</body></html>
+</body>
+</html>

@@ -1,5 +1,44 @@
 ---
 import '../../styles/global.css';
+
+const jwt = Astro.cookies.get('jwt')?.value;
+let mechanics = [];
+let zones = [];
+
+if (jwt) {
+  try {
+    // Fetch Mechanics
+    const mecRes = await fetch('http://localhost:1337/api/mecenicos?populate=orden_de_trabajos', {
+      headers: { 'Authorization': `Bearer ${jwt}` }
+    });
+    const mecData = await mecRes.json();
+    mechanics = mecData.data || [];
+
+    // Fetch Zones with active orders
+    // Note: Deep filtering in populate is supported in Strapi v4
+    const zoneRes = await fetch('http://localhost:1337/api/zonas?populate[orden_de_trabajos][filters][estado][$ne]=Entregado&populate[orden_de_trabajos][populate]=vehiculo', {
+      headers: { 'Authorization': `Bearer ${jwt}` }
+    });
+    const zoneData = await zoneRes.json();
+    zones = zoneData.data || [];
+
+  } catch (e) {
+    console.error('Error fetching data:', e);
+  }
+} else {
+  return Astro.redirect('/login');
+}
+
+const getWorkload = (orders: any) => {
+    if (!orders) return 0;
+    const active = orders.filter((o: any) => o.estado !== 'Entregado').length;
+    return Math.min((active / 5) * 100, 100); // Cap at 100% (5 orders max)
+};
+
+const getActiveOrdersCount = (orders: any) => {
+    if (!orders) return 0;
+    return orders.filter((o: any) => o.estado !== 'Entregado').length;
+};
 ---
 <!DOCTYPE html>
 
@@ -154,117 +193,78 @@ import '../../styles/global.css';
 <h2 class="text-gray-900 dark:text-white text-[22px] font-bold leading-tight tracking-[-0.015em] px-4 pb-3 pt-5">Mecánicos</h2>
 <!-- Mechanic Cards Grid -->
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-<div class="bg-white dark:bg-background-dark/50 rounded-xl border border-gray-200 dark:border-gray-800 p-4 flex flex-col gap-4">
-<div class="flex items-center gap-3">
-<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" data-alt="Avatar de Juan Pérez" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuB1-56-IoUQ0Q72fIF16pCfxZLPL2bWGawgy4ggArCn7mS7qVOW-MMhuA_6_ZAWN6CU8Fy0c1SJ4ZaRKUpGYLzZ-LINd5MPmfz9OCJYjhKLj74dep_gm0Pu2Rc4lu8BQTtoHjP31V5R-w3Txga2oKfbVYkTGvBE5F9ZlWzTu4HtlN1LvaXXMpljya31FKTrJRWmPE19iJIPLUpO3cm3Z5sC3vpvZdKG4C5kTZQPtg1sDyZOq-KICdvklpL4EeUEZQ6BkI9i4EFcW-Il");'></div>
-<div class="flex-1">
-<h3 class="text-gray-900 dark:text-white font-semibold">Juan Pérez</h3>
-<p class="text-gray-500 dark:text-gray-400 text-sm">Especialista en Motor</p>
-</div>
-<span class="text-xs font-medium text-green-800 bg-green-100 dark:text-green-200 dark:bg-green-900/50 py-1 px-2.5 rounded-full">Disponible</span>
-</div>
-<div>
-<div class="flex justify-between mb-1">
-<span class="text-sm font-medium text-gray-600 dark:text-gray-300">Carga de trabajo</span>
-<span class="text-sm font-medium text-gray-500 dark:text-gray-400">0/5 Órdenes</span>
-</div>
-<div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-<div class="bg-green-500 h-2 rounded-full" style="width: 0%"></div>
-</div>
-</div>
-</div>
-<div class="bg-white dark:bg-background-dark/50 rounded-xl border border-gray-200 dark:border-gray-800 p-4 flex flex-col gap-4">
-<div class="flex items-center gap-3">
-<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" data-alt="Avatar de María García" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuACW9ZA_iQ14KV1R13_Ac1Mwj7Vm9ab9NivE6RyJ6I1yQ-95CXpzt_eFHzXjjt0QFBmoDXsI9YuKarphCNRNEW21UKMJc3DeRkMKYIEZ_sz2uqms-te4q5WkewHmx7Ye9hJvcT3oEkSpQAPGBOx2Z-zK0V0cLpGNKOKU2IE5_JQPwOz4bcrwkImzBWphb2sLiZtmX9Z4FBJ8YSVn3LGQnAwgIcUVA9OsQNna5TC8Jrgy4Mc1IKiAmslg6u6ahNnUlca-KB-8maZnWil");'></div>
-<div class="flex-1">
-<h3 class="text-gray-900 dark:text-white font-semibold">María García</h3>
-<p class="text-gray-500 dark:text-gray-400 text-sm">Frenos y Suspensión</p>
-</div>
-<span class="text-xs font-medium text-orange-800 bg-orange-100 dark:text-orange-200 dark:bg-orange-900/50 py-1 px-2.5 rounded-full">Ocupado</span>
-</div>
-<div>
-<div class="flex justify-between mb-1">
-<span class="text-sm font-medium text-gray-600 dark:text-gray-300">Carga de trabajo</span>
-<span class="text-sm font-medium text-gray-500 dark:text-gray-400">3/5 Órdenes</span>
-</div>
-<div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-<div class="bg-orange-500 h-2 rounded-full" style="width: 60%"></div>
-</div>
-</div>
-</div>
-<div class="bg-white dark:bg-background-dark/50 rounded-xl border border-gray-200 dark:border-gray-800 p-4 flex flex-col gap-4">
-<div class="flex items-center gap-3">
-<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" data-alt="Avatar de Carlos Rodriguez" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuAehA6Lv5BtwPNVesGzHTdAcSCJSjAwJlu7wCD-P18kCx34dg_D92xAkTkj4qAl5g8NtHZUUwjF2qxdlJdAhINr04dF8U5G-QCvVxoMAHgl7C80eeQfRacRpIXan7wF_I9y1ZfhcDLNrqGa_MB8EUiw63vP5KPmDEOXyp6kjIJGsO3KfJFhrwQqk_T0LbAJ_GnDhEPHE_x-1F-uYQGeWGFExD-lZOBi6qN0Plym9bMFeSD_gVGviicicfWecKop5-3mWBJBnA0ZlYDj");'></div>
-<div class="flex-1">
-<h3 class="text-gray-900 dark:text-white font-semibold">Carlos Rodriguez</h3>
-<p class="text-gray-500 dark:text-gray-400 text-sm">Transmisiones</p>
-</div>
-<span class="text-xs font-medium text-gray-800 bg-gray-200 dark:text-gray-200 dark:bg-gray-700 py-1 px-2.5 rounded-full">En descanso</span>
-</div>
-<div>
-<div class="flex justify-between mb-1">
-<span class="text-sm font-medium text-gray-600 dark:text-gray-300">Carga de trabajo</span>
-<span class="text-sm font-medium text-gray-500 dark:text-gray-400">2/5 Órdenes</span>
-</div>
-<div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-<div class="bg-yellow-400 h-2 rounded-full" style="width: 40%"></div>
-</div>
-</div>
-</div>
+{mechanics.map((mec: any) => {
+    const activeCount = getActiveOrdersCount(mec.orden_de_trabajos);
+    const workload = getWorkload(mec.orden_de_trabajos);
+    const status = activeCount >= 5 ? 'Ocupado' : 'Disponible';
+    const statusColor = activeCount >= 5 ? 'text-orange-800 bg-orange-100 dark:text-orange-200 dark:bg-orange-900/50' : 'text-green-800 bg-green-100 dark:text-green-200 dark:bg-green-900/50';
+    const barColor = activeCount >= 5 ? 'bg-orange-500' : 'bg-green-500';
+
+    return (
+    <div class="bg-white dark:bg-background-dark/50 rounded-xl border border-gray-200 dark:border-gray-800 p-4 flex flex-col gap-4">
+        <div class="flex items-center gap-3">
+            <div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10 bg-gray-200 flex items-center justify-center text-gray-500">
+                <span class="material-symbols-outlined">person</span>
+            </div>
+            <div class="flex-1">
+                <h3 class="text-gray-900 dark:text-white font-semibold">{mec.nombre} {mec.apellido}</h3>
+                <p class="text-gray-500 dark:text-gray-400 text-sm">{mec.especialidad || 'Mecánico General'}</p>
+            </div>
+            <span class={`text-xs font-medium py-1 px-2.5 rounded-full ${statusColor}`}>{status}</span>
+        </div>
+        <div>
+            <div class="flex justify-between mb-1">
+                <span class="text-sm font-medium text-gray-600 dark:text-gray-300">Carga de trabajo</span>
+                <span class="text-sm font-medium text-gray-500 dark:text-gray-400">{activeCount}/5 Órdenes</span>
+            </div>
+            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                <div class={`${barColor} h-2 rounded-full`} style={`width: ${workload}%`}></div>
+            </div>
+        </div>
+    </div>
+    );
+})}
 </div>
 <!-- SectionHeader: Zonas del Taller -->
 <h2 class="text-gray-900 dark:text-white text-[22px] font-bold leading-tight tracking-[-0.015em] px-4 pb-3 pt-8">Zonas del Taller</h2>
 <!-- Workshop Zones Grid -->
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-<div class="bg-white dark:bg-background-dark/50 rounded-xl border border-orange-300 dark:border-orange-800 p-4 flex flex-col gap-3 relative">
-<div class="flex items-center justify-between">
-<h3 class="text-gray-900 dark:text-white font-semibold">Elevador 1</h3>
-<span class="text-xs font-medium text-orange-800 bg-orange-100 dark:text-orange-200 dark:bg-orange-900/50 py-1 px-2.5 rounded-full">Ocupado</span>
+{zones.map((zone: any) => {
+    const activeOrders = zone.orden_de_trabajos || [];
+    const isOccupied = activeOrders.length > 0;
+    const currentOrder = isOccupied ? activeOrders[0] : null;
+    const status = isOccupied ? 'Ocupado' : 'Libre';
+    const statusColor = isOccupied ? 'text-orange-800 bg-orange-100 dark:text-orange-200 dark:bg-orange-900/50' : 'text-green-800 bg-green-100 dark:text-green-200 dark:bg-green-900/50';
+    const borderColor = isOccupied ? 'border-orange-300 dark:border-orange-800' : 'border-green-300 dark:border-green-800';
+
+    return (
+    <div class={`bg-white dark:bg-background-dark/50 rounded-xl border ${borderColor} p-4 flex flex-col gap-3 relative`}>
+        <div class="flex items-center justify-between">
+            <h3 class="text-gray-900 dark:text-white font-semibold">{zone.nombre}</h3>
+            <span class={`text-xs font-medium py-1 px-2.5 rounded-full ${statusColor}`}>{status}</span>
+        </div>
+        {isOccupied ? (
+            <>
+            <div class="text-sm text-gray-600 dark:text-gray-300">
+                <p class="font-medium">OT-{currentOrder.id}</p>
+                <p class="text-gray-500 dark:text-gray-400">{currentOrder.vehiculo?.modelo || 'Vehículo'}</p>
+            </div>
+            <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mt-auto pt-2 border-t border-gray-200 dark:border-gray-700">
+                <span class="material-symbols-outlined" style="font-size: 16px;">schedule</span>
+                <span>En uso</span>
+            </div>
+            </>
+        ) : (
+            <div class="flex flex-col items-center justify-center h-full">
+                <span class="material-symbols-outlined text-green-500 text-4xl">check_circle</span>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">Disponible</p>
+            </div>
+        )}
+    </div>
+    );
+})}
 </div>
-<div class="text-sm text-gray-600 dark:text-gray-300">
-<p class="font-medium">OT-1245</p>
-<p class="text-gray-500 dark:text-gray-400">Toyota Corolla</p>
-</div>
-<div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mt-auto pt-2 border-t border-gray-200 dark:border-gray-700">
-<span class="material-symbols-outlined" style="font-size: 16px;">schedule</span>
-<span>Ocupado por 2h 15m</span>
-</div>
-</div>
-<div class="bg-white dark:bg-background-dark/50 rounded-xl border border-green-300 dark:border-green-800 p-4 flex flex-col gap-3 justify-center items-center text-center">
-<div class="flex items-center justify-between w-full">
-<h3 class="text-gray-900 dark:text-white font-semibold">Elevador 2</h3>
-<span class="text-xs font-medium text-green-800 bg-green-100 dark:text-green-200 dark:bg-green-900/50 py-1 px-2.5 rounded-full">Libre</span>
-</div>
-<div class="flex flex-col items-center justify-center h-full">
-<span class="material-symbols-outlined text-green-500 text-4xl">check_circle</span>
-<p class="text-sm text-gray-500 dark:text-gray-400 mt-2">Disponible para asignar</p>
-</div>
-</div>
-<div class="bg-white dark:bg-background-dark/50 rounded-xl border border-orange-300 dark:border-orange-800 p-4 flex flex-col gap-3 relative">
-<div class="flex items-center justify-between">
-<h3 class="text-gray-900 dark:text-white font-semibold">Zona de Chapa</h3>
-<span class="text-xs font-medium text-orange-800 bg-orange-100 dark:text-orange-200 dark:bg-orange-900/50 py-1 px-2.5 rounded-full">Ocupado</span>
-</div>
-<div class="text-sm text-gray-600 dark:text-gray-300">
-<p class="font-medium">OT-1248</p>
-<p class="text-gray-500 dark:text-gray-400">Ford Focus</p>
-</div>
-<div class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mt-auto pt-2 border-t border-gray-200 dark:border-gray-700">
-<span class="material-symbols-outlined" style="font-size: 16px;">schedule</span>
-<span>Ocupado por 4h 30m</span>
-</div>
-</div>
-<div class="bg-white dark:bg-background-dark/50 rounded-xl border border-red-300 dark:border-red-800 p-4 flex flex-col gap-3 relative">
-<div class="flex items-center justify-between">
-<h3 class="text-gray-900 dark:text-white font-semibold">Cabina de Pintura</h3>
-<span class="text-xs font-medium text-red-800 bg-red-100 dark:text-red-200 dark:bg-red-900/50 py-1 px-2.5 rounded-full">Mantenimiento</span>
-</div>
-<div class="flex flex-col items-center justify-center h-full text-center">
-<span class="material-symbols-outlined text-red-500 text-4xl">warning</span>
-<p class="text-sm text-gray-500 dark:text-gray-400 mt-2">No disponible</p>
-</div>
-</div>
-</div>
+
 </div>
 </main>
 </div>

@@ -1,5 +1,42 @@
 ---
 import '../../styles/global.css';
+
+const jwt = Astro.cookies.get('jwt')?.value;
+let activeOrders = [];
+
+if (jwt) {
+  try {
+    const res = await fetch('http://localhost:1337/api/orden-de-trabajos?filters[estado][$ne]=Entregado&populate=cliente&populate=vehiculo&populate=mecanico&sort[0]=updatedAt:desc', {
+      headers: { 'Authorization': `Bearer ${jwt}` }
+    });
+    const data = await res.json();
+    activeOrders = data.data || [];
+  } catch (e) {
+    console.error('Error fetching active orders:', e);
+  }
+} else {
+  return Astro.redirect('/login');
+}
+
+const getProgress = (status: string) => {
+  switch(status) {
+    case 'Pendiente': return 10;
+    case 'En Proceso': return 50;
+    case 'Esperando Repuestos': return 30; // If this status exists
+    case 'Finalizado': return 90;
+    case 'Entregado': return 100;
+    default: return 0;
+  }
+};
+
+const getStatusColor = (status: string) => {
+    switch(status) {
+        case 'Pendiente': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
+        case 'En Proceso': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
+        case 'Finalizado': return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
+        default: return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
+    }
+};
 ---
 
 <!DOCTYPE html>
@@ -94,10 +131,10 @@ import '../../styles/global.css';
 <!-- PageHeading -->
 <header class="flex flex-wrap justify-between items-center gap-4 mb-6">
 <h1 class="text-3xl font-black tracking-tight">Órdenes de Trabajo en Progreso</h1>
-<button class="flex items-center justify-center gap-2 h-10 px-5 bg-primary text-white rounded-lg text-sm font-bold shadow-sm hover:bg-primary/90 transition-colors">
+<a href="/recepcion/list_c_y_v" class="flex items-center justify-center gap-2 h-10 px-5 bg-primary text-white rounded-lg text-sm font-bold shadow-sm hover:bg-primary/90 transition-colors">
 <span class="material-symbols-outlined text-base">add_circle</span>
 <span>Crear Nueva Orden</span>
-</button>
+</a>
 </header>
 <!-- SearchBar -->
 <div class="mb-6">
@@ -122,78 +159,32 @@ import '../../styles/global.css';
 </tr>
 </thead>
 <tbody class="divide-y divide-border-light dark:divide-border-dark">
+{activeOrders.length > 0 ? activeOrders.map((order: any) => (
 <tr class="hover:bg-background-light dark:hover:bg-background-dark/50 transition-colors">
-<td class="px-6 py-4 whitespace-nowrap font-medium text-text-secondary-light dark:text-text-secondary-dark">1024</td>
-<td class="px-6 py-4 whitespace-nowrap font-semibold">Ana Torres</td>
-<td class="px-6 py-4 whitespace-nowrap text-text-secondary-light dark:text-text-secondary-dark">Toyota Corolla (ABC-123)</td>
-<td class="px-6 py-4 whitespace-nowrap text-text-secondary-light dark:text-text-secondary-dark">Carlos Ruiz</td>
+<td class="px-6 py-4 whitespace-nowrap font-medium text-text-secondary-light dark:text-text-secondary-dark">#{order.documentId.slice(0, 6)}</td>
+<td class="px-6 py-4 whitespace-nowrap font-semibold">{order.cliente ? `${order.cliente.nombre} ${order.cliente.apellido}` : 'N/A'}</td>
+<td class="px-6 py-4 whitespace-nowrap text-text-secondary-light dark:text-text-secondary-dark">{order.vehiculo ? `${order.vehiculo.marca} ${order.vehiculo.modelo}` : 'N/A'}</td>
+<td class="px-6 py-4 whitespace-nowrap text-text-secondary-light dark:text-text-secondary-dark">{order.mecanico ? order.mecanico.nombre : 'Sin asignar'}</td>
 <td class="px-6 py-4 whitespace-nowrap">
-<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-status-green/20 text-status-green">En Progreso</span>
+<span class={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(order.estado)}`}>
+{order.estado}
+</span>
 </td>
 <td class="px-6 py-4 whitespace-nowrap">
 <div class="flex items-center gap-3">
-<div class="w-24 bg-border-light dark:bg-border-dark rounded-full h-1.5"><div class="bg-status-green h-1.5 rounded-full" style="width: 75%"></div></div>
-<span class="font-medium">75%</span>
+<div class="w-24 bg-border-light dark:bg-border-dark rounded-full h-1.5"><div class={`h-1.5 rounded-full ${order.estado === 'Pendiente' ? 'bg-yellow-500' : 'bg-blue-500'}`} style={`width: ${getProgress(order.estado)}%`}></div></div>
+<span class="font-medium">{getProgress(order.estado)}%</span>
 </div>
 </td>
 <td class="px-6 py-4 whitespace-nowrap text-right">
-<a class="font-bold text-primary hover:underline" href="/encargado/detalles_de_orden">Ver Detalles</a>
+<a class="font-bold text-primary hover:underline" href={`/encargado/detalles_de_orden?id=${order.documentId}`}>Ver Detalles</a>
 </td>
 </tr>
-<tr class="hover:bg-background-light dark:hover:bg-background-dark/50 transition-colors">
-<td class="px-6 py-4 whitespace-nowrap font-medium text-text-secondary-light dark:text-text-secondary-dark">1023</td>
-<td class="px-6 py-4 whitespace-nowrap font-semibold">Juan Pérez</td>
-<td class="px-6 py-4 whitespace-nowrap text-text-secondary-light dark:text-text-secondary-dark">Ford Focus (XYZ-789)</td>
-<td class="px-6 py-4 whitespace-nowrap text-text-secondary-light dark:text-text-secondary-dark">Lucía Gómez</td>
-<td class="px-6 py-4 whitespace-nowrap">
-<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-status-yellow/20 text-status-yellow">Esperando Pieza</span>
-</td>
-<td class="px-6 py-4 whitespace-nowrap">
-<div class="flex items-center gap-3">
-<div class="w-24 bg-border-light dark:bg-border-dark rounded-full h-1.5"><div class="bg-status-yellow h-1.5 rounded-full" style="width: 30%"></div></div>
-<span class="font-medium">30%</span>
-</div>
-</td>
-<td class="px-6 py-4 whitespace-nowrap text-right">
-<a class="font-bold text-primary hover:underline" href="/encargado/detalles_de_orden">Ver Detalles</a>
-</td>
-</tr>
-<tr class="hover:bg-background-light dark:hover:bg-background-dark/50 transition-colors">
-<td class="px-6 py-4 whitespace-nowrap font-medium text-text-secondary-light dark:text-text-secondary-dark">1022</td>
-<td class="px-6 py-4 whitespace-nowrap font-semibold">María López</td>
-<td class="px-6 py-4 whitespace-nowrap text-text-secondary-light dark:text-text-secondary-dark">Honda Civic (DEF-456)</td>
-<td class="px-6 py-4 whitespace-nowrap text-text-secondary-light dark:text-text-secondary-dark">Carlos Ruiz</td>
-<td class="px-6 py-4 whitespace-nowrap">
-<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-status-red/20 text-status-red">Retrasado</span>
-</td>
-<td class="px-6 py-4 whitespace-nowrap">
-<div class="flex items-center gap-3">
-<div class="w-24 bg-border-light dark:bg-border-dark rounded-full h-1.5"><div class="bg-status-red h-1.5 rounded-full" style="width: 50%"></div></div>
-<span class="font-medium">50%</span>
-</div>
-</td>
-<td class="px-6 py-4 whitespace-nowrap text-right">
-<a class="font-bold text-primary hover:underline" href="/encargado/detalles_de_orden">Ver Detalles</a>
-</td>
-</tr>
-<tr class="hover:bg-background-light dark:hover:bg-background-dark/50 transition-colors">
-<td class="px-6 py-4 whitespace-nowrap font-medium text-text-secondary-light dark:text-text-secondary-dark">1021</td>
-<td class="px-6 py-4 whitespace-nowrap font-semibold">Pedro García</td>
-<td class="px-6 py-4 whitespace-nowrap text-text-secondary-light dark:text-text-secondary-dark">Nissan Sentra (GHI-101)</td>
-<td class="px-6 py-4 whitespace-nowrap text-text-secondary-light dark:text-text-secondary-dark">Sofía Martin</td>
-<td class="px-6 py-4 whitespace-nowrap">
-<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/20 text-primary">En Diagnóstico</span>
-</td>
-<td class="px-6 py-4 whitespace-nowrap">
-<div class="flex items-center gap-3">
-<div class="w-24 bg-border-light dark:bg-border-dark rounded-full h-1.5"><div class="bg-primary h-1.5 rounded-full" style="width: 10%"></div></div>
-<span class="font-medium">10%</span>
-</div>
-</td>
-<td class="px-6 py-4 whitespace-nowrap text-right">
-<a class="font-bold text-primary hover:underline" href="/encargado/detalles_de_orden">Ver Detalles</a>
-</td>
-</tr>
+)) : (
+    <tr>
+        <td colspan="7" class="px-6 py-8 text-center text-gray-500">No hay órdenes en curso.</td>
+    </tr>
+)}
 </tbody>
 </table>
 </div>
@@ -205,12 +196,6 @@ import '../../styles/global.css';
 <span class="material-symbols-outlined text-lg">chevron_left</span>
 </a>
 <a class="text-sm font-bold flex size-9 items-center justify-center rounded-lg bg-primary text-white" href="#">1</a>
-<a class="text-sm font-medium flex size-9 items-center justify-center rounded-lg hover:bg-primary/10 transition-colors text-text-secondary-light dark:text-text-secondary-dark" href="#">2</a>
-<a class="text-sm font-medium flex size-9 items-center justify-center rounded-lg hover:bg-primary/10 transition-colors text-text-secondary-light dark:text-text-secondary-dark" href="#">3</a>
-<span class="text-sm font-medium flex size-9 items-center justify-center rounded-lg text-text-secondary-light dark:text-text-secondary-dark">...</span>
-<a class="text-sm font-medium flex size-9 items-center justify-center rounded-lg hover:bg-primary/10 transition-colors text-text-secondary-light dark:text-text-secondary-dark" href="#">8</a>
-<a class="text-sm font-medium flex size-9 items-center justify-center rounded-lg hover:bg-primary/10 transition-colors text-text-secondary-light dark:text-text-secondary-dark" href="#">9</a>
-<a class="text-sm font-medium flex size-9 items-center justify-center rounded-lg hover:bg-primary/10 transition-colors text-text-secondary-light dark:text-text-secondary-dark" href="#">10</a>
 <a class="flex size-9 items-center justify-center rounded-lg hover:bg-primary/10 transition-colors" href="#">
 <span class="material-symbols-outlined text-lg">chevron_right</span>
 </a>
