@@ -43,56 +43,69 @@ import '../../styles/global.css';
   </style>
 </head>
 <body class="font-display bg-background-light dark:bg-background-dark">
-<div class="relative flex h-auto min-h-screen w-full flex-col group/design-root overflow-x-hidden">
-<div class="flex flex-col lg:flex-row h-screen">
+<div class="relative flex min-h-screen w-full">
 <!-- SideNavBar -->
-<aside class="w-full lg:w-64 bg-white dark:bg-background-dark border-r border-gray-200 dark:border-gray-800 flex-shrink-0">
-<div class="flex h-full flex-col justify-between p-4">
+<aside class="flex w-64 flex-col bg-white dark:bg-gray-900 p-4 border-r border-gray-200 dark:border-gray-800">
 <div class="flex flex-col gap-4">
-<div class="flex items-center gap-3 px-2">
+<div class="flex items-center gap-3">
 <div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://cdn.usegalileo.ai/stability/a4b1f6ac-1498-420f-bb19-91ee46e9ce70.png");'></div>
 <div class="flex flex-col">
-<h1 class="text-gray-900 dark:text-gray-100 text-base font-bold leading-normal">Taller Veloz</h1>
+<h1 class="text-gray-900 dark:text-white text-base font-medium leading-normal">Taller Veloz</h1>
 <p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Gestión de Taller</p>
 </div>
 </div>
-<div class="flex flex-col gap-2 mt-4">
+<nav class="flex flex-col gap-2 mt-4">
 <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/dash_enc">
-<span class="material-symbols-outlined text-gray-500 dark:text-gray-400">dashboard</span>
+<span class="material-symbols-outlined">dashboard</span>
 <p class="text-sm font-medium leading-normal">Dashboard</p>
 </a>
 <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/alert_stock">
-<span class="material-symbols-outlined text-gray-500 dark:text-gray-400">inventory_2</span>
+<span class="material-symbols-outlined">inventory_2</span>
 <p class="text-sm font-medium leading-normal">Alertas Stock</p>
 </a>
 <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/asig_orden">
-<span class="material-symbols-outlined text-gray-500 dark:text-gray-400">assignment_ind</span>
+<span class="material-symbols-outlined">assignment_ind</span>
 <p class="text-sm font-medium leading-normal">Asignar Orden</p>
 </a>
 <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/disp_mec">
-<span class="material-symbols-outlined text-gray-500 dark:text-gray-400">calendar_view_week</span>
+<span class="material-symbols-outlined">calendar_view_week</span>
 <p class="text-sm font-medium leading-normal">Disponibilidad</p>
 </a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/trabajos_en_curso">
+<span class="material-symbols-outlined">construction</span>
+<p class="text-sm font-medium leading-normal">Trabajos en Curso</p>
+</a>
 <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/gen_factura">
-<span class="material-symbols-outlined text-gray-500 dark:text-gray-400">receipt_long</span>
+<span class="material-symbols-outlined">receipt_long</span>
 <p class="text-sm font-medium leading-normal">Generar Factura</p>
 </a>
-<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/20 dark:bg-primary/30" href="/encargado/marc_orden">
-<span class="material-symbols-outlined text-primary dark:text-white font-bold">flag</span>
-<p class="text-primary dark:text-white text-sm font-bold leading-normal">Marcar Orden</p>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/10 text-primary" href="/encargado/marc_orden">
+<span class="material-symbols-outlined">flag</span>
+<p class="text-sm font-medium leading-normal">Marcar Orden</p>
 </a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/disp_mec_zonas">
+<span class="material-symbols-outlined">view_quilt</span>
+<p class="text-sm font-medium leading-normal">Disp. Mec. Zonas</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/asignar_orden_zona">
+<span class="material-symbols-outlined">add_road</span>
+<p class="text-sm font-medium leading-normal">Asignar Orden Zona</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/detalles_de_orden">
+<span class="material-symbols-outlined">info</span>
+<p class="text-sm font-medium leading-normal">Detalles de Orden</p>
+</a>
+</nav>
 </div>
-</div>
-<div class="flex flex-col gap-2">
+<div class="mt-auto flex flex-col gap-2">
 <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
-<span class="material-symbols-outlined text-gray-500 dark:text-gray-400">settings</span>
+<span class="material-symbols-outlined">settings</span>
 <p class="text-sm font-medium leading-normal">Configuración</p>
 </a>
 <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
-<span class="material-symbols-outlined text-gray-500 dark:text-gray-400">logout</span>
+<span class="material-symbols-outlined">logout</span>
 <p class="text-sm font-medium leading-normal">Cerrar Sesión</p>
 </a>
-</div>
 </div>
 </aside>
 <!-- Main Content -->
@@ -226,6 +239,5 @@ import '../../styles/global.css';
 </div>
 </div>
 </main>
-</div>
 </div>
 </body></html>

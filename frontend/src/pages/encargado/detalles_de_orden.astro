@@ -1,0 +1,299 @@
+---
+import '../../styles/global.css';
+--- 
+
+<!DOCTYPE html>
+
+<html class="light" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Detalles de Orden - Taller Veloz</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            font-size: 24px;
+        }
+        .material-symbols-outlined.fill {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#135bec",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#101622",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+</head>
+<body class="font-display bg-background-light dark:bg-background-dark text-gray-800 dark:text-gray-200">
+<div class="relative flex min-h-screen w-full">
+<!-- SideNavBar -->
+<aside class="flex w-64 flex-col bg-white dark:bg-gray-900/50 p-4 border-r border-gray-200 dark:border-gray-800">
+<div class="flex flex-col gap-4">
+<div class="flex items-center gap-3">
+<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://cdn.usegalileo.ai/stability/a4b1f6ac-1498-420f-bb19-91ee46e9ce70.png");'></div>
+<div class="flex flex-col">
+<h1 class="text-gray-900 dark:text-white text-base font-medium leading-normal">Taller Veloz</h1>
+<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Gestión de Taller</p>
+</div>
+</div>
+<nav class="flex flex-col gap-2 mt-4">
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/dash_enc">
+<span class="material-symbols-outlined">dashboard</span>
+<p class="text-sm font-medium leading-normal">Dashboard</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/alert_stock">
+<span class="material-symbols-outlined">inventory_2</span>
+<p class="text-sm font-medium leading-normal">Alertas Stock</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/asig_orden">
+<span class="material-symbols-outlined">assignment_ind</span>
+<p class="text-sm font-medium leading-normal">Asignar Orden</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/disp_mec">
+<span class="material-symbols-outlined">calendar_view_week</span>
+<p class="text-sm font-medium leading-normal">Disponibilidad</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/trabajos_en_curso">
+<span class="material-symbols-outlined">construction</span>
+<p class="text-sm font-medium leading-normal">Trabajos en Curso</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/gen_factura">
+<span class="material-symbols-outlined">receipt_long</span>
+<p class="text-sm font-medium leading-normal">Generar Factura</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/marc_orden">
+<span class="material-symbols-outlined">flag</span>
+<p class="text-sm font-medium leading-normal">Marcar Orden</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/disp_mec_zonas">
+<span class="material-symbols-outlined">view_quilt</span>
+<p class="text-sm font-medium leading-normal">Disp. Mec. Zonas</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/asignar_orden_zona">
+<span class="material-symbols-outlined">add_road</span>
+<p class="text-sm font-medium leading-normal">Asignar Orden Zona</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/10 text-primary" href="/encargado/detalles_de_orden">
+<span class="material-symbols-outlined text-primary">info</span>
+<p class="text-sm font-medium leading-normal">Detalles de Orden</p>
+</a>
+</nav>
+</div>
+<div class="mt-auto flex flex-col gap-2">
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
+<span class="material-symbols-outlined">settings</span>
+<p class="text-sm font-medium leading-normal">Configuración</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
+<span class="material-symbols-outlined">logout</span>
+<p class="text-sm font-medium leading-normal">Cerrar Sesión</p>
+</a>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="flex-1 p-8">
+<div class="mx-auto max-w-6xl">
+<!-- Header Bar -->
+<header class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
+<div>
+<!-- Breadcrumbs -->
+<div class="flex flex-wrap items-center gap-2">
+<a class="text-gray-500 dark:text-gray-400 text-base font-medium leading-normal hover:text-primary" href="#">Órdenes</a>
+<span class="text-gray-400 dark:text-gray-500 text-base font-medium leading-normal">/</span>
+<span class="text-gray-800 dark:text-gray-200 text-base font-medium leading-normal">Orden #12345</span>
+</div>
+<div class="flex items-center gap-3 mt-2">
+<h1 class="text-3xl font-bold text-gray-900 dark:text-white">Orden de Trabajo #12345</h1>
+<!-- Chip -->
+<div class="flex h-8 shrink-0 items-center justify-center gap-x-2 rounded-full bg-green-100 dark:bg-green-900/40 px-3">
+<span class="w-2 h-2 rounded-full bg-green-500"></span>
+<p class="text-green-700 dark:text-green-300 text-sm font-medium leading-normal">Finalizada</p>
+</div>
+</div>
+</div>
+<!-- Toolbar -->
+<div class="flex gap-2">
+<button class="flex items-center justify-center gap-2 p-2 h-10 w-10 rounded-lg text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700/50 border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700">
+<span class="material-symbols-outlined">edit</span>
+</button>
+<button class="flex items-center justify-center gap-2 p-2 h-10 w-10 rounded-lg text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700/50 border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700">
+<span class="material-symbols-outlined">print</span>
+</button>
+<button class="flex items-center justify-center gap-2 h-10 px-4 rounded-lg bg-primary text-white hover:bg-primary/90">
+<span class="material-symbols-outlined">picture_as_pdf</span>
+<span class="text-sm font-medium">Exportar a PDF</span>
+</button>
+</div>
+</header>
+<!-- Grid Layout for Content -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+<!-- Left Column: Details -->
+<div class="lg:col-span-2 flex flex-col gap-6">
+<!-- Customer & Vehicle Card -->
+<div class="bg-white dark:bg-[#18202F] p-6 rounded-xl border border-gray-200 dark:border-gray-700">
+<h2 class="text-xl font-bold text-gray-900 dark:text-white pb-4 border-b border-gray-200 dark:border-gray-700">Información del Cliente y Vehículo</h2>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+<div>
+<h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">CLIENTE</h3>
+<p class="font-medium text-gray-800 dark:text-gray-200">Ana Torres</p>
+<p class="text-gray-600 dark:text-gray-300">ana.torres@example.com</p>
+<p class="text-gray-600 dark:text-gray-300">+34 612 345 678</p>
+</div>
+<div>
+<h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">VEHÍCULO</h3>
+<p class="font-medium text-gray-800 dark:text-gray-200">Toyota Corolla (2021)</p>
+<p class="text-gray-600 dark:text-gray-300">Matrícula: 5432 JKL</p>
+<p class="text-gray-600 dark:text-gray-300">VIN: YK1234567890ABCDE</p>
+</div>
+</div>
+</div>
+<!-- Parts & Labor Card -->
+<div class="bg-white dark:bg-[#18202F] p-6 rounded-xl border border-gray-200 dark:border-gray-700">
+<h2 class="text-xl font-bold text-gray-900 dark:text-white pb-4 mb-4 border-b border-gray-200 dark:border-gray-700">Repuestos y Servicios</h2>
+<div class="overflow-x-auto">
+<table class="w-full text-left">
+<thead>
+<tr class="text-sm text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
+<th class="py-2 font-medium">Descripción</th>
+<th class="py-2 font-medium text-center">Cantidad</th>
+<th class="py-2 font-medium text-right">Precio Unitario</th>
+<th class="py-2 font-medium text-right">Total</th>
+</tr>
+</thead>
+<tbody>
+<tr class="border-b border-gray-200 dark:border-gray-700">
+<td class="py-3">Filtro de aceite Bosch P3245</td>
+<td class="py-3 text-center">1</td>
+<td class="py-3 text-right">€15.00</td>
+<td class="py-3 text-right">€15.00</td>
+</tr>
+<tr class="border-b border-gray-200 dark:border-gray-700">
+<td class="py-3">Aceite sintético 5W-30 (Litro)</td>
+<td class="py-3 text-center">4</td>
+<td class="py-3 text-right">€22.50</td>
+<td class="py-3 text-right">€90.00</td>
+</tr>
+<tr class="border-b border-gray-200 dark:border-gray-700">
+<td class="py-3">Mano de obra: Cambio de aceite y filtros</td>
+<td class="py-3 text-center">1</td>
+<td class="py-3 text-right">€50.00</td>
+<td class="py-3 text-right">€50.00</td>
+</tr>
+</tbody>
+<tfoot>
+<tr>
+<td class="pt-4 text-right font-medium text-gray-600 dark:text-gray-300" colspan="3">Subtotal</td>
+<td class="pt-4 text-right font-medium text-gray-800 dark:text-gray-200">€155.00</td>
+</tr>
+<tr>
+<td class="py-1 text-right font-medium text-gray-600 dark:text-gray-300" colspan="3">IVA (21%)</td>
+<td class="py-1 text-right font-medium text-gray-800 dark:text-gray-200">€32.55</td>
+</tr>
+<tr>
+<td class="pt-2 text-right text-lg font-bold text-gray-900 dark:text-white" colspan="3">Total</td>
+<td class="pt-2 text-right text-lg font-bold text-gray-900 dark:text-white">€187.55</td>
+</tr>
+</tfoot>
+</table>
+</div>
+</div>
+</div>
+<!-- Right Column: Summary & History -->
+<div class="lg:col-span-1 flex flex-col gap-6">
+<!-- Summary Card -->
+<div class="bg-white dark:bg-[#18202F] p-6 rounded-xl border border-gray-200 dark:border-gray-700">
+<h2 class="text-xl font-bold text-gray-900 dark:text-white pb-4 mb-4 border-b border-gray-200 dark:border-gray-700">Resumen de la Orden</h2>
+<div class="space-y-4 text-sm">
+<div class="flex justify-between">
+<span class="text-gray-500 dark:text-gray-400">Fecha de Creación:</span>
+<span class="font-medium text-gray-800 dark:text-gray-200">15 Julio, 2024</span>
+</div>
+<div class="flex justify-between">
+<span class="text-gray-500 dark:text-gray-400">Mecánico Asignado:</span>
+<span class="font-medium text-gray-800 dark:text-gray-200">Carlos Pérez</span>
+</div>
+<div class="flex justify-between">
+<span class="text-gray-500 dark:text-gray-400">Entrega Estimada:</span>
+<span class="font-medium text-gray-800 dark:text-gray-200">17 Julio, 2024</span>
+</div>
+<div>
+<span class="text-gray-500 dark:text-gray-400">Problema Inicial:</span>
+<p class="font-medium text-gray-800 dark:text-gray-200 mt-1">Revisión periódica y cambio de aceite. El cliente reporta un ruido leve al frenar.</p>
+</div>
+</div>
+</div>
+<!-- Timeline Component -->
+<div class="bg-white dark:bg-[#18202F] p-6 rounded-xl border border-gray-200 dark:border-gray-700">
+<h2 class="text-xl font-bold text-gray-900 dark:text-white pb-4 border-b border-gray-200 dark:border-gray-700">Historial y Bitácora</h2>
+<div class="mt-4 space-y-6">
+<div class="relative flex gap-4">
+<div class="absolute left-[11px] top-10 h-full w-0.5 bg-gray-200 dark:bg-gray-700"></div>
+<div class="z-10 flex h-6 w-6 items-center justify-center rounded-full bg-green-500 text-white">
+<span class="material-symbols-outlined !text-[16px]">check</span>
+</div>
+<div>
+<p class="font-medium text-gray-800 dark:text-gray-200">Orden Finalizada</p>
+<p class="text-xs text-gray-500 dark:text-gray-400">16 Julio, 2024 - 17:30</p>
+<p class="text-sm text-gray-600 dark:text-gray-300 mt-1">Vehículo listo para entrega. Cliente notificado.</p>
+</div>
+</div>
+<div class="relative flex gap-4">
+<div class="absolute left-[11px] top-10 h-full w-0.5 bg-gray-200 dark:bg-gray-700"></div>
+<div class="z-10 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-white">
+<span class="material-symbols-outlined !text-[16px]">build</span>
+</div>
+<div>
+<p class="font-medium text-gray-800 dark:text-gray-200">Cambio de Estado: En Reparación</p>
+<p class="text-xs text-gray-500 dark:text-gray-400">16 Julio, 2024 - 11:00</p>
+<p class="text-sm text-gray-600 dark:text-gray-300 mt-1">Se procede con el cambio de aceite y filtros.</p>
+</div>
+</div>
+<div class="relative flex gap-4">
+<div class="absolute left-[11px] top-10 h-full w-0.5 bg-gray-200 dark:bg-gray-700"></div>
+<div class="z-10 flex h-6 w-6 items-center justify-center rounded-full bg-yellow-500 text-white">
+<span class="material-symbols-outlined !text-[16px]">search</span>
+</div>
+<div>
+<p class="font-medium text-gray-800 dark:text-gray-200">Cambio de Estado: Diagnóstico</p>
+<p class="text-xs text-gray-500 dark:text-gray-400">15 Julio, 2024 - 14:20</p>
+<p class="text-sm text-gray-600 dark:text-gray-300 mt-1">Se confirma que el ruido al frenar se debe a pastillas de freno gastadas. Cliente aprueba reemplazo.</p>
+</div>
+</div>
+<div class="relative flex gap-4">
+<div class="z-10 flex h-6 w-6 items-center justify-center rounded-full bg-gray-400 text-white">
+<span class="material-symbols-outlined !text-[16px]">add</span>
+</div>
+<div>
+<p class="font-medium text-gray-800 dark:text-gray-200">Orden Creada</p>
+<p class="text-xs text-gray-500 dark:text-gray-400">15 Julio, 2024 - 12:05</p>
+<p class="text-sm text-gray-600 dark:text-gray-300 mt-1">Vehículo recibido en el taller.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>
