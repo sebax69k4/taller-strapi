@@ -451,7 +451,12 @@ export interface ApiBitacoraBitacora extends Struct.CollectionTypeSchema {
       'api::bitacora.bitacora'
     > &
       Schema.Attribute.Private;
+    mecanico: Schema.Attribute.Relation<'manyToOne', 'api::mecenico.mecenico'>;
     observaciones: Schema.Attribute.String;
+    orden_de_trabajo: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::orden-de-trabajo.orden-de-trabajo'
+    >;
     procedimientos: Schema.Attribute.String & Schema.Attribute.Required;
     publishedAt: Schema.Attribute.DateTime;
     tiempo: Schema.Attribute.Decimal;
@@ -546,6 +551,7 @@ export interface ApiMecenicoMecenico extends Struct.CollectionTypeSchema {
   };
   attributes: {
     apellido: Schema.Attribute.String;
+    bitacoras: Schema.Attribute.Relation<'oneToMany', 'api::bitacora.bitacora'>;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -589,6 +595,7 @@ export interface ApiOrdenDeTrabajoOrdenDeTrabajo
     draftAndPublish: true;
   };
   attributes: {
+    bitacoras: Schema.Attribute.Relation<'oneToMany', 'api::bitacora.bitacora'>;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -615,6 +622,10 @@ export interface ApiOrdenDeTrabajoOrdenDeTrabajo
       'api::presupuesto.presupuesto'
     >;
     publishedAt: Schema.Attribute.DateTime;
+    repuestos: Schema.Attribute.Relation<
+      'manyToMany',
+      'api::repuesto.repuesto'
+    >;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -682,6 +693,10 @@ export interface ApiRepuestoRepuesto extends Struct.CollectionTypeSchema {
     > &
       Schema.Attribute.Private;
     nombre: Schema.Attribute.String;
+    orden_de_trabajos: Schema.Attribute.Relation<
+      'manyToMany',
+      'api::orden-de-trabajo.orden-de-trabajo'
+    >;
     precio: Schema.Attribute.Decimal;
     proveedor: Schema.Attribute.String;
     publishedAt: Schema.Attribute.DateTime;

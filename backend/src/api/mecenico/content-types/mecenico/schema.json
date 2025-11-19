@@ -58,6 +58,12 @@
       "relation": "oneToMany",
       "target": "api::zona.zona",
       "mappedBy": "mecanico"
+    },
+    "bitacoras": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::bitacora.bitacora",
+      "mappedBy": "mecanico"
     }
   }
 }

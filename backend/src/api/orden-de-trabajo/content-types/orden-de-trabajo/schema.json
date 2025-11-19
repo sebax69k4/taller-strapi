@@ -62,6 +62,18 @@
       "relation": "oneToOne",
       "target": "api::factura.factura",
       "mappedBy": "orden_de_trabajo"
+    },
+    "repuestos": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::repuesto.repuesto",
+      "inversedBy": "orden_de_trabajos"
+    },
+    "bitacoras": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::bitacora.bitacora",
+      "mappedBy": "orden_de_trabajo"
     }
   }
 }

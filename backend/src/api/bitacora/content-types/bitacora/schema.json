@@ -24,6 +24,18 @@
     },
     "observaciones": {
       "type": "string"
+    },
+    "orden_de_trabajo": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::orden-de-trabajo.orden-de-trabajo",
+      "inversedBy": "bitacoras"
+    },
+    "mecanico": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::mecenico.mecenico",
+      "inversedBy": "bitacoras"
     }
   }
 }
