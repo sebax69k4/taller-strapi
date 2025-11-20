@@ -558,7 +558,7 @@ export interface ApiMecenicoMecenico extends Struct.CollectionTypeSchema {
     email: Schema.Attribute.Email;
     especialidad: Schema.Attribute.String;
     estado: Schema.Attribute.Enumeration<
-      ['"disponible", "ocupado", "descanso", "ausente"']
+      ['disponible', 'ocupado', 'descanso', 'ausente']
     >;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
@@ -604,7 +604,11 @@ export interface ApiOrdenDeTrabajoOrdenDeTrabajo
     diagnostico: Schema.Attribute.Text;
     estado: Schema.Attribute.Enumeration<
       [
-        ' "ingresado", "en_diagnostico", "en_reparacion", "finalizado", "entregado"',
+        'ingresado',
+        'en_diagnostico',
+        'en_reparacion',
+        'finalizado',
+        'entregado',
       ]
     >;
     factura: Schema.Attribute.Relation<'oneToOne', 'api::factura.factura'>;

@@ -13,7 +13,7 @@ let availableCount = 0;
 let totalCapacity = 0; // Assuming 5 orders per mechanic max
 
 try {
-  const data = await strapiGet('/api/mecanicos?populate[orden_de_trabajos][populate]=vehiculo');
+  const data = await strapiGet('/api/mecenico?populate[orden_de_trabajos][populate][0]=vehiculo');
   mechanics = data.data || [];
 
   mechanics.forEach((m: any) => {

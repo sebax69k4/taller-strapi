@@ -1,0 +1,10 @@
+{
+  "data": {
+    "marca": "Toyota",
+    "modelo": "Corolla",
+    "ano": 2020,
+    "patente": "ABC123",
+    "vin": "VIN001",
+    "cliente": 11
+  }
+}

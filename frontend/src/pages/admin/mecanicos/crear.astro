@@ -1,0 +1,203 @@
+---
+import Layout from '../../../layouts/Layout.astro';
+import { zonas } from '../../../lib/crud';
+
+let zonasList: any[] = [];
+let error = '';
+
+try {
+  const response = await zonas.getAll([]);
+  zonasList = response.data || [];
+} catch (e: unknown) {
+  error = e instanceof Error ? e.message : 'Error desconocido';
+}
+---
+
+<Layout title="Crear Mecánico">
+  <div class="container mx-auto px-4 py-8 max-w-2xl">
+    <div class="flex items-center mb-6">
+      <a href="/admin/mecanicos" class="text-blue-500 hover:text-blue-700 mr-4">
+        ← Volver
+      </a>
+      <h1 class="text-3xl font-bold">Crear Nuevo Mecánico</h1>
+    </div>
+
+    <div id="errorMessage" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4"></div>
+    <div id="successMessage" class="hidden bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4"></div>
+
+    <form id="mecanicoForm" class="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-bold mb-2" for="nombre">
+          Nombre *
+        </label>
+        <input
+          type="text"
+          id="nombre"
+          name="nombre"
+          required
+          class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          placeholder="Pedro"
+        />
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-bold mb-2" for="apellido">
+          Apellido *
+        </label>
+        <input
+          type="text"
+          id="apellido"
+          name="apellido"
+          required
+          class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          placeholder="González"
+        />
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-bold mb-2" for="email">
+          Email *
+        </label>
+        <input
+          type="email"
+          id="email"
+          name="email"
+          required
+          class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          placeholder="mecanico@taller.com"
+        />
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-bold mb-2" for="especialidad">
+          Especialidad
+        </label>
+        <input
+          type="text"
+          id="especialidad"
+          name="especialidad"
+          class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          placeholder="Motor, Transmisión, Eléctrica, etc."
+        />
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-bold mb-2" for="zona">
+          Zona Asignada
+        </label>
+        <select
+          id="zona"
+          name="zona"
+          class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+        >
+          <option value="">Sin zona asignada</option>
+          {zonasList.map((zona: any) => (
+            <option value={zona.id}>{zona.nombre}</option>
+          ))}
+        </select>
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-bold mb-2" for="estado">
+          Estado *
+        </label>
+        <select
+          id="estado"
+          name="estado"
+          required
+          class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+        >
+          <option value="disponible">Disponible</option>
+          <option value="ocupado">Ocupado</option>
+          <option value="descanso">Descanso</option>
+          <option value="ausente">Ausente</option>
+        </select>
+      </div>
+
+      <div class="mb-6">
+        <label class="block text-gray-700 text-sm font-bold mb-2" for="ordenes_activas">
+          Órdenes Activas
+        </label>
+        <input
+          type="number"
+          id="ordenes_activas"
+          name="ordenes_activas"
+          min="0"
+          value="0"
+          class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+        />
+      </div>
+
+      <div class="flex items-center justify-between">
+        <button
+          type="submit"
+          class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+        >
+          Crear Mecánico
+        </button>
+        <a
+          href="/admin/mecanicos"
+          class="inline-block align-baseline font-bold text-sm text-gray-500 hover:text-gray-800"
+        >
+          Cancelar
+        </a>
+      </div>
+    </form>
+  </div>
+</Layout>
+
+<script>
+  const form = document.getElementById('mecanicoForm') as HTMLFormElement;
+  const errorDiv = document.getElementById('errorMessage') as HTMLDivElement;
+  const successDiv = document.getElementById('successMessage') as HTMLDivElement;
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    errorDiv.classList.add('hidden');
+    successDiv.classList.add('hidden');
+    
+    const formData = new FormData(form);
+    const data: any = {
+      nombre: formData.get('nombre'),
+      apellido: formData.get('apellido'),
+      email: formData.get('email'),
+      especialidad: formData.get('especialidad') || null,
+      estado: formData.get('estado'),
+      ordenes_activas: parseInt(formData.get('ordenes_activas') as string) || 0,
+    };
+
+    const zonaId = formData.get('zona');
+    if (zonaId) {
+      data.zona = parseInt(zonaId as string);
+    }
+
+    try {
+      const response = await fetch('http://localhost:1337/api/mecenico', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ data }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || 'Error al crear mecánico');
+      }
+
+      successDiv.textContent = 'Mecánico creado exitosamente';
+      successDiv.classList.remove('hidden');
+      
+      form.reset();
+      
+      setTimeout(() => {
+        window.location.href = '/admin/mecanicos';
+      }, 1500);
+      
+    } catch (error: unknown) {
+      errorDiv.textContent = error instanceof Error ? error.message : 'Error desconocido';
+      errorDiv.classList.remove('hidden');
+    }
+  });
+</script>

@@ -15,7 +15,7 @@ let error = '';
 
 try {
   // Fetch Active Orders
-  const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$ne]=Entregado&populate=cliente&populate=vehiculo');
+  const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$ne]=Entregado&populate[0]=cliente&populate[1]=vehiculo');
   activeOrders = data.data || [];
 
   // Get Selected Order ID from URL

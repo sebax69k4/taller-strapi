@@ -16,15 +16,7 @@ if (!orderId) {
 }
 
 try {
-  const query = new URLSearchParams({
-      'populate[cliente]': '*',
-      'populate[vehiculo]': '*',
-      'populate[mecanico]': '*',
-      'populate[repuestos]': '*',
-      'populate[bitacoras]': '*'
-  });
-
-  const data = await strapiGet(`/api/orden-de-trabajos/${orderId}?${query.toString()}`);
+  const data = await strapiGet(`/api/orden-de-trabajos/${orderId}?populate[0]=cliente&populate[1]=vehiculo&populate[2]=mecanico&populate[3]=repuestos&populate[4]=bitacoras`);
   order = data.data[0];
 } catch (e) {
   console.error('Error fetching order:', e);

@@ -29,7 +29,7 @@ if (userRole) {
     lowStockItems = lowStockRes.data || [];
 
     // Recent Activity
-    const recentRes = await strapiGet('/api/orden-de-trabajos?sort[0]=updatedAt:desc&pagination[limit]=5&populate=cliente&populate=vehiculo&populate=mecanico');
+    const recentRes = await strapiGet('/api/orden-de-trabajos?sort[0]=updatedAt:desc&pagination[limit]=5&populate[0]=cliente&populate[1]=vehiculo&populate[2]=mecanico');
     recentOrders = recentRes.data || [];
 
   } catch (e) {

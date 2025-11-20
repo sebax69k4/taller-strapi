@@ -24,7 +24,11 @@
     "estado": {
       "type": "enumeration",
       "enum": [
-        " \"ingresado\", \"en_diagnostico\", \"en_reparacion\", \"finalizado\", \"entregado\""
+        "ingresado",
+        "en_diagnostico",
+        "en_reparacion",
+        "finalizado",
+        "entregado"
       ]
     },
     "descripcion": {

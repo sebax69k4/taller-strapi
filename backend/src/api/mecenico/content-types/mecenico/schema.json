@@ -38,7 +38,10 @@
     "estado": {
       "type": "enumeration",
       "enum": [
-        "\"disponible\", \"ocupado\", \"descanso\", \"ausente\""
+        "disponible",
+        "ocupado",
+        "descanso",
+        "ausente"
       ]
     },
     "ordenes_activas": {

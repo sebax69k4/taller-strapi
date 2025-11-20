@@ -1,0 +1,202 @@
+---
+import Layout from '../../../layouts/Layout.astro';
+---
+
+<Layout title="Crear Repuesto">
+  <div class="container mx-auto px-4 py-8 max-w-2xl">
+    <div class="flex items-center mb-6">
+      <a href="/admin/repuestos" class="text-blue-500 hover:text-blue-700 mr-4">
+        ← Volver
+      </a>
+      <h1 class="text-3xl font-bold">Crear Nuevo Repuesto</h1>
+    </div>
+
+    <div id="errorMessage" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4"></div>
+    <div id="successMessage" class="hidden bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4"></div>
+
+    <form id="repuestoForm" class="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-bold mb-2" for="nombre">
+          Nombre *
+        </label>
+        <input
+          type="text"
+          id="nombre"
+          name="nombre"
+          required
+          class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          placeholder="Filtro de aceite"
+        />
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-bold mb-2" for="sku">
+          SKU *
+        </label>
+        <input
+          type="text"
+          id="sku"
+          name="sku"
+          required
+          class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          placeholder="FLT-001"
+        />
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-bold mb-2" for="descripcion">
+          Descripción
+        </label>
+        <textarea
+          id="descripcion"
+          name="descripcion"
+          rows="3"
+          class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          placeholder="Descripción detallada del repuesto"
+        ></textarea>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4 mb-4">
+        <div>
+          <label class="block text-gray-700 text-sm font-bold mb-2" for="stock">
+            Stock *
+          </label>
+          <input
+            type="number"
+            id="stock"
+            name="stock"
+            required
+            min="0"
+            class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+            placeholder="100"
+          />
+        </div>
+
+        <div>
+          <label class="block text-gray-700 text-sm font-bold mb-2" for="stock_minimo">
+            Stock Mínimo *
+          </label>
+          <input
+            type="number"
+            id="stock_minimo"
+            name="stock_minimo"
+            required
+            min="0"
+            value="5"
+            class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          />
+        </div>
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-bold mb-2" for="precio">
+          Precio *
+        </label>
+        <input
+          type="number"
+          id="precio"
+          name="precio"
+          required
+          min="0"
+          step="0.01"
+          class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          placeholder="15000"
+        />
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-bold mb-2" for="proveedor">
+          Proveedor
+        </label>
+        <input
+          type="text"
+          id="proveedor"
+          name="proveedor"
+          class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          placeholder="Autopartes Chile"
+        />
+      </div>
+
+      <div class="mb-6">
+        <label class="block text-gray-700 text-sm font-bold mb-2" for="ubicacion">
+          Ubicación
+        </label>
+        <input
+          type="text"
+          id="ubicacion"
+          name="ubicacion"
+          class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          placeholder="Bodega A, Estante 3"
+        />
+      </div>
+
+      <div class="flex items-center justify-between">
+        <button
+          type="submit"
+          class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+        >
+          Crear Repuesto
+        </button>
+        <a
+          href="/admin/repuestos"
+          class="inline-block align-baseline font-bold text-sm text-gray-500 hover:text-gray-800"
+        >
+          Cancelar
+        </a>
+      </div>
+    </form>
+  </div>
+</Layout>
+
+<script>
+  const form = document.getElementById('repuestoForm') as HTMLFormElement;
+  const errorDiv = document.getElementById('errorMessage') as HTMLDivElement;
+  const successDiv = document.getElementById('successMessage') as HTMLDivElement;
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    errorDiv.classList.add('hidden');
+    successDiv.classList.add('hidden');
+    
+    const formData = new FormData(form);
+    const data = {
+      nombre: formData.get('nombre'),
+      sku: formData.get('sku'),
+      descripcion: formData.get('descripcion') || null,
+      stock: parseInt(formData.get('stock') as string),
+      stock_minimo: parseInt(formData.get('stock_minimo') as string),
+      precio: parseFloat(formData.get('precio') as string),
+      proveedor: formData.get('proveedor') || null,
+      ubicacion: formData.get('ubicacion') || null,
+    };
+
+    try {
+      const response = await fetch('http://localhost:1337/api/repuestos', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ data }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || 'Error al crear repuesto');
+      }
+
+      successDiv.textContent = 'Repuesto creado exitosamente';
+      successDiv.classList.remove('hidden');
+      
+      form.reset();
+      
+      setTimeout(() => {
+        window.location.href = '/admin/repuestos';
+      }, 1500);
+      
+    } catch (error: unknown) {
+      errorDiv.textContent = error instanceof Error ? error.message : 'Error desconocido';
+      errorDiv.classList.remove('hidden');
+    }
+  });
+</script>

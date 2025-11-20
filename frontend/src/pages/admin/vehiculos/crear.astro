@@ -1,0 +1,209 @@
+---
+import Layout from '../../../layouts/Layout.astro';
+import { clientes, mecanicos, vehiculos } from '../../../lib/crud';
+
+let clientesList: any[] = [];
+let mecanicosList: any[] = [];
+let error = '';
+
+try {
+  const [clientesRes, mecanicosRes] = await Promise.all([
+    clientes.getAll([]),
+    mecanicos.getAll([])
+  ]);
+  clientesList = clientesRes.data || [];
+  mecanicosList = mecanicosRes.data || [];
+} catch (e: unknown) {
+  error = e instanceof Error ? e.message : 'Error desconocido';
+}
+---
+
+<Layout title="Crear Vehículo">
+  <div class="container mx-auto px-4 py-8 max-w-2xl">
+    <div class="flex items-center mb-6">
+      <a href="/admin/vehiculos" class="text-blue-500 hover:text-blue-700 mr-4">
+        ← Volver
+      </a>
+      <h1 class="text-3xl font-bold">Crear Nuevo Vehículo</h1>
+    </div>
+
+    <div id="errorMessage" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4"></div>
+    <div id="successMessage" class="hidden bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4"></div>
+
+    <form id="vehiculoForm" class="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-bold mb-2" for="patente">
+          Patente *
+        </label>
+        <input
+          type="text"
+          id="patente"
+          name="patente"
+          required
+          class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          placeholder="ABC123"
+        />
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-bold mb-2" for="marca">
+          Marca *
+        </label>
+        <input
+          type="text"
+          id="marca"
+          name="marca"
+          required
+          class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          placeholder="Toyota"
+        />
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-bold mb-2" for="modelo">
+          Modelo *
+        </label>
+        <input
+          type="text"
+          id="modelo"
+          name="modelo"
+          required
+          class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          placeholder="Corolla"
+        />
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-bold mb-2" for="ano">
+          Año
+        </label>
+        <input
+          type="number"
+          id="ano"
+          name="ano"
+          min="1900"
+          max="2100"
+          class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          placeholder="2020"
+        />
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-bold mb-2" for="numero_de_chasis">
+          Número de Chasis
+        </label>
+        <input
+          type="text"
+          id="numero_de_chasis"
+          name="numero_de_chasis"
+          class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          placeholder="1HGBH41JXMN109186"
+        />
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-bold mb-2" for="cliente">
+          Cliente *
+        </label>
+        <select
+          id="cliente"
+          name="cliente"
+          required
+          class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+        >
+          <option value="">Seleccione un cliente</option>
+          {clientesList.map((cliente: any) => (
+            <option value={cliente.id}>{cliente.nombre} {cliente.apellido} - {cliente.rut}</option>
+          ))}
+        </select>
+      </div>
+
+      <div class="mb-6">
+        <label class="block text-gray-700 text-sm font-bold mb-2" for="mecanico">
+          Mecánico Asignado
+        </label>
+        <select
+          id="mecanico"
+          name="mecanico"
+          class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+        >
+          <option value="">Sin asignar</option>
+          {mecanicosList.map((mecanico: any) => (
+            <option value={mecanico.id}>{mecanico.nombre} {mecanico.apellido} - {mecanico.especialidad}</option>
+          ))}
+        </select>
+      </div>
+
+      <div class="flex items-center justify-between">
+        <button
+          type="submit"
+          class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+        >
+          Crear Vehículo
+        </button>
+        <a
+          href="/admin/vehiculos"
+          class="inline-block align-baseline font-bold text-sm text-gray-500 hover:text-gray-800"
+        >
+          Cancelar
+        </a>
+      </div>
+    </form>
+  </div>
+</Layout>
+
+<script>
+  const form = document.getElementById('vehiculoForm') as HTMLFormElement;
+  const errorDiv = document.getElementById('errorMessage') as HTMLDivElement;
+  const successDiv = document.getElementById('successMessage') as HTMLDivElement;
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    errorDiv.classList.add('hidden');
+    successDiv.classList.add('hidden');
+    
+    const formData = new FormData(form);
+    const data: any = {
+      patente: formData.get('patente'),
+      marca: formData.get('marca'),
+      modelo: formData.get('modelo'),
+      ano: formData.get('ano') ? parseInt(formData.get('ano') as string) : null,
+      numero_de_chasis: formData.get('numero_de_chasis') || null,
+      cliente: parseInt(formData.get('cliente') as string),
+    };
+
+    const mecanicoId = formData.get('mecanico');
+    if (mecanicoId) {
+      data.mecanico = parseInt(mecanicoId as string);
+    }
+
+    try {
+      const response = await fetch('http://localhost:1337/api/vehiculos', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ data }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || 'Error al crear vehículo');
+      }
+
+      successDiv.textContent = 'Vehículo creado exitosamente';
+      successDiv.classList.remove('hidden');
+      
+      form.reset();
+      
+      setTimeout(() => {
+        window.location.href = '/admin/vehiculos';
+      }, 1500);
+      
+    } catch (error: unknown) {
+      errorDiv.textContent = error instanceof Error ? error.message : 'Error desconocido';
+      errorDiv.classList.remove('hidden');
+    }
+  });
+</script>

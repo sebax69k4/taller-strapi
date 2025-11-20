@@ -14,31 +14,30 @@ let error = '';
 let successMessage = '';
 
 try {
-  try {
-    // Fetch Pending Orders
-    const ordersData = await strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=Pendiente&populate=vehiculo');
-    pendingOrders = ordersData.data || [];
+  // Fetch Pending Orders
+  const ordersData = await strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=Pendiente&populate=vehiculo');
+  pendingOrders = ordersData.data || [];
 
-    // Fetch Mechanics with their orders to calculate workload
-    const mechanicsData = await strapiGet('/api/mecanicos?populate=orden_de_trabajos');
-    mechanics = mechanicsData.data || [];
+  // Fetch Mechanics with their orders to calculate workload
+  const mechanicsData = await strapiGet('/api/mecenico?populate=orden_de_trabajos');
+  mechanics = mechanicsData.data || [];
 
-    // Handle Assignment (POST request to self)
-    if (Astro.request.method === 'POST') {
-      const formData = await Astro.request.formData();
-      const orderId = formData.get('orderId');
-      const mechanicId = formData.get('mechanicId');
+  // Handle Assignment (POST request to self)
+  if (Astro.request.method === 'POST') {
+    const formData = await Astro.request.formData();
+    const orderId = formData.get('orderId');
+    const mechanicId = formData.get('mechanicId');
 
-      if (orderId && mechanicId) {
-        await strapiPut(`/api/orden-de-trabajos/${orderId}`, {
-          mecanico: mechanicId,
-          estado: 'En Progreso'
-        });
-        successMessage = 'Orden asignada correctamente';
-        // Refresh data
-        return Astro.redirect('/encargado/asig_orden');
-      }
+    if (orderId && mechanicId) {
+      await strapiPut(`/api/orden-de-trabajos/${orderId}`, {
+        mecanico: mechanicId,
+        estado: 'En Progreso'
+      });
+      successMessage = 'Orden asignada correctamente';
+      // Refresh data
+      return Astro.redirect('/encargado/asig_orden');
     }
+  }
 
 } catch (e) {
   console.error('Error fetching data:', e);

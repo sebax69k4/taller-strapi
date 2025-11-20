@@ -11,7 +11,7 @@ if (!userRole) {
 let activeOrders = [];
 
 try {
-  const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$ne]=Entregado&populate=cliente&populate=vehiculo&populate=mecanico&sort[0]=updatedAt:desc');
+  const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$ne]=Entregado&populate[0]=cliente&populate[1]=vehiculo&populate[2]=mecanico&sort[0]=updatedAt:desc');
   activeOrders = data.data || [];
 } catch (e) {
   console.error('Error fetching active orders:', e);

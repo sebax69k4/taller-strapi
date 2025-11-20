@@ -1,0 +1,301 @@
+---
+import Layout from '../../../layouts/Layout.astro';
+import { vehiculos, mecanicos, zonas, repuestos } from '../../../lib/crud';
+
+let vehiculosList: any[] = [];
+let mecanicosList: any[] = [];
+let zonasList: any[] = [];
+let repuestosList: any[] = [];
+let error = '';
+
+try {
+  const [vehiculosRes, mecanicosRes, zonasRes, repuestosRes] = await Promise.all([
+    vehiculos.getAll(['cliente']),
+    mecanicos.getAll([]),
+    zonas.getAll([]),
+    repuestos.getAll([])
+  ]);
+  
+  vehiculosList = vehiculosRes.data || [];
+  mecanicosList = mecanicosRes.data || [];
+  zonasList = zonasRes.data || [];
+  repuestosList = repuestosRes.data || [];
+} catch (e: unknown) {
+  error = e instanceof Error ? e.message : 'Error desconocido';
+}
+---
+
+<Layout title="Crear Orden de Trabajo">
+  <div class="container mx-auto px-4 py-8 max-w-4xl">
+    <div class="flex items-center mb-6">
+      <a href="/admin/ordenes" class="text-blue-500 hover:text-blue-700 mr-4">
+        ← Volver
+      </a>
+      <h1 class="text-3xl font-bold">Crear Nueva Orden de Trabajo</h1>
+    </div>
+
+    {error && (
+      <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+        Error cargando datos: {error}
+      </div>
+    )}
+
+    <div id="errorMessage" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4"></div>
+    <div id="successMessage" class="hidden bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4"></div>
+
+    <form id="ordenForm" class="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
+      <!-- Información básica -->
+      <div class="mb-6">
+        <h2 class="text-xl font-bold mb-4 border-b pb-2">Información Básica</h2>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-gray-700 text-sm font-bold mb-2" for="fecha_ingreso">
+              Fecha de Ingreso *
+            </label>
+            <input
+              type="date"
+              id="fecha_ingreso"
+              name="fecha_ingreso"
+              required
+              value={new Date().toISOString().split('T')[0]}
+              class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+            />
+          </div>
+
+          <div>
+            <label class="block text-gray-700 text-sm font-bold mb-2" for="fecha_estimada">
+              Fecha Estimada de Entrega
+            </label>
+            <input
+              type="date"
+              id="fecha_estimada"
+              name="fecha_estimada"
+              class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- Asignaciones -->
+      <div class="mb-6">
+        <h2 class="text-xl font-bold mb-4 border-b pb-2">Asignaciones</h2>
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label class="block text-gray-700 text-sm font-bold mb-2" for="vehiculo">
+              Vehículo *
+            </label>
+            <select
+              id="vehiculo"
+              name="vehiculo"
+              required
+              class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+            >
+              <option value="">Seleccione vehículo</option>
+              {vehiculosList.map((veh: any) => (
+                <option value={veh.id}>
+                  {veh.patente} - {veh.marca} {veh.modelo}
+                  {veh.cliente ? ` (${veh.cliente.nombre} ${veh.cliente.apellido})` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-gray-700 text-sm font-bold mb-2" for="mecanico">
+              Mecánico
+            </label>
+            <select
+              id="mecanico"
+              name="mecanico"
+              class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+            >
+              <option value="">Sin asignar</option>
+              {mecanicosList.map((mec: any) => (
+                <option value={mec.id}>
+                  {mec.nombre} {mec.apellido}
+                  {mec.especialidad ? ` - ${mec.especialidad}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-gray-700 text-sm font-bold mb-2" for="zona">
+              Zona
+            </label>
+            <select
+              id="zona"
+              name="zona"
+              class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+            >
+              <option value="">Sin asignar</option>
+              {zonasList.map((zona: any) => (
+                <option value={zona.id}>{zona.nombre}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Detalles del trabajo -->
+      <div class="mb-6">
+        <h2 class="text-xl font-bold mb-4 border-b pb-2">Detalles del Trabajo</h2>
+        
+        <div class="mb-4">
+          <label class="block text-gray-700 text-sm font-bold mb-2" for="estado">
+            Estado *
+          </label>
+          <select
+            id="estado"
+            name="estado"
+            required
+            class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          >
+            <option value="ingresado">Ingresado</option>
+            <option value="en_diagnostico">En Diagnóstico</option>
+            <option value="en_reparacion">En Reparación</option>
+            <option value="finalizado">Finalizado</option>
+            <option value="entregado">Entregado</option>
+          </select>
+        </div>
+
+        <div class="mb-4">
+          <label class="block text-gray-700 text-sm font-bold mb-2" for="descripcion">
+            Descripción
+          </label>
+          <textarea
+            id="descripcion"
+            name="descripcion"
+            rows="4"
+            class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+            placeholder="Detalle de los trabajos a realizar..."
+          ></textarea>
+        </div>
+
+        <div class="mb-4">
+          <label class="block text-gray-700 text-sm font-bold mb-2" for="diagnostico">
+            Diagnóstico
+          </label>
+          <textarea
+            id="diagnostico"
+            name="diagnostico"
+            rows="4"
+            class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+            placeholder="Diagnóstico técnico del vehículo..."
+          ></textarea>
+        </div>
+      </div>
+
+      <!-- Repuestos -->
+      <div class="mb-6">
+        <h2 class="text-xl font-bold mb-4 border-b pb-2">Repuestos Necesarios</h2>
+        <div class="bg-gray-50 p-4 rounded">
+          <div id="repuestosContainer" class="space-y-2 max-h-64 overflow-y-auto">
+            {repuestosList.map((rep: any) => (
+              <label class="flex items-center space-x-2 cursor-pointer hover:bg-gray-100 p-2 rounded">
+                <input
+                  type="checkbox"
+                  name="repuestos"
+                  value={rep.id}
+                  class="form-checkbox h-5 w-5 text-blue-600"
+                />
+                <span class="flex-1">
+                  <span class="font-medium">{rep.nombre}</span>
+                  <span class="text-gray-500 text-sm"> - SKU: {rep.sku}</span>
+                  <span class={`ml-2 text-xs ${rep.stock <= rep.stock_minimo ? 'text-red-600' : 'text-green-600'}`}>
+                    (Stock: {rep.stock})
+                  </span>
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between">
+        <button
+          type="submit"
+          class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+        >
+          Crear Orden de Trabajo
+        </button>
+        <a
+          href="/admin/ordenes"
+          class="inline-block align-baseline font-bold text-sm text-gray-500 hover:text-gray-800"
+        >
+          Cancelar
+        </a>
+      </div>
+    </form>
+  </div>
+</Layout>
+
+<script>
+  const form = document.getElementById('ordenForm') as HTMLFormElement;
+  const errorDiv = document.getElementById('errorMessage') as HTMLDivElement;
+  const successDiv = document.getElementById('successMessage') as HTMLDivElement;
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    errorDiv.classList.add('hidden');
+    successDiv.classList.add('hidden');
+    
+    const formData = new FormData(form);
+    
+    // Recopilar repuestos seleccionados
+    const repuestosCheckboxes = document.querySelectorAll('input[name="repuestos"]:checked');
+    const repuestosIds = Array.from(repuestosCheckboxes).map(cb => parseInt((cb as HTMLInputElement).value));
+    
+    const data: any = {
+      fecha_ingreso: formData.get('fecha_ingreso'),
+      fecha_estimada: formData.get('fecha_estimada') || null,
+      estado: formData.get('estado'),
+      descripcion: formData.get('descripcion') || null,
+      diagnostico: formData.get('diagnostico') || null,
+      vehiculo: parseInt(formData.get('vehiculo') as string),
+    };
+
+    const mecanicoId = formData.get('mecanico');
+    if (mecanicoId) {
+      data.mecanico = parseInt(mecanicoId as string);
+    }
+
+    const zonaId = formData.get('zona');
+    if (zonaId) {
+      data.zona = parseInt(zonaId as string);
+    }
+
+    if (repuestosIds.length > 0) {
+      data.repuestos = repuestosIds;
+    }
+
+    try {
+      const response = await fetch('http://localhost:1337/api/orden-de-trabajos', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ data }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || 'Error al crear orden de trabajo');
+      }
+
+      successDiv.textContent = 'Orden de trabajo creada exitosamente';
+      successDiv.classList.remove('hidden');
+      
+      setTimeout(() => {
+        window.location.href = '/admin/ordenes';
+      }, 1500);
+      
+    } catch (error: unknown) {
+      errorDiv.textContent = error instanceof Error ? error.message : 'Error desconocido';
+      errorDiv.classList.remove('hidden');
+    }
+  });
+</script>

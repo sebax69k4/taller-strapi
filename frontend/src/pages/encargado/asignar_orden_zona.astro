@@ -53,11 +53,11 @@ try {
   }
 
   // Fetch Order
-  const orderData = await strapiGet(`/api/orden-de-trabajos/${orderId}?populate=cliente&populate=vehiculo&populate=mecanico&populate=zona`);
+  const orderData = await strapiGet(`/api/orden-de-trabajos/${orderId}?populate[0]=cliente&populate[1]=vehiculo&populate[2]=mecanico&populate[3]=zona`);
   order = orderData.data[0];
 
   // Fetch Mechanics
-  const mecData = await strapiGet('/api/mecanicos');
+  const mecData = await strapiGet('/api/mecenico');
   mechanics = mecData.data || [];
 
   // Fetch Zones

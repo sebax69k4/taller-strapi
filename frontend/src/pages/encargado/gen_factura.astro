@@ -33,7 +33,7 @@ let invoiceData = {
 
 try {
   // Fetch completed orders (Entregado)
-  const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=Entregado&populate=vehiculo.cliente');
+  const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=Entregado&populate[0]=vehiculo&populate[1]=cliente');
   completedOrders = data.data || [];
 
   // Check for selected order
@@ -41,7 +41,7 @@ try {
   const selectedId = url.searchParams.get('id');
 
   if (selectedId) {
-    const orderData = await strapiGet(`/api/orden-de-trabajos/${selectedId}?populate=vehiculo.cliente,repuestos,presupuesto`);
+    const orderData = await strapiGet(`/api/orden-de-trabajos/${selectedId}?populate[0]=vehiculo&populate[1]=cliente&populate[2]=repuestos&populate[3]=presupuesto`);
     selectedOrder = orderData.data[0];
 
     if (selectedOrder) {

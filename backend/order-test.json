@@ -1,0 +1,10 @@
+{
+  "data": {
+    "descripcion": "Test",
+    "fecha_ingreso": "2025-11-20",
+    "cliente": 12,
+    "vehiculo": 22,
+    "zona": 2,
+    "estado": "ingresado"
+  }
+}
