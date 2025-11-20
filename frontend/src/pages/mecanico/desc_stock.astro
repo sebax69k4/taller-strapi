@@ -1,6 +1,6 @@
 ---
 export const prerender = false;
-import { fetchStrapi, strapiGet, strapiPost, strapiPut } from '../../lib/strapi';
+import { strapiGet, strapiPut } from '../../lib/strapi';
 import '../../styles/global.css';
 
 const userRole = Astro.cookies.get('user_role')?.value;
@@ -71,22 +71,14 @@ if (!bitacoraId) {
       const updatePromises = partsToDeduct.map(async (part) => {
         try {
           // Get current stock again to be safe from race conditions
-          const partRes = await fetch(`http://localhost:1337/api/repuestos/${part.id}`, { headers: {} });
-          if (!partRes.ok) throw new Error(`No se pudo obtener el repuesto ${part.id}`);
-          const partData = await partRes.json();
-          const currentStock = partData.data.attributes.stock;
+          const partData = await strapiGet(`/api/repuestos/${part.id}`);
+          const currentStock = partData.data[0]?.stock || 0;
 
           const newStock = currentStock - part.quantity;
           if (newStock < 0) throw new Error(`Stock insuficiente para ${part.nombre}`);
 
           // Update stock
-          const updateRes = await fetch(`http://localhost:1337/api/repuestos/${part.id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ data: { stock: newStock } })
-          });
-
-          if (!updateRes.ok) throw new Error(`No se pudo actualizar el stock para ${part.nombre}`);
+          await strapiPut(`/api/repuestos/${part.id}`, { stock: newStock });
           
           return { ...part, stock_anterior: currentStock, stock_actual: newStock, status: newStock < 5 ? 'Stock Bajo' : 'Deducido' };
         } catch (e: any) {
@@ -98,37 +90,29 @@ if (!bitacoraId) {
       summary = await Promise.all(updatePromises) as RepuestoUtilizado[];
 
       // Mark bitacora as stock deducted
-      await fetch(`http://localhost:1337/api/bitacoras/${bitacoraId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data: { stock_deducido: true } })
-      });
+      await strapiPut(`/api/bitacoras/${bitacoraId}`, { stock_deducido: true });
       
       success = "El stock ha sido actualizado correctamente.";
       
       // Fetch the final bitacora state to render the page
-      const bitacoraRes = await fetch(`http://localhost:1337/api/bitacoras/${bitacoraId}?populate[orden_de_trabajo][populate][0]=vehiculo`, { headers: {} });
-      const bitacoraData = await bitacoraRes.json();
-      bitacora = bitacoraData.data.id ? { id: bitacoraData.data.id, ...bitacoraData.data.attributes } : null;
+      const bitacoraData = await strapiGet(`/api/bitacoras/${bitacoraId}?populate[orden_de_trabajo][populate][0]=vehiculo`);
+      bitacora = bitacoraData.data[0] || null;
 
 
     } else { // --- INITIAL DATA FETCHING (GET) ---
-      const bitacoraRes = await fetch(`http://localhost:1337/api/bitacoras/${bitacoraId}?populate[orden_de_trabajo][populate][0]=vehiculo`, { headers: {} });
-      if (!bitacoraRes.ok) throw new Error('No se pudo cargar la bitácora.');
-      
-      const bitacoraData = await bitacoraRes.json();
-      bitacora = bitacoraData.data.id ? { id: bitacoraData.data.id, ...bitacoraData.data.attributes } : null;
+      const bitacoraData = await strapiGet(`/api/bitacoras/${bitacoraId}?populate[orden_de_trabajo][populate][0]=vehiculo`);
+      bitacora = bitacoraData.data[0] || null;
 
       if (bitacora && bitacora.repuestos_utilizados) {
         const partDetailsPromises = bitacora.repuestos_utilizados.map(async (part) => {
-          const partRes = await fetch(`http://localhost:1337/api/repuestos/${part.id}`, { headers: {} });
-          const partData = await partRes.json();
+          const partData = await strapiGet(`/api/repuestos/${part.id}`);
+          const partInfo = partData.data[0];
           return {
             ...part,
-            nombre: partData.data.attributes.nombre,
-            sku: partData.data.attributes.sku,
-            stock_anterior: partData.data.attributes.stock,
-            stock_actual: partData.data.attributes.stock - part.quantity,
+            nombre: partInfo.nombre,
+            sku: partInfo.sku,
+            stock_anterior: partInfo.stock,
+            stock_actual: partInfo.stock - part.quantity,
           };
         });
         summary = await Promise.all(partDetailsPromises);

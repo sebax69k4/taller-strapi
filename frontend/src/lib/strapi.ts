@@ -28,22 +28,41 @@ export async function fetchStrapi(endpoint: string, options: RequestInit = {}) {
   }
 }
 
-// Helper simplificado para fetch directo (reemplazo directo de fetch con bearer)
+// Helper simplificado para GET que aplana la estructura de Strapi
 export async function strapiGet(endpoint: string) {
-  return fetchStrapi(endpoint, { method: 'GET' });
+  const response = await fetchStrapi(endpoint, { method: 'GET' });
+  
+  // Si tiene data, devolver la estructura completa con data aplanado
+  if (response.data) {
+    // Aplanar cada elemento en data.data
+    const flattenedData = Array.isArray(response.data) 
+      ? response.data.map((item: any) => ({
+          id: item.id,
+          documentId: item.documentId || item.id,
+          ...item.attributes,
+        }))
+      : response.data;
+    
+    return {
+      data: flattenedData,
+      meta: response.meta
+    };
+  }
+  
+  return response;
 }
 
 export async function strapiPost(endpoint: string, body: any) {
   return fetchStrapi(endpoint, {
     method: 'POST',
-    body: JSON.stringify(body)
+    body: JSON.stringify({ data: body })
   });
 }
 
 export async function strapiPut(endpoint: string, body: any) {
   return fetchStrapi(endpoint, {
     method: 'PUT',
-    body: JSON.stringify(body)
+    body: JSON.stringify({ data: body })
   });
 }
 

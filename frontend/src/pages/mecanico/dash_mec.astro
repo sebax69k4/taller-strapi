@@ -1,10 +1,12 @@
 ---
 export const prerender = false;
-import { fetchStrapi, strapiGet, strapiPost, strapiPut } from '../../lib/strapi';
+import { strapiGet, strapiPost, strapiPut } from '../../lib/strapi';
 import '../../styles/global.css';
 
 const userRole = Astro.cookies.get('user_role')?.value;
-if (!userRole) {
+const mecenicoId = Astro.cookies.get('mecanico_id')?.value;
+
+if (!userRole || (userRole === 'mecanico' && !mecenicoId)) {
   return Astro.redirect('/login');
 }
 
@@ -14,13 +16,9 @@ interface Order {
   estado: string;
   createdAt: string;
   vehiculo?: {
-    data?: {
-      attributes: {
-        marca: string;
-        modelo: string;
-        imagen_url?: string;
-      }
-    }
+    marca: string;
+    modelo: string;
+    imagen_url?: string;
   }
 }
 
@@ -39,36 +37,12 @@ const statusConfig: { [key: string]: { color: string; label: string } } = {
 };
 
 try {
-  // 1. Get current user to find the related mechanic
-  const meRes = await fetchStrapi('/api/users/me?populate=mecanico');
+  const userName = Astro.cookies.get('user_name')?.value;
+  mechanicName = userName || 'Mecánico';
 
-  if (!meRes.ok) throw new Error('No se pudo obtener la información del usuario.');
-  
-  const meData = await meRes.json();
-  
-  const mechanicId = meData.mecanico?.id;
-  if (meData.mecanico?.nombre) {
-      mechanicName = meData.mecanico.nombre;
-  }
-
-  if (!mechanicId) {
-    error = 'Este usuario no está asociado a ningún mecánico.';
-  } else {
-    // 2. Fetch work orders for this mechanic
-    const ordersUrl = new URL('http://localhost:1337/api/orden-de-trabajos');
-    ordersUrl.searchParams.set('filters[mecanico][id][$eq]', mechanicId);
-    ordersUrl.searchParams.set('populate', 'vehiculo');
-    ordersUrl.searchParams.set('sort', 'createdAt:desc');
-
-    const ordersRes = await fetch(ordersUrl.toString(), {
-      headers: {}
-    });
-
-    if (!ordersRes.ok) throw new Error('No se pudieron cargar las órdenes de trabajo.');
-
-    const ordersData = await ordersRes.json();
-    assignedOrders = ordersData.data.map((order: any) => ({ id: order.id, ...order.attributes }));
-  }
+  // Fetch work orders assigned to the logged-in mechanic
+  const ordersRes = await strapiGet(`/api/orden-de-trabajos?filters[mecanico][id][$eq]=${mecenicoId}&populate=vehiculo&sort=createdAt:desc`);
+  assignedOrders = ordersRes.data || [];
 
 } catch (e: any) {
   console.error('Error en el dashboard del mecánico:', e);
@@ -146,11 +120,11 @@ if (statusFilter && statusFilter !== 'Todas') {
 </nav>
 </div>
 <div class="mt-auto flex flex-col gap-2">
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/settings">
 <span class="material-symbols-outlined">settings</span>
 <p class="text-sm font-medium leading-normal">Configuración</p>
 </a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/login">
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/logout">
 <span class="material-symbols-outlined">logout</span>
 <p class="text-sm font-medium leading-normal">Cerrar Sesión</p>
 </a>
@@ -178,9 +152,8 @@ if (statusFilter && statusFilter !== 'Todas') {
     {filteredOrders.length > 0 ? (
         filteredOrders.map((order: Order) => {
             const statusInfo = statusConfig[order.estado] || { color: '#6c757d', label: order.estado };
-            const vehicle = order.vehiculo?.data?.attributes;
-            const vehicleName = vehicle ? `${vehicle.marca} ${vehicle.modelo}` : 'Vehículo no especificado';
-            const imageUrl = vehicle?.imagen_url || 'https://cdn.usegalileo.ai/stability/64938e55-2324-4692-a43a-99badb3a964a.png';
+            const vehicleName = order.vehiculo ? `${order.vehiculo.marca} ${order.vehiculo.modelo}` : 'Vehículo no especificado';
+            const imageUrl = order.vehiculo?.imagen_url || 'https://cdn.usegalileo.ai/stability/64938e55-2324-4692-a43a-99badb3a964a.png';
 
             return (
                 <div class="flex flex-col items-stretch justify-start rounded-xl shadow-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 overflow-hidden">

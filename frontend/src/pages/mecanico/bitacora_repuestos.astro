@@ -1,6 +1,6 @@
 ---
 export const prerender = false;
-import { fetchStrapi, strapiGet, strapiPost, strapiPut } from '../../lib/strapi';
+import { strapiGet, strapiPost, strapiPut } from '../../lib/strapi';
 import '../../styles/global.css';
 
 const userRole = Astro.cookies.get('user_role')?.value;
@@ -17,7 +17,7 @@ interface Cliente {
 interface Vehiculo {
   marca: string;
   modelo: string;
-  anio: number;
+  ano: number;
   patente: string;
   cliente?: { data?: { attributes: Cliente } };
 }
@@ -57,62 +57,45 @@ if (!orderId) {
       const usedPartsData = formData.get('used_parts') as string;
       const usedParts = JSON.parse(usedPartsData); // [{ id: number, quantity: number }]
 
-      const meRes = await fetchStrapi('/api/users/me?populate=mecanico');
-      const meData = await meRes.json();
-      const mechanicId = meData.mecanico?.id;
+      // For now, we'll skip mechanic ID since we don't have user-mechanic relationship
+      const mechanicId = null;
 
       if (!mechanicId) throw new Error("No se pudo identificar al mecánico.");
 
       // 1. Create Bitacora Entry
-      const bitacoraRes = await fetch('http://localhost:1337/api/bitacoras', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          data: {
-            descripcion: description,
-            tiempo_invertido: timeSpent ? parseFloat(timeSpent.toString()) : 0,
-            orden_de_trabajo: orderId,
-            mecanico: mechanicId,
-            repuestos_utilizados: usedParts, // Store used parts snapshot
-          }
-        })
+      await strapiPost('/api/bitacoras', {
+        descripcion: description,
+        tiempo_invertido: timeSpent ? parseFloat(timeSpent.toString()) : 0,
+        orden_de_trabajo: orderId,
+        mecanico: mechanicId,
+        repuestos_utilizados: usedParts,
       });
 
-      if (!bitacoraRes.ok) throw new Error('Error al guardar la entrada en la bitácora.');
-
       // 2. Update Order with new parts
-      const orderRes = await fetch(`http://localhost:1337/api/orden-de-trabajos/${orderId}?populate=repuestos`, { headers: {} });
-      const currentOrderData = await orderRes.json();
-      const existingPartIds = currentOrderData.data.attributes.repuestos.data.map((p: any) => p.id);
+      const currentOrderData = await strapiGet(`/api/orden-de-trabajos/${orderId}?populate=repuestos`);
+      const currentOrder = currentOrderData.data[0];
+      const existingPartIds = currentOrder?.repuestos?.map((p: any) => p.id) || [];
       const newPartIds = usedParts.map((p: { id: number }) => p.id);
       const allPartIds = [...new Set([...existingPartIds, ...newPartIds])];
 
-      const updateOrderRes = await fetch(`http://localhost:1337/api/orden-de-trabajos/${orderId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ data: { repuestos: allPartIds } })
+      await strapiPut(`/api/orden-de-trabajos/${orderId}`, {
+        repuestos: allPartIds
       });
-
-      if (!updateOrderRes.ok) throw new Error('Error al actualizar los repuestos de la orden.');
 
       success = 'Entrada guardada y orden actualizada correctamente.';
       return Astro.redirect(`/mecanico/detalle_orden_trabajo?id=${orderId}&success=${encodeURIComponent(success)}`);
     }
 
     // --- INITIAL DATA FETCHING (GET) ---
-    const [orderRes, partsRes] = await Promise.all([
-      fetch(`http://localhost:1337/api/orden-de-trabajos/${orderId}?populate[vehiculo][populate][0]=cliente`, { headers: {} }),
-      fetchStrapi('/api/repuestos')
+    const [orderData, partsData] = await Promise.all([
+      strapiGet(`/api/orden-de-trabajos/${orderId}?populate[vehiculo][populate][0]=cliente`),
+      strapiGet('/api/repuestos')
     ]);
 
-    if (!orderRes.ok) throw new Error('No se pudo cargar la orden de trabajo.');
-    if (!partsRes.ok) throw new Error('No se pudieron cargar los repuestos.');
+    if (!orderData.data || orderData.data.length === 0) throw new Error('No se pudo cargar la orden de trabajo.');
 
-    const orderData = await orderRes.json();
-    order = { id: orderData.data.id, ...orderData.data.attributes };
-
-    const partsData = await partsRes.json();
-    allParts = partsData.data.map((part: any) => ({ id: part.id, ...part.attributes }));
+    order = orderData.data[0];
+    allParts = partsData.data || [];
 
   } catch (e: any) {
     console.error(e);
@@ -221,7 +204,7 @@ const client = vehicle?.cliente?.data?.attributes;
                     <div class="p-6 bg-white dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 mb-8">
                         <div class="flex flex-col sm:flex-row items-start sm:items-stretch justify-between gap-6">
                             <div class="flex flex-col gap-3 flex-[2_2_0px]">
-                                <p class="text-[#0d121b] dark:text-white text-xl font-bold leading-tight">{vehicle ? `${vehicle.marca} ${vehicle.modelo} ${vehicle.anio}` : 'Vehículo no especificado'} - {vehicle?.patente || 'S/P'}</p>
+                                <p class="text-[#0d121b] dark:text-white text-xl font-bold leading-tight">{vehicle ? `${vehicle.marca} ${vehicle.modelo} ${vehicle.ano}` : 'Vehículo no especificado'} - {vehicle?.patente || 'S/P'}</p>
                                 <div class="space-y-1.5">
                                     <p class="text-gray-600 dark:text-gray-300 text-sm font-normal leading-normal"><span class="font-medium text-gray-800 dark:text-gray-200">Cliente:</span> {client ? `${client.nombre} ${client.apellido}` : 'Cliente no especificado'}</p>
                                     <p class="text-gray-600 dark:text-gray-300 text-sm font-normal leading-normal"><span class="font-medium text-gray-800 dark:text-gray-200">Servicio:</span> {order.descripcion_problema}</p>

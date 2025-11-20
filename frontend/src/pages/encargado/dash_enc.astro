@@ -1,41 +1,36 @@
 ---
 export const prerender = false;
-import { fetchStrapi, strapiGet, strapiPost, strapiPut } from '../../lib/strapi';
+import { strapiGet } from '../../lib/strapi';
 import '../../styles/global.css';
 
-const jwt = Astro.cookies.get('jwt')?.value;
+const userRole = Astro.cookies.get('user_role')?.value;
+const userName = Astro.cookies.get('user_name')?.value;
 let activeOrdersCount = 0;
 let completedTodayCount = 0;
 let lowStockCount = 0;
 let recentOrders = [];
 let lowStockItems = [];
 
-if (jwt) {
+if (userRole) {
   try {
     const today = new Date().toISOString().split('T')[0];
 
     // Active Orders
-    const activeRes = await fetchStrapi('/api/orden-de-trabajos?filters[estado][$ne]=Entregado');
-    const activeData = await activeRes.json();
-    activeOrdersCount = activeData.meta?.pagination?.total || 0;
+    const activeRes = await strapiGet('/api/orden-de-trabajos?filters[estado][$ne]=Entregado');
+    activeOrdersCount = activeRes.meta?.pagination?.total || 0;
 
     // Completed Today
-    const completedRes = await fetch(`http://localhost:1337/api/orden-de-trabajos?filters[estado][$eq]=Entregado&filters[updatedAt][$gte]=${today}`, {
-      headers: {}
-    });
-    const completedData = await completedRes.json();
-    completedTodayCount = completedData.meta?.pagination?.total || 0;
+    const completedRes = await strapiGet(`/api/orden-de-trabajos?filters[estado][$eq]=Entregado&filters[updatedAt][$gte]=${today}`);
+    completedTodayCount = completedRes.meta?.pagination?.total || 0;
 
     // Low Stock (assuming threshold 5)
-    const lowStockRes = await fetchStrapi('/api/repuestos?filters[stock][$lte]=5');
-    const lowStockData = await lowStockRes.json();
-    lowStockCount = lowStockData.meta?.pagination?.total || 0;
-    lowStockItems = lowStockData.data || [];
+    const lowStockRes = await strapiGet('/api/repuestos?filters[stock][$lte]=5');
+    lowStockCount = lowStockRes.meta?.pagination?.total || 0;
+    lowStockItems = lowStockRes.data || [];
 
     // Recent Activity
-    const recentRes = await fetchStrapi('/api/orden-de-trabajos?sort[0]=updatedAt:desc&pagination[limit]=5&populate=cliente&populate=vehiculo&populate=mecanico');
-    const recentData = await recentRes.json();
-    recentOrders = recentData.data || [];
+    const recentRes = await strapiGet('/api/orden-de-trabajos?sort[0]=updatedAt:desc&pagination[limit]=5&populate=cliente&populate=vehiculo&populate=mecanico');
+    recentOrders = recentRes.data || [];
 
   } catch (e) {
     console.error('Error fetching dashboard data:', e);
@@ -153,11 +148,11 @@ if (jwt) {
 </a>
 </div>
 <div class="mt-auto flex flex-col gap-2">
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/settings">
 <span class="material-symbols-outlined">settings</span>
 <p class="text-sm font-medium leading-normal">Configuración</p>
 </a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/logout">
 <span class="material-symbols-outlined">logout</span>
 <p class="text-sm font-medium leading-normal">Cerrar Sesión</p>
 </a>
@@ -205,18 +200,18 @@ if (jwt) {
 <!-- ButtonGroup -->
 <div class="flex justify-stretch">
 <div class="flex flex-1 gap-4 flex-wrap px-4 py-3 justify-start">
-<button class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 px-5 bg-brand-accent text-white text-base font-bold leading-normal tracking-[0.015em] gap-2 hover:opacity-90 transition-opacity">
+<a href="/encargado/alert_stock" class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 px-5 bg-brand-accent text-white text-base font-bold leading-normal tracking-[0.015em] gap-2 hover:opacity-90 transition-opacity">
 <span class="material-symbols-outlined">warning</span>
 <span class="truncate">Alertas de Stock Bajo</span>
-</button>
-<button class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 px-5 bg-brand-primary text-white text-base font-bold leading-normal tracking-[0.015em] gap-2 hover:opacity-90 transition-opacity">
+</a>
+<a href="/encargado/asig_orden" class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 px-5 bg-brand-primary text-white text-base font-bold leading-normal tracking-[0.015em] gap-2 hover:opacity-90 transition-opacity">
 <span class="material-symbols-outlined">add_circle</span>
 <span class="truncate">Asignar Orden</span>
-</button>
-<button class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 px-5 bg-gray-200 dark:bg-dark-brand-card dark:border dark:border-dark-brand-border text-brand-text-primary dark:text-dark-brand-text-primary text-base font-bold leading-normal tracking-[0.015em] gap-2 hover:bg-gray-300 dark:hover:bg-gray-700 transition-colors">
+</a>
+<a href="/encargado/disp_mec" class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 px-5 bg-gray-200 dark:bg-dark-brand-card dark:border dark:border-dark-brand-border text-brand-text-primary dark:text-dark-brand-text-primary text-base font-bold leading-normal tracking-[0.015em] gap-2 hover:bg-gray-300 dark:hover:bg-gray-700 transition-colors">
 <span class="material-symbols-outlined">group</span>
 <span class="truncate">Disponibilidad Mecánicos</span>
-</button>
+</a>
 </div>
 </div>
 <div class="grid grid-cols-1 lg:grid-cols-5 gap-6 p-4 mt-6">

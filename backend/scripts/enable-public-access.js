@@ -6,7 +6,7 @@ console.log('\n=== HABILITANDO ACCESO PÚBLICO A TODAS LAS COLECCIONES ===\n');
 
 try {
   // Obtener el ID del rol "Public" (id=2)
-  const publicRole = db.prepare('SELECT * FROM up_roles WHERE type = ?').get('public');
+  const publicRole = /** @type {{id: number, type: string}} */ (db.prepare('SELECT * FROM up_roles WHERE type = ?').get('public'));
   
   if (!publicRole) {
     console.error('❌ No se encontró el rol Public');
@@ -16,12 +16,12 @@ try {
   console.log(`✓ Rol Public encontrado (ID: ${publicRole.id})`);
 
   // Obtener todos los permisos de las APIs
-  const apiPermissions = db.prepare(`
+  const apiPermissions = /** @type {Array<{id: number, action: string}>} */ (db.prepare(`
     SELECT id, action 
     FROM up_permissions 
     WHERE action NOT LIKE 'plugin::users-permissions%'
     AND action NOT LIKE 'plugin::upload%'
-  `).all();
+  `).all());
 
   console.log(`\n📋 Permisos de API encontrados: ${apiPermissions.length}\n`);
 
@@ -29,7 +29,7 @@ try {
   let assigned = 0;
   let skipped = 0;
 
-  apiPermissions.forEach((perm, index) => {
+  apiPermissions.forEach((perm) => {
     // Verificar si ya existe
     const existing = db.prepare(`
       SELECT * FROM up_permissions_role_lnk 
@@ -42,11 +42,11 @@ try {
     }
 
     // Obtener el siguiente orden
-    const lastOrd = db.prepare(`
+    const lastOrd = /** @type {{max_ord: number | null}} */ (db.prepare(`
       SELECT MAX(permission_ord) as max_ord 
       FROM up_permissions_role_lnk 
       WHERE role_id = ?
-    `).get(publicRole.id);
+    `).get(publicRole.id));
 
     const nextOrd = (lastOrd.max_ord || 0) + 1;
 

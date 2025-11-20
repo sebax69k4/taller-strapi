@@ -1,6 +1,6 @@
 ---
 export const prerender = false;
-import { fetchStrapi, strapiGet, strapiPost, strapiPut } from '../../lib/strapi';
+import { strapiGet } from '../../lib/strapi';
 import '../../styles/global.css';
 
 interface InvoiceItem {
@@ -33,8 +33,7 @@ let invoiceData = {
 
 try {
   // Fetch completed orders (Entregado)
-  const response = await fetchStrapi('/api/orden-de-trabajos?filters[estado][$eq]=Entregado&populate=vehiculo.cliente');
-  const data = await response.json();
+  const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=Entregado&populate=vehiculo.cliente');
   completedOrders = data.data || [];
 
   // Check for selected order
@@ -42,11 +41,8 @@ try {
   const selectedId = url.searchParams.get('id');
 
   if (selectedId) {
-    const orderResponse = await fetch(`http://localhost:1337/api/orden-de-trabajos/${selectedId}?populate=vehiculo.cliente,repuestos,presupuesto`, {
-      headers: {}
-    });
-    const orderData = await orderResponse.json();
-    selectedOrder = orderData.data;
+    const orderData = await strapiGet(`/api/orden-de-trabajos/${selectedId}?populate=vehiculo.cliente,repuestos,presupuesto`);
+    selectedOrder = orderData.data[0];
 
     if (selectedOrder) {
       const client = selectedOrder.vehiculo?.cliente;
@@ -57,7 +53,7 @@ try {
       invoiceData.clientName = client?.nombre || 'Cliente Desconocido';
       invoiceData.clientAddress = client?.direccion || 'Dirección no disponible'; // Assuming address exists or using placeholder
       invoiceData.clientPhone = client?.telefono || 'Sin teléfono';
-      invoiceData.vehicle = `${vehicle?.marca} ${vehicle?.modelo} (${vehicle?.anio}) - ${vehicle?.patente}`;
+      invoiceData.vehicle = `${vehicle?.marca} ${vehicle?.modelo} (${vehicle?.ano}) - ${vehicle?.patente}`;
 
       // Build items from repuestos
       let items = repuestos.map((r: any) => ({
@@ -200,11 +196,11 @@ const formatCurrency = (amount: number) => {
 </nav>
 </div>
 <div class="mt-auto flex flex-col gap-2">
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/settings">
 <span class="material-symbols-outlined">settings</span>
 <p class="text-sm font-medium leading-normal">Configuración</p>
 </a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/logout">
 <span class="material-symbols-outlined">logout</span>
 <p class="text-sm font-medium leading-normal">Cerrar Sesión</p>
 </a>

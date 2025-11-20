@@ -74,6 +74,12 @@
       "relation": "oneToMany",
       "target": "api::bitacora.bitacora",
       "mappedBy": "orden_de_trabajo"
+    },
+    "fecha_inicio_planificada": {
+      "type": "datetime"
+    },
+    "fecha_fin_planificada": {
+      "type": "datetime"
     }
   }
 }

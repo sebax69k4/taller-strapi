@@ -1,67 +1,71 @@
 ---
 export const prerender = false;
-import { fetchStrapi, strapiGet, strapiPost, strapiPut } from '../../lib/strapi';
+import { strapiGet, strapiPut } from '../../lib/strapi';
 import '../../styles/global.css';
 
-const jwt = Astro.cookies.get('jwt')?.value;
+const userRole = Astro.cookies.get('user_role')?.value;
+if (!userRole) {
+  return Astro.redirect('/login');
+}
+
 const orderId = Astro.url.searchParams.get('id');
 let order = null;
 let mechanics = [];
 let zones = [];
 
-if (jwt) {
-  if (!orderId) {
-    return Astro.redirect('/encargado/asig_orden');
-  }
+if (!orderId) {
+  return Astro.redirect('/encargado/asig_orden');
+}
 
-  try {
-    // Handle POST assignment
-    if (Astro.request.method === 'POST') {
-      const formData = await Astro.request.formData();
-      const mechanicId = formData.get('mechanic');
-      const zoneId = formData.get('work-area');
+try {
+  // Handle POST assignment
+  if (Astro.request.method === 'POST') {
+    const formData = await Astro.request.formData();
+    const mechanicId = formData.get('mechanic');
+    const zoneId = formData.get('work-area');
+    const startDate = formData.get('start-date');
+    const endDate = formData.get('end-date');
 
-      if (mechanicId && zoneId) {
-        const updateRes = await fetch(`http://localhost:1337/api/orden-de-trabajos/${orderId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            data: {
-              mecanico: mechanicId,
-              zona: zoneId,
-              estado: 'En Proceso'
-            }
-          })
-        });
+    const payload: any = {
+      estado: 'En Proceso'
+    };
 
-        if (updateRes.ok) {
-          return Astro.redirect('/encargado/disp_mec_zonas');
-        }
-      }
+    if (mechanicId) {
+      payload.mecanico = mechanicId;
     }
 
-    // Fetch Order
-    const orderRes = await fetch(`http://localhost:1337/api/orden-de-trabajos/${orderId}?populate=cliente&populate=vehiculo&populate=mecanico&populate=zona`, {
-      headers: {}
-    });
-    const orderData = await orderRes.json();
-    order = orderData.data;
+    if (zoneId) {
+      payload.zona = zoneId;
+    }
 
-    // Fetch Mechanics
-    const mecRes = await fetchStrapi('/api/mecanicos');
-    const mecData = await mecRes.json();
-    mechanics = mecData.data || [];
+    if (startDate) {
+      payload.fecha_inicio_planificada = new Date(startDate.toString()).toISOString();
+    }
 
-    // Fetch Zones
-    const zoneRes = await fetchStrapi('/api/zonas');
-    const zoneData = await zoneRes.json();
-    zones = zoneData.data || [];
+    if (endDate) {
+      payload.fecha_fin_planificada = new Date(endDate.toString()).toISOString();
+    }
 
-  } catch (e) {
-    console.error('Error fetching data:', e);
+    if (mechanicId && zoneId) {
+      await strapiPut(`/api/orden-de-trabajos/${orderId}`, payload);
+      return Astro.redirect('/encargado/disp_mec_zonas');
+    }
   }
-} else {
-  return Astro.redirect('/login');
+
+  // Fetch Order
+  const orderData = await strapiGet(`/api/orden-de-trabajos/${orderId}?populate=cliente&populate=vehiculo&populate=mecanico&populate=zona`);
+  order = orderData.data[0];
+
+  // Fetch Mechanics
+  const mecData = await strapiGet('/api/mecanicos');
+  mechanics = mecData.data || [];
+
+  // Fetch Zones
+  const zoneData = await strapiGet('/api/zonas');
+  zones = zoneData.data || [];
+
+} catch (e) {
+  console.error('Error fetching data:', e);
 }
 
 if (!order) {
@@ -164,11 +168,11 @@ if (!order) {
 </nav>
 </div>
 <div class="mt-auto flex flex-col gap-2">
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/settings">
 <span class="material-symbols-outlined">settings</span>
 <p class="text-sm font-medium leading-normal">Configuración</p>
 </a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/logout">
 <span class="material-symbols-outlined">logout</span>
 <p class="text-sm font-medium leading-normal">Cerrar Sesión</p>
 </a>
@@ -246,7 +250,7 @@ if (!order) {
 <div class="flex flex-col gap-2">
 <label class="text-gray-700 dark:text-gray-300 text-sm font-medium" for="start-date">Fecha y Hora de Inicio</label>
 <div class="relative">
-<input class="w-full pl-10 pr-4 py-2.5 text-sm font-normal text-gray-800 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary dark:focus:border-primary" id="start-date" name="start-date" type="datetime-local"/>
+<input class="w-full pl-10 pr-4 py-2.5 text-sm font-normal text-gray-800 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary dark:focus:border-primary" id="start-date" name="start-date" type="datetime-local" value={order.fecha_inicio_planificada ? new Date(order.fecha_inicio_planificada).toISOString().slice(0, 16) : ''}/>
 <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none">calendar_today</span>
 </div>
 </div>
@@ -254,7 +258,7 @@ if (!order) {
 <div class="flex flex-col gap-2">
 <label class="text-gray-700 dark:text-gray-300 text-sm font-medium" for="end-date">Fecha y Hora de Fin</label>
 <div class="relative">
-<input class="w-full pl-10 pr-4 py-2.5 text-sm font-normal text-gray-800 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary dark:focus:border-primary" id="end-date" name="end-date" type="datetime-local"/>
+<input class="w-full pl-10 pr-4 py-2.5 text-sm font-normal text-gray-800 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary dark:focus:border-primary" id="end-date" name="end-date" type="datetime-local" value={order.fecha_fin_planificada ? new Date(order.fecha_fin_planificada).toISOString().slice(0, 16) : ''}/>
 <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none">event</span>
 </div>
 </div>

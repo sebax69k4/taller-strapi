@@ -2,7 +2,7 @@
 export const prerender = false;
 
 import '../../styles/global.css';
-import { fetchStrapi } from '../../lib/strapi';
+import { strapiGet } from '../../lib/strapi';
 
 const userRole = Astro.cookies.get('user_role')?.value;
 
@@ -14,10 +14,22 @@ let clientes = [];
 let error = '';
 
 try {
-  const response = await fetchStrapi('/api/clientes?populate=vehiculos');
-  clientes = response.data || [];
+  const response = await strapiGet('/api/clientes?populate=vehiculos');
+  // Extraer data de la respuesta de Strapi
+  const rawData = response.data || [];
+  clientes = rawData.map((item: any) => ({
+    id: item.id,
+    documentId: item.id,
+    nombre: item.nombre,
+    apellido: item.apellido,
+    telefono: item.telefono,
+    email: item.email,
+    rut: item.rut,
+    vehiculos: item.vehiculos || []
+  }));
 } catch (e: any) {
   error = e.message || 'Error al cargar clientes';
+  console.error('Error fetching clients:', e);
 }
 ---
 <!DOCTYPE html>
@@ -29,6 +41,7 @@ try {
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 <script>
     tailwind.config = {
       darkMode: "class",
@@ -47,38 +60,39 @@ try {
       },
     }
   </script>
-  <script is:inline>
-    function toggleRow(id) {
-      const detailRow = document.getElementById(`detail-${id}`);
-      const icon = document.getElementById(`icon-${id}`);
-      
-      if (detailRow.classList.contains('hidden')) {
-        detailRow.classList.remove('hidden');
-        icon.textContent = 'expand_more';
-      } else {
-        detailRow.classList.add('hidden');
-        icon.textContent = 'chevron_right';
-      }
-    }
-  </script>
 <style>
     .material-symbols-outlined {
       font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
       font-size: 24px;
     }
     body {
-      background: linear-gradient(135deg, #f6f6f8 0%, #e9ecef 100%);
+      background: #f9fafb;
     }
     .form-input:focus, .form-select:focus {
       box-shadow: 0 0 0 3px rgba(19, 91, 236, 0.1);
+      border-color: #135bec;
     }
-    tr:hover {
-      background-color: rgba(19, 91, 236, 0.03) !important;
-      transition: background-color 0.2s;
+    tbody tr {
+      transition: all 0.2s ease;
     }
-    button:hover {
+    tbody tr:hover {
+      background-color: #f3f4f6 !important;
+      transform: translateX(2px);
+    }
+    .dark tbody tr:hover {
+      background-color: #374151 !important;
+    }
+    button, a {
+      transition: all 0.2s ease;
+    }
+    button:hover, a:hover {
+      transform: translateY(-1px);
+    }
+    .action-btn {
+      transition: all 0.15s ease;
+    }
+    .action-btn:hover {
       transform: scale(1.1);
-      transition: transform 0.2s;
     }
   </style>
 </head>
@@ -117,11 +131,11 @@ try {
 </a>
 </div>
 <div class="mt-auto flex flex-col gap-2">
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/settings">
 <span class="material-symbols-outlined">settings</span>
 <p class="text-sm font-medium leading-normal">Configuración</p>
 </a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/logout">
 <span class="material-symbols-outlined">logout</span>
 <p class="text-sm font-medium leading-normal">Cerrar Sesión</p>
 </a>
@@ -133,14 +147,41 @@ try {
 <div class="w-full max-w-7xl mx-auto">
 <!-- PageHeading -->
 <div class="flex flex-wrap justify-between items-center gap-4 mb-6">
-<h1 class="text-[#0d121b] dark:text-white text-3xl font-black leading-tight tracking-tight">Client and Vehicle Management</h1>
-<button class="flex items-center gap-2 min-w-[84px] cursor-pointer justify-center overflow-hidden rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold leading-normal tracking-[0.015em] hover:bg-primary/90">
+<div>
+<h1 class="text-[#0d121b] dark:text-white text-3xl font-black leading-tight tracking-tight">Gestión de Clientes y Vehículos</h1>
+<p class="text-gray-600 dark:text-gray-400 text-sm mt-1">Consulta y administra clientes y sus vehículos registrados</p>
+</div>
+<a href="/recepcion/crear_cliente" class="flex items-center gap-2 min-w-[84px] cursor-pointer justify-center overflow-hidden rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold leading-normal tracking-[0.015em] hover:bg-primary/90">
 <span class="material-symbols-outlined text-xl">add</span>
-<span class="truncate">Add New Client</span>
-</button>
+<span class="truncate">Nuevo Cliente</span>
+</a>
 </div>
 <!-- Toolbar: Search and Filters -->
-<div class="bg-white dark:bg-[#1C2534] rounded-xl p-4 mb-6">
+<div class="bg-white dark:bg-[#1C2534] rounded-xl p-4 mb-6" 
+     x-data=`{ 
+       searchQuery: '', 
+       clientes: ${JSON.stringify(clientes)},
+       get filteredClientes() {
+         if (!this.searchQuery) return this.clientes;
+         const query = this.searchQuery.toLowerCase();
+         return this.clientes.filter(c => 
+           c.nombre.toLowerCase().includes(query) || 
+           c.apellido.toLowerCase().includes(query) ||
+           c.telefono.includes(query) ||
+           c.email.toLowerCase().includes(query) ||
+           c.rut.includes(query) ||
+           (c.vehiculos && c.vehiculos.some(v => 
+             v.patente.toLowerCase().includes(query) ||
+             v.marca.toLowerCase().includes(query) ||
+             v.modelo.toLowerCase().includes(query)
+           ))
+         );
+       },
+       expandedRows: {},
+       toggleRow(id) {
+         this.expandedRows[id] = !this.expandedRows[id];
+       }
+     }`>
 <div class="flex flex-col md:flex-row gap-4">
 <!-- SearchBar -->
 <div class="flex-grow">
@@ -149,25 +190,15 @@ try {
 <div class="text-gray-500 dark:text-gray-400 flex bg-[#f6f6f8] dark:bg-gray-900/50 items-center justify-center pl-4 rounded-l-lg">
 <span class="material-symbols-outlined">search</span>
 </div>
-<input class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-r-lg text-[#0d121b] dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border-none bg-[#f6f6f8] dark:bg-gray-900/50 h-full placeholder:text-gray-500 dark:placeholder:text-gray-400 px-4 text-base font-normal leading-normal" placeholder="Search by client name, license plate, phone..." value=""/>
+<input x-model="searchQuery" class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-r-lg text-[#0d121b] dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border-none bg-[#f6f6f8] dark:bg-gray-900/50 h-full placeholder:text-gray-500 dark:placeholder:text-gray-400 px-4 text-base font-normal leading-normal" placeholder="Buscar por nombre, teléfono, email, patente, marca..." type="text"/>
 </div>
 </label>
 </div>
-<!-- Chips -->
-<div class="flex gap-3 items-center">
-<button class="flex h-12 shrink-0 items-center justify-center gap-x-2 rounded-lg bg-[#f6f6f8] dark:bg-gray-900/50 px-4">
-<p class="text-[#0d121b] dark:text-white text-sm font-medium leading-normal">Status</p>
-<span class="material-symbols-outlined text-gray-500 dark:text-gray-400">expand_more</span>
-</button>
-<button class="flex h-12 shrink-0 items-center justify-center gap-x-2 rounded-lg bg-[#f6f6f8] dark:bg-gray-900/50 px-4">
-<p class="text-[#0d121b] dark:text-white text-sm font-medium leading-normal">Vehicle Brand</p>
-<span class="material-symbols-outlined text-gray-500 dark:text-gray-400">expand_more</span>
-</button>
-<button class="flex h-12 shrink-0 items-center justify-center gap-x-2 rounded-lg bg-[#f6f6f8] dark:bg-gray-900/50 px-4">
-<p class="text-[#0d121b] dark:text-white text-sm font-medium leading-normal">Last Visit</p>
-<span class="material-symbols-outlined text-gray-500 dark:text-gray-400">expand_more</span>
-</button>
-</div>
+<!-- Result count -->
+<div class="flex items-center px-4">
+<p class="text-sm text-gray-600 dark:text-gray-400">
+  <span x-text="filteredClientes.length"></span> clientes encontrados
+</p>
 </div>
 </div>
 <!-- Data Table -->
@@ -177,104 +208,103 @@ try {
 <thead class="text-xs text-gray-700 dark:text-gray-300 uppercase bg-gray-50 dark:bg-gray-800">
 <tr>
 <th class="p-4 w-4" scope="col"></th>
-<th class="px-6 py-3" scope="col">Client Name</th>
-<th class="px-6 py-3" scope="col">Contact</th>
-<th class="px-6 py-3 text-center" scope="col">Vehicles</th>
-<th class="px-6 py-3" scope="col">Last Visit</th>
-<th class="px-6 py-3" scope="col">Status</th>
-<th class="px-6 py-3 text-right" scope="col">Actions</th>
+<th class="px-6 py-4 text-left font-semibold text-gray-900 dark:text-gray-100" scope="col">Cliente</th>
+<th class="px-6 py-4 text-left font-semibold text-gray-900 dark:text-gray-100" scope="col">Contacto</th>
+<th class="px-6 py-4 text-left font-semibold text-gray-900 dark:text-gray-100" scope="col">RUT</th>
+<th class="px-6 py-4 text-center font-semibold text-gray-900 dark:text-gray-100" scope="col">Vehículos</th>
+<th class="px-6 py-4 text-center font-semibold text-gray-900 dark:text-gray-100" scope="col">Estado</th>
+<th class="px-6 py-4 text-right font-semibold text-gray-900 dark:text-gray-100" scope="col">Acciones</th>
 </tr>
 </thead>
 <tbody>
-  {clientes.map((cliente: any) => (
+  <template x-for="cliente in filteredClientes" :key="cliente.documentId">
     <>
       <tr class="bg-white dark:bg-[#1C2534] border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800">
         <td class="p-4">
-          <button onclick={`toggleRow('${cliente.documentId}')`} class="text-gray-500 hover:text-primary">
-            <span id={`icon-${cliente.documentId}`} class="material-symbols-outlined">chevron_right</span>
+          <button @click="toggleRow(cliente.documentId)" class="text-gray-500 hover:text-primary">
+            <span class="material-symbols-outlined" x-text="expandedRows[cliente.documentId] ? 'expand_more' : 'chevron_right'"></span>
           </button>
         </td>
         <td class="px-6 py-4 font-medium text-gray-900 dark:text-white whitespace-nowrap">
-          {cliente.nombre} {cliente.apellido}
+          <span x-text="`${cliente.nombre} ${cliente.apellido}`"></span>
         </td>
         <td class="px-6 py-4">
-          {cliente.telefono} <br/>
-          <span class="text-xs text-gray-400">{cliente.email}</span>
+          <span x-text="cliente.telefono"></span> <br/>
+          <span class="text-xs text-gray-400" x-text="cliente.email"></span>
         </td>
         <td class="px-6 py-4 text-center">
-          {cliente.vehiculos ? cliente.vehiculos.length : 0}
+          <span x-text="cliente.vehiculos ? cliente.vehiculos.length : 0"></span>
         </td>
         <td class="px-6 py-4">
-          - {/* Last visit logic would go here */}
+          <span x-text="cliente.rut || '-'"></span>
         </td>
         <td class="px-6 py-4">
           <span class="bg-green-100 text-green-800 text-xs font-medium mr-2 px-2.5 py-0.5 rounded-full dark:bg-green-900 dark:text-green-300">
-            Active
+            Activo
           </span>
         </td>
         <td class="px-6 py-4 text-right">
-          <button class="p-2 text-gray-500 hover:text-primary dark:hover:text-primary">
+          <a :href="`/recepcion/crear_cliente?id=${cliente.documentId}`" class="p-2 text-gray-500 hover:text-primary dark:hover:text-primary" title="Editar cliente">
             <span class="material-symbols-outlined">edit</span>
-          </button>
+          </a>
+          <a :href="`/recepcion/crear_vehiculo?cliente=${cliente.documentId}`" class="p-2 text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 inline-flex" title="Agregar vehículo">
+            <span class="material-symbols-outlined">directions_car</span>
+          </a>
+          <a :href="`/recepcion/crear_orden?cliente=${cliente.documentId}`" class="p-2 text-gray-500 hover:text-green-600 dark:hover:text-green-400 inline-flex" title="Crear orden">
+            <span class="material-symbols-outlined">post_add</span>
+          </a>
         </td>
       </tr>
       
-      <tr id={`detail-${cliente.documentId}`} class="hidden bg-gray-50 dark:bg-gray-800">
+      <tr x-show="expandedRows[cliente.documentId]" class="bg-gray-50 dark:bg-gray-800" x-transition>
         <td class="p-0" colspan="7">
           <div class="px-10 py-4">
             <h4 class="font-bold text-sm text-gray-700 dark:text-gray-300 mb-2">Vehículos</h4>
-            {cliente.vehiculos && cliente.vehiculos.length > 0 ? (
+            <template x-if="cliente.vehiculos && cliente.vehiculos.length > 0">
               <table class="w-full text-sm">
                 <thead class="text-xs text-gray-600 dark:text-gray-400">
                   <tr>
-                    <th class="text-left py-2 px-3">Placa</th>
+                    <th class="text-left py-2 px-3">Patente</th>
                     <th class="text-left py-2 px-3">Marca</th>
                     <th class="text-left py-2 px-3">Modelo</th>
                     <th class="text-left py-2 px-3">Año</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {cliente.vehiculos.map((vehiculo: any) => (
+                  <template x-for="vehiculo in cliente.vehiculos" :key="vehiculo.id || vehiculo.patente">
                     <tr class="border-b border-gray-200 dark:border-gray-700">
-                      <td class="py-2 px-3">{vehiculo.placa}</td>
-                      <td class="py-2 px-3">{vehiculo.marca}</td>
-                      <td class="py-2 px-3">{vehiculo.modelo}</td>
-                      <td class="py-2 px-3">{vehiculo.anio}</td>
+                      <td class="py-2 px-3" x-text="vehiculo.patente"></td>
+                      <td class="py-2 px-3" x-text="vehiculo.marca"></td>
+                      <td class="py-2 px-3" x-text="vehiculo.modelo"></td>
+                      <td class="py-2 px-3" x-text="vehiculo.ano"></td>
                     </tr>
-                  ))}
+                  </template>
                 </tbody>
               </table>
-            ) : (
+            </template>
+            <template x-if="!cliente.vehiculos || cliente.vehiculos.length === 0">
               <p class="text-sm text-gray-500">No hay vehículos registrados.</p>
-            )}
+            </template>
           </div>
         </td>
       </tr>
     </>
-  ))}
+  </template>
+  <template x-if="filteredClientes.length === 0">
+    <tr>
+      <td colspan="7" class="px-6 py-8 text-center">
+        <p class="text-gray-500 dark:text-gray-400">No se encontraron clientes que coincidan con la búsqueda.</p>
+      </td>
+    </tr>
+  </template>
 </tbody>
 </table>
 </div>
 <!-- Pagination -->
 <nav aria-label="Table navigation" class="flex items-center justify-between p-4">
-<span class="text-sm font-normal text-gray-500 dark:text-gray-400">Showing <span class="font-semibold text-gray-900 dark:text-white">1-4</span> of <span class="font-semibold text-gray-900 dark:text-white">100</span></span>
-<ul class="inline-flex -space-x-px text-sm h-8">
-<li>
-<a class="flex items-center justify-center px-3 h-8 ml-0 leading-tight text-gray-500 bg-white border border-gray-300 rounded-l-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white" href="#">Previous</a>
-</li>
-<li>
-<a aria-current="page" class="flex items-center justify-center px-3 h-8 text-blue-600 border border-gray-300 bg-blue-50 hover:bg-blue-100 hover:text-blue-700 dark:border-gray-700 dark:bg-gray-700 dark:text-white" href="#">1</a>
-</li>
-<li>
-<a class="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white" href="#">2</a>
-</li>
-<li>
-<a class="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white" href="#">3</a>
-</li>
-<li>
-<a class="flex items-center justify-center px-3 h-8 leading-tight text-gray-500 bg-white border border-gray-300 rounded-r-lg hover:bg-gray-100 hover:text-gray-700 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white" href="#">Next</a>
-</li>
-</ul>
+<span class="text-sm font-normal text-gray-500 dark:text-gray-400">
+  Mostrando <span class="font-semibold text-gray-900 dark:text-white" x-text="filteredClientes.length"></span> clientes
+</span>
 </nav>
 </div>
 </div>

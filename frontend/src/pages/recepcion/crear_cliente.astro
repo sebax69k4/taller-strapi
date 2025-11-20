@@ -2,13 +2,28 @@
 export const prerender = false;
 
 import '../../styles/global.css';
-import { createStrapiItem } from '../../lib/strapi';
+import { strapiPost, strapiPut, getStrapiItem } from '../../lib/strapi';
 
 const userRole = Astro.cookies.get('user_role')?.value;
 
 if (!userRole) {
   return Astro.redirect('/login');
 }
+
+const clientId = Astro.url.searchParams.get('id');
+let cliente = null;
+let isEditMode = !!clientId;
+
+if (isEditMode && clientId) {
+    try {
+        const response = await getStrapiItem('clientes', clientId);
+        cliente = response.data;
+    } catch (error) {
+        console.error("Error fetching client for editing:", error);
+        return Astro.redirect(`/recepcion/list_c_y_v?message=${encodeURIComponent('Error al cargar el cliente para editar.')}&type=error`);
+    }
+}
+
 
 let message = Astro.url.searchParams.get('message');
 let messageType = Astro.url.searchParams.get('type');
@@ -22,26 +37,31 @@ if (Astro.request.method === 'POST') {
     const email = params.get('email');
     const telefono = params.get('telefono');
     const rut = params.get('rut');
+    const idToUpdate = params.get('id');
 
     // Validación básica
     if (!nombre || !apellido || !email || !telefono || !rut) {
-        return Astro.redirect(`/recepcion/crear_cliente?message=${encodeURIComponent('Todos los campos son obligatorios.')}&type=error`);
+        const redirectUrl = idToUpdate ? `/recepcion/crear_cliente?id=${idToUpdate}` : '/recepcion/crear_cliente';
+        return Astro.redirect(`${redirectUrl}&message=${encodeURIComponent('Todos los campos son obligatorios.')}&type=error`);
     }
 
-    await createStrapiItem('clientes', {
-      nombre,
-      apellido,
-      email,
-      telefono,
-      rut
-    });
+    const clientData = { nombre, apellido, email, telefono, rut };
+    let successMessage = '';
 
-    const successMessage = `Cliente "${nombre} ${apellido}" creado exitosamente.`;
-    return Astro.redirect(`/recepcion/crear_cliente?message=${encodeURIComponent(successMessage)}&type=success`);
+    if (idToUpdate) {
+        await strapiPut(`/api/clientes/${idToUpdate}`, clientData);
+        successMessage = `Cliente "${nombre} ${apellido}" actualizado exitosamente.`;
+        return Astro.redirect(`/recepcion/list_c_y_v?message=${encodeURIComponent(successMessage)}&type=success`);
+    } else {
+        await strapiPost('/api/clientes', clientData);
+        successMessage = `Cliente "${nombre} ${apellido}" creado exitosamente.`;
+        return Astro.redirect(`/recepcion/crear_cliente?message=${encodeURIComponent(successMessage)}&type=success`);
+    }
 
   } catch (error: any) {
-    const errorMessage = error.message || 'Error al crear el cliente.';
-    return Astro.redirect(`/recepcion/crear_cliente?message=${encodeURIComponent(errorMessage)}&type=error`);
+    const errorMessage = error.message || 'Ocurrió un error.';
+    const redirectUrl = clientId ? `/recepcion/crear_cliente?id=${clientId}` : '/recepcion/crear_cliente';
+    return Astro.redirect(`${redirectUrl}&message=${encodeURIComponent(errorMessage)}&type=error`);
   }
 }
 ---
@@ -50,7 +70,8 @@ if (Astro.request.method === 'POST') {
 <head>
     <meta charset="utf-8"/>
     <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-    <title>Registrar Nuevo Cliente</title>
+    <title>{isEditMode ? 'Editar' : 'Registrar Nuevo'} Cliente</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
     <style>
@@ -93,7 +114,7 @@ if (Astro.request.method === 'POST') {
         </a>
     </nav>
     <div class="mt-auto flex flex-col gap-2">
-        <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/login">
+        <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/logout">
             <span class="material-symbols-outlined">logout</span>
             <p class="text-sm font-medium">Cerrar Sesión</p>
         </a>
@@ -106,8 +127,8 @@ if (Astro.request.method === 'POST') {
         <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm" x-data="{ message: '{{ message }}', messageType: '{{ messageType }}' }">
             <div class="p-6 sm:p-8">
                 <div class="flex flex-col gap-2">
-                    <h1 class="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-slate-50">Registrar Nuevo Cliente</h1>
-                    <p class="text-sm text-slate-500 dark:text-slate-400">Complete los siguientes campos para añadir un nuevo cliente al sistema.</p>
+                    <h1 class="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-slate-50">{isEditMode ? 'Editar' : 'Registrar Nuevo'} Cliente</h1>
+                    <p class="text-sm text-slate-500 dark:text-slate-400">{isEditMode ? 'Modifique los datos del cliente.' : 'Complete los siguientes campos para añadir un nuevo cliente al sistema.'}</p>
                 </div>
                 
                 <template x-if="message">
@@ -117,33 +138,34 @@ if (Astro.request.method === 'POST') {
                 </template>
 
                 <form method="POST" class="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2">
+                    {isEditMode && <input type="hidden" name="id" value={clientId} />}
                     <div class="flex flex-col sm:col-span-1">
                         <label class="text-sm font-medium text-slate-800 dark:text-slate-200 pb-2" for="nombre">Nombre</label>
-                        <input name="nombre" class="form-input w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-primary dark:text-slate-200" id="nombre" placeholder="ej: Juan" type="text" required/>
+                        <input name="nombre" class="form-input w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-primary dark:text-slate-200" id="nombre" placeholder="ej: Juan" type="text" required value={cliente?.nombre || ''}/>
                     </div>
                     <div class="flex flex-col sm:col-span-1">
                         <label class="text-sm font-medium text-slate-800 dark:text-slate-200 pb-2" for="apellido">Apellido</label>
-                        <input name="apellido" class="form-input w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-primary dark:text-slate-200" id="apellido" placeholder="ej: Pérez" type="text" required/>
+                        <input name="apellido" class="form-input w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-primary dark:text-slate-200" id="apellido" placeholder="ej: Pérez" type="text" required value={cliente?.apellido || ''}/>
                     </div>
                     <div class="flex flex-col sm:col-span-2">
                         <label class="text-sm font-medium text-slate-800 dark:text-slate-200 pb-2" for="rut">RUT</label>
-                        <input name="rut" class="form-input w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-primary dark:text-slate-200" id="rut" placeholder="ej: 12.345.678-9" type="text" required/>
+                        <input name="rut" class="form-input w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-primary dark:text-slate-200" id="rut" placeholder="ej: 12.345.678-9" type="text" required value={cliente?.rut || ''}/>
                     </div>
                     <div class="flex flex-col sm:col-span-2">
                         <label class="text-sm font-medium text-slate-800 dark:text-slate-200 pb-2" for="email">Email</label>
-                        <input name="email" class="form-input w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-primary dark:text-slate-200" id="email" placeholder="ej: juan.perez@email.com" type="email" required/>
+                        <input name="email" class="form-input w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-primary dark:text-slate-200" id="email" placeholder="ej: juan.perez@email.com" type="email" required value={cliente?.email || ''}/>
                     </div>
                     <div class="flex flex-col sm:col-span-2">
                         <label class="text-sm font-medium text-slate-800 dark:text-slate-200 pb-2" for="telefono">Teléfono</label>
-                        <input name="telefono" class="form-input w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-primary dark:text-slate-200" id="telefono" placeholder="ej: +56912345678" type="tel" required/>
+                        <input name="telefono" class="form-input w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-primary dark:text-slate-200" id="telefono" placeholder="ej: +56912345678" type="tel" required value={cliente?.telefono || ''}/>
                     </div>
                     <div class="sm:col-span-2 flex justify-end gap-4 pt-4">
-                         <a href="/recepcion/dash_recep" class="inline-flex items-center justify-center rounded-lg bg-white dark:bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 ring-1 ring-inset ring-slate-300 dark:ring-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                         <a href="/recepcion/list_c_y_v" class="inline-flex items-center justify-center rounded-lg bg-white dark:bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 ring-1 ring-inset ring-slate-300 dark:ring-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">
                             Cancelar
                         </a>
                         <button class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90" type="submit">
                             <span class="material-symbols-outlined mr-2 text-base">save</span>
-                            Guardar Cliente
+                            {isEditMode ? 'Actualizar Cliente' : 'Guardar Cliente'}
                         </button>
                     </div>
                 </form>

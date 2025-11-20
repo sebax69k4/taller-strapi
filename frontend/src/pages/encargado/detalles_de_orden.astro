@@ -1,41 +1,33 @@
 ---
 export const prerender = false;
-import { fetchStrapi, strapiGet, strapiPost, strapiPut } from '../../lib/strapi';
+import { strapiGet } from '../../lib/strapi';
 import '../../styles/global.css';
 
-const jwt = Astro.cookies.get('jwt')?.value;
+const userRole = Astro.cookies.get('user_role')?.value;
+if (!userRole) {
+  return Astro.redirect('/login');
+}
+
 const orderId = Astro.url.searchParams.get('id');
 let order = null;
 
-if (jwt) {
-  if (!orderId) {
-    return Astro.redirect('/encargado/trabajos_en_curso');
-  }
+if (!orderId) {
+  return Astro.redirect('/encargado/trabajos_en_curso');
+}
 
-  try {
-    const query = new URLSearchParams({
-        'populate[cliente]': '*',
-        'populate[vehiculo]': '*',
-        'populate[mecanico]': '*',
-        'populate[repuestos]': '*',
-        'populate[bitacoras]': '*'
-    });
+try {
+  const query = new URLSearchParams({
+      'populate[cliente]': '*',
+      'populate[vehiculo]': '*',
+      'populate[mecanico]': '*',
+      'populate[repuestos]': '*',
+      'populate[bitacoras]': '*'
+  });
 
-    const res = await fetch(`http://localhost:1337/api/orden-de-trabajos/${orderId}?${query.toString()}`, {
-      headers: {}
-    });
-    
-    if (res.ok) {
-      const data = await res.json();
-      order = data.data;
-    } else {
-      console.error('Failed to fetch order details');
-    }
-  } catch (e) {
-    console.error('Error fetching order:', e);
-  }
-} else {
-  return Astro.redirect('/login');
+  const data = await strapiGet(`/api/orden-de-trabajos/${orderId}?${query.toString()}`);
+  order = data.data[0];
+} catch (e) {
+  console.error('Error fetching order:', e);
 }
 
 if (!order) {
@@ -174,7 +166,7 @@ const grandTotal = total + iva;
 </nav>
 </div>
 <div class="mt-auto flex flex-col gap-2">
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/settings">
 <span class="material-symbols-outlined">settings</span>
 <p class="text-sm font-medium leading-normal">Configuración</p>
 </a>
@@ -235,7 +227,7 @@ const grandTotal = total + iva;
 </div>
 <div>
 <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">VEHÍCULO</h3>
-<p class="font-medium text-gray-800 dark:text-gray-200">{order.vehiculo?.marca} {order.vehiculo?.modelo} ({order.vehiculo?.anio})</p>
+<p class="font-medium text-gray-800 dark:text-gray-200">{order.vehiculo?.marca} {order.vehiculo?.modelo} ({order.vehiculo?.ano})</p>
 <p class="text-gray-600 dark:text-gray-300">Matrícula: {order.vehiculo?.patente}</p>
 <p class="text-gray-600 dark:text-gray-300">VIN: {order.vehiculo?.vin || 'N/A'}</p>
 </div>
@@ -302,6 +294,14 @@ const grandTotal = total + iva;
 <span class="font-medium text-gray-800 dark:text-gray-200">
     {order.mecanico ? `${order.mecanico.nombre} ${order.mecanico.apellido}` : 'Sin asignar'}
 </span>
+</div>
+<div class="flex justify-between">
+<span class="text-gray-500 dark:text-gray-400">Inicio Planificado:</span>
+<span class="font-medium text-gray-800 dark:text-gray-200">{formatDate(order.fecha_inicio_planificada)}</span>
+</div>
+<div class="flex justify-between">
+<span class="text-gray-500 dark:text-gray-400">Fin Planificado:</span>
+<span class="font-medium text-gray-800 dark:text-gray-200">{formatDate(order.fecha_fin_planificada)}</span>
 </div>
 <div class="flex justify-between">
 <span class="text-gray-500 dark:text-gray-400">Entrega Estimada:</span>

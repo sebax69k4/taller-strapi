@@ -40,20 +40,13 @@ let clientes: Cliente[] = [];
 let vehiculos: Vehiculo[] = [];
 
 try {
-  const [clientesRes, vehiculosRes] = await Promise.all([
-    fetchStrapi('/api/clientes?sort=nombre:asc'),
-    fetchStrapi('/api/vehiculos?populate=cliente&sort=marca:asc')
+  const [clientesResponse, vehiculosResponse] = await Promise.all([
+    strapiGet('/api/clientes?sort=nombre:asc'),
+    strapiGet('/api/vehiculos?populate=cliente&sort=marca:asc')
   ]);
 
-  if (!clientesRes.ok || !vehiculosRes.ok) {
-    throw new Error('Error al obtener los datos iniciales del servidor.');
-  }
-
-  const clientesData = await clientesRes.json();
-  const vehiculosData = await vehiculosRes.json();
-
-  clientes = clientesData.data;
-  vehiculos = vehiculosData.data;
+  clientes = clientesResponse.data || [];
+  vehiculos = vehiculosResponse.data || [];
 
 } catch (error: any) {
   console.error('Error fetching data:', error);
@@ -73,35 +66,21 @@ if (Astro.request.method === 'POST') {
         return Astro.redirect(`/recepcion/crear_orden?message=${encodeURIComponent('Todos los campos son obligatorios.')}&type=error`);
     }
 
-    const response = await fetch('http://localhost:1337/api/orden-de-trabajos', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        data: {
-          cliente: Number(clienteId),
-          vehiculo: Number(vehiculoId),
-          fecha_entrada: fechaEntrada,
-          descripcion: descripcion,
-          estado: 'Pendiente' // Default state for new orders
-        }
-      })
+    const result = await strapiPost('/api/orden-de-trabajos', {
+      cliente: parseInt(clienteId as string, 10),
+      vehiculo: parseInt(vehiculoId as string, 10),
+      fecha_entrada: fechaEntrada,
+      descripcion: descripcion,
+      estado: 'Pendiente'
     });
 
-    const responseData = await response.json();
+    const ordenId = result.data.id;
+    const successMessage = `Orden de trabajo #${ordenId} creada exitosamente.`;
+    return Astro.redirect(`/recepcion/crear_orden?message=${encodeURIComponent(successMessage)}&type=success`);
 
-    if (response.ok) {
-      const ordenId = responseData.data.id;
-      const successMessage = `Orden de trabajo #${ordenId} creada exitosamente.`;
-      return Astro.redirect(`/recepcion/crear_orden?message=${encodeURIComponent(successMessage)}&type=success`);
-    } else {
-      const errorMessage = responseData.error?.message || 'Error desconocido al crear la orden.';
-      return Astro.redirect(`/recepcion/crear_orden?message=${encodeURIComponent(errorMessage)}&type=error`);
-    }
   } catch (error: any) {
-    return Astro.redirect(`/recepcion/crear_orden?message=${encodeURIComponent('Error de conexión: ' + error.message)}&type=error`);
+    const errorMessage = error.message || 'Error al crear la orden.';
+    return Astro.redirect(`/recepcion/crear_orden?message=${encodeURIComponent(errorMessage)}&type=error`);
   }
 }
 ---
@@ -111,6 +90,7 @@ if (Astro.request.method === 'POST') {
     <meta charset="utf-8"/>
     <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
     <title>Nueva Orden de Trabajo</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
     <style>
@@ -153,7 +133,7 @@ if (Astro.request.method === 'POST') {
         </a>
     </nav>
     <div class="mt-auto flex flex-col gap-2">
-        <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/login">
+        <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/logout">
             <span class="material-symbols-outlined">logout</span>
             <p class="text-sm font-medium">Cerrar Sesión</p>
         </a>
@@ -188,8 +168,8 @@ if (Astro.request.method === 'POST') {
                                 <label class="text-sm font-medium text-slate-700 dark:text-slate-300 pb-2" for="cliente">Cliente</label>
                                 <select name="cliente" id="cliente" @change="filterVehiculos($event.target.value)" class="form-select w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark focus:border-primary focus:ring-primary dark:text-slate-200" required>
                                     <option value="" disabled selected>Seleccione un cliente...</option>
-                                    {clientes.map((cliente) => (
-                                        <option value={cliente.id}>{cliente.attributes.nombre} {cliente.attributes.apellido}</option>
+                                    {clientes.map((cliente: any) => (
+                                        <option value={cliente.id}>{cliente.nombre} {cliente.apellido}</option>
                                     ))}
                                 </select>
                             </div>
@@ -198,7 +178,7 @@ if (Astro.request.method === 'POST') {
                                 <select name="vehiculo" id="vehiculo" class="form-select w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark focus:border-primary focus:ring-primary dark:text-slate-200" required :disabled="filteredVehiculos.length === 0">
                                     <option value="" disabled selected>Seleccione un vehículo...</option>
                                     <template x-for="vehiculo in filteredVehiculos" :key="vehiculo.id">
-                                        <option :value="vehiculo.id" x-text="`${vehiculo.attributes.marca} ${vehiculo.attributes.modelo} (${vehiculo.attributes.patente})`"></option>
+                                        <option :value="vehiculo.id" x-text="`${vehiculo.marca} ${vehiculo.modelo} (${vehiculo.patente})`"></option>
                                     </template>
                                 </select>
                                 <p x-show="selectedClientId && filteredVehiculos.length === 0" class="text-xs text-amber-600 dark:text-amber-400 mt-2">
@@ -264,7 +244,7 @@ if (Astro.request.method === 'POST') {
                     return;
                 }
                 this.filteredVehiculos = this.allVehiculos.filter(
-                    (vehiculo: any) => vehiculo.attributes.cliente.data && vehiculo.attributes.cliente.data.id == clientId
+                    (vehiculo: any) => vehiculo.cliente && vehiculo.cliente.id == clientId
                 );
             }
         }));

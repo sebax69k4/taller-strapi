@@ -1,14 +1,15 @@
 ---
 export const prerender = false;
-import { fetchStrapi, strapiGet, strapiPost, strapiPut } from '../../lib/strapi';
+import { strapiGet, strapiPut } from '../../lib/strapi';
 import '../../styles/global.css';
 
-const jwt = Astro.cookies.get('jwt')?.value;
+const userRole = Astro.cookies.get('user_role')?.value;
 let lowStockItems = [];
 let totalCritical = 0;
-let pendingOrders = 0; // Placeholder or fetch if possible
+let successMessage = '';
+let errorMessage = '';
 
-if (jwt) {
+if (userRole) {
   try {
     // Handle Restock POST
     if (Astro.request.method === 'POST') {
@@ -17,48 +18,40 @@ if (jwt) {
       const addAmount = parseInt(formData.get('amount')?.toString() || '0');
 
       if (repuestoId && addAmount > 0) {
-        // 1. Get current stock
-        const currentRes = await fetch(`http://localhost:1337/api/repuestos/${repuestoId}`, {
-          headers: {}
-        });
-        
-        if (currentRes.ok) {
-            const currentData = await currentRes.json();
-            const currentStock = currentData.data.attributes.stock || 0;
-            const newStock = currentStock + addAmount;
+        try {
+          // 1. Get current stock
+          const currentRes = await strapiGet(`/api/repuestos/${repuestoId}`);
+          const currentStock = currentRes.data[0]?.stock || 0;
+          const itemName = currentRes.data[0]?.nombre || 'repuesto';
+          const newStock = currentStock + addAmount;
 
-            // 2. Update stock
-            await fetch(`http://localhost:1337/api/repuestos/${repuestoId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                data: { stock: newStock }
-            })
-            });
+          // 2. Update stock
+          await strapiPut(`/api/repuestos/${repuestoId}`, { stock: newStock });
+          
+          successMessage = `Se agregaron ${addAmount} unidades de ${itemName}. Stock actualizado: ${newStock}`;
+        } catch (e) {
+          errorMessage = 'Error al actualizar el stock';
+          console.error('Error updating stock:', e);
         }
       }
     }
 
-    // Fetch Repuestos (fetching all to filter by stock_minimo correctly in JS)
-    // Optimization: Filter by a safe upper bound on server side first, e.g., stock <= 50
-    const res = await fetchStrapi('/api/repuestos?filters[stock][$lte]=50&pagination[limit]=100');
-    const data = await res.json();
-    const allRepuestos = data.data || [];
+    // Fetch Repuestos with low stock
+    const res = await strapiGet('/api/repuestos?filters[stock][$lte]=50&pagination[limit]=100');
+    const allRepuestos = res.data || [];
 
     // Filter strictly where stock <= stock_minimo
     lowStockItems = allRepuestos.filter((item: any) => {
-        const stock = item.attributes.stock || 0;
-        const min = item.attributes.stock_minimo || 5; // Default to 5 if not set
+        const stock = item.stock || 0;
+        const min = item.stock_minimo || 5;
         return stock <= min;
-    }).map((item: any) => ({
-        id: item.id,
-        ...item.attributes
-    }));
+    });
 
     totalCritical = lowStockItems.length;
 
   } catch (e) {
     console.error('Error fetching stock alerts:', e);
+    errorMessage = 'Error al cargar las alertas de stock';
   }
 } else {
   return Astro.redirect('/login');
@@ -71,6 +64,7 @@ if (jwt) {
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>Alertas de Stock - Taller Veloz</title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&amp;display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
 <script>
@@ -169,28 +163,54 @@ if (jwt) {
 </nav>
 </div>
 <div class="mt-auto flex flex-col gap-2">
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/settings">
 <span class="material-symbols-outlined">settings</span>
 <p class="text-sm font-medium leading-normal">Configuración</p>
 </a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/logout">
 <span class="material-symbols-outlined">logout</span>
 <p class="text-sm font-medium leading-normal">Cerrar Sesión</p>
 </a>
 </div>
 </aside>
 <!-- Main Content -->
-<main class="flex-1 p-8">
+<main class="flex-1 p-8" 
+    x-data=`{
+        searchQuery: '',
+        items: ${JSON.stringify(lowStockItems)},
+        get filteredItems() {
+            if (!this.searchQuery) return this.items;
+            const query = this.searchQuery.toLowerCase();
+            return this.items.filter(item => 
+                item.nombre.toLowerCase().includes(query) ||
+                (item.sku && item.sku.toLowerCase().includes(query))
+            );
+        }
+    }`>
 <div class="max-w-7xl mx-auto">
+<!-- Messages -->
+{successMessage && (
+  <div class="mb-4 p-4 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700 rounded-lg text-green-800 dark:text-green-200">
+    <p class="flex items-center gap-2">
+      <span class="material-symbols-outlined">check_circle</span>
+      {successMessage}
+    </p>
+  </div>
+)}
+{errorMessage && (
+  <div class="mb-4 p-4 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg text-red-800 dark:text-red-200">
+    <p class="flex items-center gap-2">
+      <span class="material-symbols-outlined">error</span>
+      {errorMessage}
+    </p>
+  </div>
+)}
 <!-- PageHeading -->
 <div class="flex flex-wrap justify-between items-center gap-4 mb-6">
 <div class="flex flex-col gap-2">
 <h1 class="text-[#0d121b] dark:text-white text-3xl font-black tracking-tight">Inventario: Alerta de Bajo Stock</h1>
 <p class="text-[#4c669a] dark:text-gray-400 text-base font-normal leading-normal">Gestiona y reabastece los repuestos que están por debajo del umbral mínimo.</p>
 </div>
-<button class="flex min-w-[84px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-primary/20 dark:bg-primary/30 text-primary dark:text-white text-sm font-bold leading-normal tracking-[0.015em]">
-<span class="truncate">Crear Nuevo Pedido</span>
-</button>
 </div>
 <!-- Stats -->
 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -210,7 +230,7 @@ if (jwt) {
 <div class="text-[#4c669a] dark:text-gray-400 flex border border-r-0 border-gray-200 dark:border-gray-700 bg-background-light dark:bg-background-dark items-center justify-center pl-4 rounded-l-lg">
 <span class="material-symbols-outlined">search</span>
 </div>
-<input class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-r-lg text-[#0d121b] dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/50 h-full placeholder:text-[#4c669a] dark:placeholder:text-gray-500 px-4 text-base font-normal leading-normal" placeholder="Buscar por nombre o código del repuesto..." value=""/>
+<input x-model="searchQuery" class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-r-lg text-[#0d121b] dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900/50 h-full placeholder:text-[#4c669a] dark:placeholder:text-gray-500 px-4 text-base font-normal leading-normal" placeholder="Buscar por nombre o código del repuesto..." type="text"/>
 </div>
 </label>
 </div>
@@ -228,36 +248,39 @@ if (jwt) {
 </tr>
 </thead>
 <tbody>
-{lowStockItems.length > 0 ? lowStockItems.map((item: any) => (
-<tr class="border-b border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
-<td class="px-4 py-3 align-middle">
-<span class={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium ${
-    item.stock === 0 ? 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300' : 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-300'
-}`}>
-<span class={`h-2 w-2 rounded-full ${item.stock === 0 ? 'bg-red-500' : 'bg-yellow-500'}`}></span>
-                                        {item.stock === 0 ? 'Crítico' : 'Bajo'}
-                                    </span>
-</td>
-<td class="px-4 py-3 align-middle text-[#0d121b] dark:text-white text-sm font-normal">
-    <div>{item.nombre}</div>
-    <div class="text-xs text-gray-500">{item.sku}</div>
-</td>
-<td class="px-4 py-3 align-middle text-center text-red-600 dark:text-red-400 text-sm font-bold">{item.stock}</td>
-<td class="px-4 py-3 align-middle text-center text-[#4c669a] dark:text-gray-400 text-sm font-normal">{item.stock_minimo}</td>
-<td class="px-4 py-3 align-middle text-[#4c669a] dark:text-gray-400 text-sm font-normal">{item.proveedor || 'N/A'}</td>
-<td class="px-4 py-3 text-right align-middle">
-    <form method="POST" class="flex items-center justify-end gap-2">
-        <input type="hidden" name="repuestoId" value={item.id} />
-        <input type="number" name="amount" value="10" min="1" class="w-16 h-8 text-sm border rounded px-2 dark:bg-gray-800 dark:border-gray-700" />
-        <button type="submit" class="text-primary dark:text-blue-400 text-sm font-bold tracking-[0.015em] hover:underline">Reabastecer</button>
-    </form>
-</td>
-</tr>
-)) : (
-    <tr>
-        <td colspan="6" class="px-4 py-8 text-center text-gray-500">No hay repuestos con stock bajo.</td>
-    </tr>
-)}
+    <template x-if="filteredItems.length > 0">
+        <template x-for="item in filteredItems" :key="item.id">
+            <tr class="border-b border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                <td class="px-4 py-3 align-middle">
+                    <span :class="{ 'inline-flex items-center gap-2 rounded-full px-3 py-1 text-sm font-medium': true, 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300': item.stock === 0, 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-300': item.stock > 0 }">
+                        <span :class="{ 'h-2 w-2 rounded-full': true, 'bg-red-500': item.stock === 0, 'bg-yellow-500': item.stock > 0 }"></span>
+                        <span x-text="item.stock === 0 ? 'Crítico' : 'Bajo'"></span>
+                    </span>
+                </td>
+                <td class="px-4 py-3 align-middle text-[#0d121b] dark:text-white text-sm font-normal">
+                    <div x-text="item.nombre"></div>
+                    <div class="text-xs text-gray-500" x-text="item.sku"></div>
+                </td>
+                <td class="px-4 py-3 align-middle text-center text-red-600 dark:text-red-400 text-sm font-bold" x-text="item.stock"></td>
+                <td class="px-4 py-3 align-middle text-center text-[#4c669a] dark:text-gray-400 text-sm font-normal" x-text="item.stock_minimo"></td>
+                <td class="px-4 py-3 align-middle text-[#4c669a] dark:text-gray-400 text-sm font-normal" x-text="item.proveedor || 'N/A'"></td>
+                <td class="px-4 py-3 text-right align-middle">
+                    <form method="POST" class="flex items-center justify-end gap-2">
+                        <input type="hidden" name="repuestoId" :value="item.id" />
+                        <input type="number" name="amount" value="10" min="1" class="w-16 h-8 text-sm border rounded px-2 dark:bg-gray-800 dark:border-gray-700" />
+                        <button type="submit" class="text-primary dark:text-blue-400 text-sm font-bold tracking-[0.015em] hover:underline">Reabastecer</button>
+                    </form>
+                </td>
+            </tr>
+        </template>
+    </template>
+    <template x-if="filteredItems.length === 0">
+        <tr>
+            <td colspan="6" class="px-4 py-8 text-center text-gray-500">
+                <span x-text="items.length > 0 ? 'No se encontraron repuestos que coincidan con la búsqueda.' : 'No hay repuestos con stock bajo.'"></span>
+            </td>
+        </tr>
+    </template>
 </tbody>
 </table>
 </div>

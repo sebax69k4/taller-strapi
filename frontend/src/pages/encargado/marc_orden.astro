@@ -1,60 +1,48 @@
 ---
 export const prerender = false;
-import { fetchStrapi, strapiGet, strapiPost, strapiPut } from '../../lib/strapi';
+import { strapiGet, strapiPut } from '../../lib/strapi';
 import '../../styles/global.css';
 
-const jwt = Astro.cookies.get('jwt')?.value;
+const userRole = Astro.cookies.get('user_role')?.value;
+if (!userRole) {
+  return Astro.redirect('/login');
+}
+
 let activeOrders = [];
 let selectedOrder = null;
 let successMessage = '';
 let error = '';
 
-if (jwt) {
-  try {
-    // Fetch Active Orders
-    const response = await fetchStrapi('/api/orden-de-trabajos?filters[estado][$ne]=Entregado&populate=cliente&populate=vehiculo');
-    const data = await response.json();
-    activeOrders = data.data || [];
+try {
+  // Fetch Active Orders
+  const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$ne]=Entregado&populate=cliente&populate=vehiculo');
+  activeOrders = data.data || [];
 
-    // Get Selected Order ID from URL
-    const orderId = Astro.url.searchParams.get('orderId');
-    if (orderId) {
-      selectedOrder = activeOrders.find((o: any) => o.documentId === orderId);
-    }
-
-    // Handle Status Update
-    if (Astro.request.method === 'POST') {
-      const formData = await Astro.request.formData();
-      const updateOrderId = formData.get('orderId');
-      const notes = formData.get('notes');
-
-      if (updateOrderId) {
-        const updateRes = await fetch(`http://localhost:1337/api/orden-de-trabajos/${updateOrderId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            data: {
-              estado: 'Entregado',
-              descripcion: notes ? `${selectedOrder?.descripcion || ''}\nNota Final: ${notes}` : undefined
-            }
-          })
-        });
-
-        if (updateRes.ok) {
-          successMessage = 'Orden marcada como entregada';
-          return Astro.redirect('/encargado/marc_orden');
-        } else {
-          error = 'Error al actualizar la orden';
-        }
-      }
-    }
-
-  } catch (e) {
-    console.error('Error fetching orders:', e);
-    error = 'Error de conexión';
+  // Get Selected Order ID from URL
+  const orderId = Astro.url.searchParams.get('orderId');
+  if (orderId) {
+    selectedOrder = activeOrders.find((o: any) => o.documentId === orderId);
   }
-} else {
-  return Astro.redirect('/login');
+
+  // Handle Status Update
+  if (Astro.request.method === 'POST') {
+    const formData = await Astro.request.formData();
+    const updateOrderId = formData.get('orderId');
+    const notes = formData.get('notes');
+
+    if (updateOrderId) {
+      await strapiPut(`/api/orden-de-trabajos/${updateOrderId}`, {
+        estado: 'Entregado',
+        descripcion: notes ? `${selectedOrder?.descripcion || ''}\nNota Final: ${notes}` : selectedOrder?.descripcion
+      });
+      successMessage = 'Orden marcada como entregada';
+      return Astro.redirect('/encargado/marc_orden');
+    }
+  }
+
+} catch (e) {
+  console.error('Error fetching orders:', e);
+  error = 'Error de conexión';
 }
 ---
 <!DOCTYPE html>
@@ -154,11 +142,11 @@ if (jwt) {
 </nav>
 </div>
 <div class="mt-auto flex flex-col gap-2">
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/settings">
 <span class="material-symbols-outlined">settings</span>
 <p class="text-sm font-medium leading-normal">Configuración</p>
 </a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/logout">
 <span class="material-symbols-outlined">logout</span>
 <p class="text-sm font-medium leading-normal">Cerrar Sesión</p>
 </a>
@@ -254,7 +242,7 @@ if (jwt) {
       <div>
         <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Vehículo</h3>
         <p class="text-base text-gray-900 dark:text-white mt-1">{selectedOrder.vehiculo ? `${selectedOrder.vehiculo.marca} ${selectedOrder.vehiculo.modelo}` : 'N/A'}</p>
-        <p class="text-base text-gray-500 dark:text-gray-300">Año: {selectedOrder.vehiculo?.anio || 'N/A'}</p>
+        <p class="text-base text-gray-500 dark:text-gray-300">Año: {selectedOrder.vehiculo?.ano || 'N/A'}</p>
         <p class="text-base text-gray-500 dark:text-gray-300">Placa: {selectedOrder.vehiculo?.placa || 'N/A'}</p>
       </div>
     </div>

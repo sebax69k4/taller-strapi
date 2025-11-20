@@ -1,24 +1,26 @@
 ---
 export const prerender = false;
-import { fetchStrapi, strapiGet, strapiPost, strapiPut } from '../../lib/strapi';
+import { strapiGet, strapiPut } from '../../lib/strapi';
 import '../../styles/global.css';
 
-const jwt = Astro.cookies.get('jwt')?.value;
+const userRole = Astro.cookies.get('user_role')?.value;
+if (!userRole) {
+  return Astro.redirect('/login');
+}
+
 let pendingOrders = [];
 let mechanics = [];
 let error = '';
 let successMessage = '';
 
-if (jwt) {
+try {
   try {
     // Fetch Pending Orders
-    const ordersRes = await fetchStrapi('/api/orden-de-trabajos?filters[estado][$eq]=Pendiente&populate=vehiculo');
-    const ordersData = await ordersRes.json();
+    const ordersData = await strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=Pendiente&populate=vehiculo');
     pendingOrders = ordersData.data || [];
 
     // Fetch Mechanics with their orders to calculate workload
-    const mechanicsRes = await fetchStrapi('/api/mecanicos?populate=orden_de_trabajos');
-    const mechanicsData = await mechanicsRes.json();
+    const mechanicsData = await strapiGet('/api/mecanicos?populate=orden_de_trabajos');
     mechanics = mechanicsData.data || [];
 
     // Handle Assignment (POST request to self)
@@ -28,33 +30,19 @@ if (jwt) {
       const mechanicId = formData.get('mechanicId');
 
       if (orderId && mechanicId) {
-        const updateRes = await fetch(`http://localhost:1337/api/orden-de-trabajos/${orderId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            data: {
-              mecanico: mechanicId,
-              estado: 'En Progreso'
-            }
-          })
+        await strapiPut(`/api/orden-de-trabajos/${orderId}`, {
+          mecanico: mechanicId,
+          estado: 'En Progreso'
         });
-
-        if (updateRes.ok) {
-          successMessage = 'Orden asignada correctamente';
-          // Refresh data
-          return Astro.redirect('/encargado/asig_orden');
-        } else {
-          error = 'Error al asignar la orden';
-        }
+        successMessage = 'Orden asignada correctamente';
+        // Refresh data
+        return Astro.redirect('/encargado/asig_orden');
       }
     }
 
-  } catch (e) {
-    console.error('Error fetching data:', e);
-    error = 'Error de conexión';
-  }
-} else {
-  return Astro.redirect('/login');
+} catch (e) {
+  console.error('Error fetching data:', e);
+  error = 'Error de conexión';
 }
 ---
 <!DOCTYPE html>

@@ -610,7 +610,9 @@ export interface ApiOrdenDeTrabajoOrdenDeTrabajo
     factura: Schema.Attribute.Relation<'oneToOne', 'api::factura.factura'>;
     fecha_entrega: Schema.Attribute.Date;
     fecha_estimada: Schema.Attribute.Date;
+    fecha_fin_planificada: Schema.Attribute.DateTime;
     fecha_ingreso: Schema.Attribute.Date & Schema.Attribute.Required;
+    fecha_inicio_planificada: Schema.Attribute.DateTime;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
       'oneToMany',

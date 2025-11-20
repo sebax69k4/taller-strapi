@@ -31,19 +31,8 @@ let messageType = Astro.url.searchParams.get('type');
 let clientes: Cliente[] = [];
 
 try {
-    const response = await fetchStrapi('/api/clientes?sort=nombre:asc');
-
-    if (!response.ok) {
-        throw new Error('Network response was not ok');
-    }
-
-    const data = await response.json();
-    // Flatten the data for easier use
-    clientes = data.data.map((item: any) => ({
-        id: item.id,
-        ...item.attributes
-    }));
-
+    const response = await strapiGet('/api/clientes?sort=nombre:asc');
+    clientes = response.data || [];
 } catch (error: any) {
     console.error('Error fetching clients:', error);
     message = 'Error al cargar la lista de clientes. ' + error.message;
@@ -66,35 +55,21 @@ if (Astro.request.method === 'POST') {
         return Astro.redirect(`/recepcion/crear_vehiculo?message=${encodeURIComponent('Todos los campos obligatorios deben ser completados.')}&type=error`);
     }
 
-    const response = await fetch('http://localhost:1337/api/vehiculos', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        data: {
-          patente,
-          marca,
-          modelo,
-          anio: parseInt(anio as string, 10), // Ensure anio is a number
-          vin,
-          cliente: clienteId
-        }
-      })
+    const result = await strapiPost('/api/vehiculos', {
+      patente,
+      marca,
+      modelo,
+      ano: parseInt(anio as string, 10),
+      numero_de_chasis: vin || null,
+      cliente: parseInt(clienteId as string, 10)
     });
 
-    const responseData = await response.json();
+    const successMessage = `Vehículo con patente "${patente}" creado y asociado exitosamente.`;
+    return Astro.redirect(`/recepcion/crear_vehiculo?message=${encodeURIComponent(successMessage)}&type=success`);
 
-    if (response.ok) {
-      const successMessage = `Vehículo con patente "${patente}" creado y asociado exitosamente.`;
-      return Astro.redirect(`/recepcion/crear_vehiculo?message=${encodeURIComponent(successMessage)}&type=success`);
-    } else {
-      const errorMessage = responseData.error?.message || 'Error desconocido al crear el vehículo.';
-      return Astro.redirect(`/recepcion/crear_vehiculo?message=${encodeURIComponent(errorMessage)}&type=error`);
-    }
   } catch (error: any) {
-    return Astro.redirect(`/recepcion/crear_vehiculo?message=${encodeURIComponent('Error de conexión: ' + error.message)}&type=error`);
+    const errorMessage = error.message || 'Error al crear el vehículo.';
+    return Astro.redirect(`/recepcion/crear_vehiculo?message=${encodeURIComponent(errorMessage)}&type=error`);
   }
 }
 ---
@@ -104,6 +79,7 @@ if (Astro.request.method === 'POST') {
     <meta charset="utf-8"/>
     <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
     <title>Añadir Nuevo Vehículo</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
     <style>
@@ -146,7 +122,7 @@ if (Astro.request.method === 'POST') {
         </a>
     </nav>
     <div class="mt-auto flex flex-col gap-2">
-        <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/login">
+        <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/logout">
             <span class="material-symbols-outlined">logout</span>
             <p class="text-sm font-medium">Cerrar Sesión</p>
         </a>
@@ -177,7 +153,7 @@ if (Astro.request.method === 'POST') {
                             <p class="text-sm font-medium text-slate-700 dark:text-slate-300 pb-2">Cliente Existente</p>
                             <select name="cliente" class="form-select w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark focus:border-primary focus:ring-primary dark:text-slate-200" required>
                                 <option value="" disabled selected>Seleccione un cliente...</option>
-                                {clientes.map((cliente) => (
+                                {clientes.map((cliente: any) => (
                                     <option value={cliente.id}>{cliente.nombre} {cliente.apellido} ({cliente.rut})</option>
                                 ))}
                             </select>

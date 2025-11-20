@@ -27,7 +27,7 @@ rolesIds.forEach(roleId => {
       WHERE role_id = ?
     `).get(roleId);
     
-    const nextOrd = (lastOrd.max_ord || 0) + 1;
+    const nextOrd = (lastOrd && typeof lastOrd === 'object' && 'max_ord' in lastOrd ? Number(lastOrd.max_ord || 0) : 0) + 1;
     
     // Insertar la nueva relación
     const insert = db.prepare(`

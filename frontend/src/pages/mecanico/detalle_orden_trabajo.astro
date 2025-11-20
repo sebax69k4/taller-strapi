@@ -1,6 +1,6 @@
 ---
 export const prerender = false;
-import { fetchStrapi, strapiGet, strapiPost, strapiPut } from '../../lib/strapi';
+import { strapiGet, strapiPost, strapiPut } from '../../lib/strapi';
 import '../../styles/global.css';
 
 const userRole = Astro.cookies.get('user_role')?.value;
@@ -12,7 +12,7 @@ if (!userRole) {
 interface Vehiculo {
   marca: string;
   modelo: string;
-  anio: number;
+  ano: number;
   patente: string;
   cliente?: {
     data?: {
@@ -78,35 +78,23 @@ if (!orderId) {
 
       if (action === 'updateStatus') {
         const newStatus = formData.get('status');
-        const res = await fetch(`http://localhost:1337/api/orden-de-trabajos/${orderId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ data: { estado: newStatus } })
+        await strapiPut(`/api/orden-de-trabajos/${orderId}`, {
+          estado: newStatus
         });
-        if (res.ok) success = 'Estado actualizado correctamente.';
-        else throw new Error('No se pudo actualizar el estado.');
+        success = 'Estado actualizado correctamente.';
       }
 
       if (action === 'addLog') {
         const logNote = formData.get('comment');
-        const meRes = await fetchStrapi('/api/users/me?populate=mecanico');
-        const meData = await meRes.json();
-        const mechanicId = meData.mecanico?.id;
+        const mechanicId = null; // Skip mechanic ID for now
 
-        if (logNote && mechanicId) {
-          const res = await fetch('http://localhost:1337/api/bitacoras', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              data: {
-                descripcion: logNote,
-                orden_de_trabajo: orderId,
-                mecanico: mechanicId,
-              }
-            })
+        if (logNote) {
+          await strapiPost('/api/bitacoras', {
+            descripcion: logNote,
+            orden_de_trabajo: orderId,
+            mecanico: mechanicId,
           });
-          if (res.ok) success = 'Nota agregada a la bitácora.';
-          else throw new Error('No se pudo agregar la nota.');
+          success = 'Nota agregada a la bitácora.';
         }
       }
        // Redirect to the same page to show updated data
@@ -114,16 +102,13 @@ if (!orderId) {
     }
 
     // Fetch all order data
-    const res = await fetch(`http://localhost:1337/api/orden-de-trabajos/${orderId}?populate[vehiculo][populate][0]=cliente&populate[mecanico]=true&populate[repuestos]=true&populate[bitacoras][populate][0]=mecanico`, {
-      headers: {}
-    });
+    const orderData = await strapiGet(`/api/orden-de-trabajos/${orderId}?populate[vehiculo][populate][0]=cliente&populate[mecanico]=true&populate[repuestos]=true&populate[bitacoras][populate][0]=mecanico`);
 
-    if (!res.ok) {
+    if (!orderData.data || orderData.data.length === 0) {
       throw new Error('No se pudo cargar la orden de trabajo.');
     }
 
-    const orderData = await res.json();
-    const fetchedOrder: Orden = { id: orderData.data.id, ...orderData.data.attributes };
+    const fetchedOrder: Orden = orderData.data[0];
     
     // Extract client from the nested structure
     if (fetchedOrder.vehiculo?.data?.attributes.cliente) {
@@ -217,7 +202,7 @@ const formatCurrency = (amount: number) => new Intl.NumberFormat('es-CL', { styl
 </nav>
 </div>
 <div class="mt-auto flex flex-col gap-2">
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
+<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/settings">
 <span class="material-symbols-outlined">settings</span>
 <p class="text-sm font-medium leading-normal">Configuración</p>
 </a>
@@ -276,7 +261,7 @@ const formatCurrency = (amount: number) => new Intl.NumberFormat('es-CL', { styl
                             </div>
                             <div class="flex flex-col gap-1">
                                 <p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Vehículo</p>
-                                <p class="text-gray-800 dark:text-gray-200 text-sm font-medium leading-normal">{`${order.vehiculo?.data?.attributes.marca || ''} ${order.vehiculo?.data?.attributes.modelo || ''} (${order.vehiculo?.data?.attributes.anio || ''})`}</p>
+                                <p class="text-gray-800 dark:text-gray-200 text-sm font-medium leading-normal">{`${order.vehiculo?.data?.attributes.marca || ''} ${order.vehiculo?.data?.attributes.modelo || ''} (${order.vehiculo?.data?.attributes.ano || ''})`}</p>
                             </div>
                             <div class="flex flex-col gap-1">
                                 <p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Matrícula</p>
