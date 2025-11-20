@@ -1,28 +1,23 @@
 ---
-import '../../styles/global.css';
+export const prerender = false;
 
-const jwt = Astro.cookies.get('jwt')?.value;
+import '../../styles/global.css';
+import { fetchStrapi } from '../../lib/strapi';
+
+const userRole = Astro.cookies.get('user_role')?.value;
+
+if (!userRole) {
+  return Astro.redirect('/login');
+}
+
 let clientes = [];
 let error = '';
 
-if (jwt) {
-  try {
-    const response = await fetch('http://localhost:1337/api/clientes?populate=vehiculos', {
-      headers: {
-        'Authorization': `Bearer ${jwt}`
-      }
-    });
-    if (response.ok) {
-      const data = await response.json();
-      clientes = data.data;
-    } else {
-      error = 'Error al cargar clientes';
-    }
-  } catch (e) {
-    error = 'Error de conexión';
-  }
-} else {
-  return Astro.redirect('/login');
+try {
+  const response = await fetchStrapi('/api/clientes?populate=vehiculos');
+  clientes = response.data || [];
+} catch (e: any) {
+  error = e.message || 'Error al cargar clientes';
 }
 ---
 <!DOCTYPE html>

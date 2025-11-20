@@ -1,4 +1,6 @@
 ---
+export const prerender = false;
+import { fetchStrapi, strapiGet, strapiPost, strapiPut } from '../../lib/strapi';
 import '../../styles/global.css';
 
 const jwt = Astro.cookies.get('jwt')?.value;
@@ -13,31 +15,25 @@ if (jwt) {
     const today = new Date().toISOString().split('T')[0];
 
     // Active Orders
-    const activeRes = await fetch('http://localhost:1337/api/orden-de-trabajos?filters[estado][$ne]=Entregado', {
-      headers: { 'Authorization': `Bearer ${jwt}` }
-    });
+    const activeRes = await fetchStrapi('/api/orden-de-trabajos?filters[estado][$ne]=Entregado');
     const activeData = await activeRes.json();
     activeOrdersCount = activeData.meta?.pagination?.total || 0;
 
     // Completed Today
     const completedRes = await fetch(`http://localhost:1337/api/orden-de-trabajos?filters[estado][$eq]=Entregado&filters[updatedAt][$gte]=${today}`, {
-      headers: { 'Authorization': `Bearer ${jwt}` }
+      headers: {}
     });
     const completedData = await completedRes.json();
     completedTodayCount = completedData.meta?.pagination?.total || 0;
 
     // Low Stock (assuming threshold 5)
-    const lowStockRes = await fetch('http://localhost:1337/api/repuestos?filters[stock][$lte]=5', {
-      headers: { 'Authorization': `Bearer ${jwt}` }
-    });
+    const lowStockRes = await fetchStrapi('/api/repuestos?filters[stock][$lte]=5');
     const lowStockData = await lowStockRes.json();
     lowStockCount = lowStockData.meta?.pagination?.total || 0;
     lowStockItems = lowStockData.data || [];
 
     // Recent Activity
-    const recentRes = await fetch('http://localhost:1337/api/orden-de-trabajos?sort[0]=updatedAt:desc&pagination[limit]=5&populate=cliente&populate=vehiculo&populate=mecanico', {
-      headers: { 'Authorization': `Bearer ${jwt}` }
-    });
+    const recentRes = await fetchStrapi('/api/orden-de-trabajos?sort[0]=updatedAt:desc&pagination[limit]=5&populate=cliente&populate=vehiculo&populate=mecanico');
     const recentData = await recentRes.json();
     recentOrders = recentData.data || [];
 

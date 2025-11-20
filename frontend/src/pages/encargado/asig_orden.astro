@@ -1,4 +1,6 @@
 ---
+export const prerender = false;
+import { fetchStrapi, strapiGet, strapiPost, strapiPut } from '../../lib/strapi';
 import '../../styles/global.css';
 
 const jwt = Astro.cookies.get('jwt')?.value;
@@ -10,16 +12,12 @@ let successMessage = '';
 if (jwt) {
   try {
     // Fetch Pending Orders
-    const ordersRes = await fetch('http://localhost:1337/api/orden-de-trabajos?filters[estado][$eq]=Pendiente&populate=vehiculo', {
-      headers: { 'Authorization': `Bearer ${jwt}` }
-    });
+    const ordersRes = await fetchStrapi('/api/orden-de-trabajos?filters[estado][$eq]=Pendiente&populate=vehiculo');
     const ordersData = await ordersRes.json();
     pendingOrders = ordersData.data || [];
 
     // Fetch Mechanics with their orders to calculate workload
-    const mechanicsRes = await fetch('http://localhost:1337/api/mecanicos?populate=orden_de_trabajos', {
-      headers: { 'Authorization': `Bearer ${jwt}` }
-    });
+    const mechanicsRes = await fetchStrapi('/api/mecanicos?populate=orden_de_trabajos');
     const mechanicsData = await mechanicsRes.json();
     mechanics = mechanicsData.data || [];
 
@@ -32,10 +30,7 @@ if (jwt) {
       if (orderId && mechanicId) {
         const updateRes = await fetch(`http://localhost:1337/api/orden-de-trabajos/${orderId}`, {
           method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${jwt}`
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             data: {
               mecanico: mechanicId,

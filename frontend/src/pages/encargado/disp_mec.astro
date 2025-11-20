@@ -1,4 +1,6 @@
 ---
+export const prerender = false;
+import { fetchStrapi, strapiGet, strapiPost, strapiPut } from '../../lib/strapi';
 import '../../styles/global.css';
 
 const jwt = Astro.cookies.get('jwt')?.value;
@@ -8,9 +10,7 @@ let totalCapacity = 0; // Assuming 5 orders per mechanic max
 
 if (jwt) {
   try {
-    const response = await fetch('http://localhost:1337/api/mecanicos?populate[orden_de_trabajos][populate]=vehiculo', {
-      headers: { 'Authorization': `Bearer ${jwt}` }
-    });
+    const response = await fetchStrapi('/api/mecanicos?populate[orden_de_trabajos][populate]=vehiculo');
     const data = await response.json();
     mechanics = data.data || [];
 

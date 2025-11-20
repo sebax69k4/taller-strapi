@@ -1,8 +1,7 @@
 ---
-import '../styles/global.css';
+export const prerender = false;
 
-// Este script podría eliminar la cookie de sesión si existe
-Astro.cookies.delete('jwt', { path: '/' });
+import '../styles/global.css';
 ---
 
 <!DOCTYPE html>

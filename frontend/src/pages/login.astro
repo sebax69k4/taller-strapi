@@ -1,68 +1,81 @@
 ---
+export const prerender = false;
+
 import '../styles/global.css';
 
 let errorMessage = '';
 
+// Usuarios hardcodeados (temporal - sin JWT)
+const USERS = [
+  { email: 'recepcionista@taller.com', password: 'Recepcion123', role: 'recepcionista', name: 'Recepcionista' },
+  { email: 'encargado@taller.com', password: 'Encargado123', role: 'encargado', name: 'Encargado' },
+  { email: 'mecanico@taller.com', password: 'Mecanico123', role: 'mecanico', name: 'Mecánico' },
+];
+
 if (Astro.request.method === 'POST') {
   try {
-    const formData = await Astro.request.formData();
-    const email = formData.get('email');
-    const password = formData.get('password');
+    const body = await Astro.request.text();
+    const params = new URLSearchParams(body);
+    const email = params.get('email') || '';
+    const password = params.get('password') || '';
 
-    // 1. Autenticar contra Strapi
-    const authResponse = await fetch('http://localhost:1337/api/auth/local', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ identifier: email, password }),
-    });
-
-    if (!authResponse.ok) {
-      const errorData = await authResponse.json();
-      throw new Error(errorData.error?.message || 'Credenciales inválidas');
+    if (!email || !password) {
+      throw new Error('Por favor, ingresa tu correo y contraseña.');
     }
 
-    const { jwt } = await authResponse.json();
+    // Buscar usuario
+    const user = USERS.find(u => u.email === email && u.password === password);
 
-    // 2. Guardar el JWT en una cookie segura
-    Astro.cookies.set('jwt', jwt, {
+    if (!user) {
+      throw new Error('Credenciales inválidas');
+    }
+
+    // Guardar datos básicos en cookies (sin JWT)
+    Astro.cookies.set('user_email', user.email, {
       path: '/',
-      httpOnly: true,
-      secure: !import.meta.env.DEV, // secure en producción
-      maxAge: 60 * 60 * 24 * 30 // 30 días
+      httpOnly: false,
+      secure: false,
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 8 // 8 horas
     });
 
-    // 3. Obtener el rol del usuario para la redirección
-    const meResponse = await fetch('http://localhost:1337/api/users/me?populate=role', {
-        headers: { 'Authorization': `Bearer ${jwt}` }
+    Astro.cookies.set('user_role', user.role, {
+      path: '/',
+      httpOnly: false,
+      secure: false,
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 8
     });
 
-    if (!meResponse.ok) {
-        throw new Error('No se pudo obtener la información del usuario.');
-    }
+    Astro.cookies.set('user_name', user.name, {
+      path: '/',
+      httpOnly: false,
+      secure: false,
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 8
+    });
 
-    const user = await meResponse.json();
-    const userRole = user.role?.name;
-
-    // 4. Redirigir según el rol
+    // Redirigir según el rol
     const roleRedirects: Record<string, string> = {
-      'Recepcionista': '/recepcion/dash_recep',
-      'Encargado': '/encargado/dash_enc',
-      'Mecanico': '/mecanico/dash_mec',
+      'recepcionista': '/recepcion/dash_recep',
+      'encargado': '/encargado/dash_enc',
+      'mecanico': '/mecanico/dash_mec',
     };
 
-    const redirectUrl = roleRedirects[userRole];
-
+    const redirectUrl = roleRedirects[user.role];
+    console.log('🔄 Redirigiendo a:', redirectUrl, 'con rol:', user.role);
+    
     if (redirectUrl) {
       return Astro.redirect(redirectUrl);
     } else {
-      // Si el rol no está en la lista, redirigir a una página de error o login
-      throw new Error('Rol no autorizado para acceder al sistema.');
+      throw new Error('Rol no reconocido');
     }
 
-  } catch (error) {
-    errorMessage = error instanceof Error ? error.message : 'Ocurrió un error inesperado.';
-    // Borrar la cookie si algo falló
-    Astro.cookies.delete('jwt', { path: '/' });
+  } catch (error: any) {
+    errorMessage = error instanceof Error ? error.message : 'Error inesperado';
+    Astro.cookies.delete('user_email', { path: '/' });
+    Astro.cookies.delete('user_role', { path: '/' });
+    Astro.cookies.delete('user_name', { path: '/' });
   }
 }
 ---

@@ -1,4 +1,6 @@
 ---
+export const prerender = false;
+import { fetchStrapi, strapiGet, strapiPost, strapiPut } from '../../lib/strapi';
 import '../../styles/global.css';
 
 const jwt = Astro.cookies.get('jwt')?.value;
@@ -20,9 +22,7 @@ if (jwt) {
     });
 
     const res = await fetch(`http://localhost:1337/api/orden-de-trabajos/${orderId}?${query.toString()}`, {
-      headers: {
-        'Authorization': `Bearer ${jwt}`
-      }
+      headers: {}
     });
     
     if (res.ok) {

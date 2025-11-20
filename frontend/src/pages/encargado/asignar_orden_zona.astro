@@ -1,4 +1,6 @@
 ---
+export const prerender = false;
+import { fetchStrapi, strapiGet, strapiPost, strapiPut } from '../../lib/strapi';
 import '../../styles/global.css';
 
 const jwt = Astro.cookies.get('jwt')?.value;
@@ -22,10 +24,7 @@ if (jwt) {
       if (mechanicId && zoneId) {
         const updateRes = await fetch(`http://localhost:1337/api/orden-de-trabajos/${orderId}`, {
           method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${jwt}`
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             data: {
               mecanico: mechanicId,
@@ -43,22 +42,18 @@ if (jwt) {
 
     // Fetch Order
     const orderRes = await fetch(`http://localhost:1337/api/orden-de-trabajos/${orderId}?populate=cliente&populate=vehiculo&populate=mecanico&populate=zona`, {
-      headers: { 'Authorization': `Bearer ${jwt}` }
+      headers: {}
     });
     const orderData = await orderRes.json();
     order = orderData.data;
 
     // Fetch Mechanics
-    const mecRes = await fetch('http://localhost:1337/api/mecanicos', {
-      headers: { 'Authorization': `Bearer ${jwt}` }
-    });
+    const mecRes = await fetchStrapi('/api/mecanicos');
     const mecData = await mecRes.json();
     mechanics = mecData.data || [];
 
     // Fetch Zones
-    const zoneRes = await fetch('http://localhost:1337/api/zonas', {
-      headers: { 'Authorization': `Bearer ${jwt}` }
-    });
+    const zoneRes = await fetchStrapi('/api/zonas');
     const zoneData = await zoneRes.json();
     zones = zoneData.data || [];
 

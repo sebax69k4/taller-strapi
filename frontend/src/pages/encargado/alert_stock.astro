@@ -1,4 +1,6 @@
 ---
+export const prerender = false;
+import { fetchStrapi, strapiGet, strapiPost, strapiPut } from '../../lib/strapi';
 import '../../styles/global.css';
 
 const jwt = Astro.cookies.get('jwt')?.value;
@@ -17,7 +19,7 @@ if (jwt) {
       if (repuestoId && addAmount > 0) {
         // 1. Get current stock
         const currentRes = await fetch(`http://localhost:1337/api/repuestos/${repuestoId}`, {
-          headers: { 'Authorization': `Bearer ${jwt}` }
+          headers: {}
         });
         
         if (currentRes.ok) {
@@ -28,10 +30,7 @@ if (jwt) {
             // 2. Update stock
             await fetch(`http://localhost:1337/api/repuestos/${repuestoId}`, {
             method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${jwt}`
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 data: { stock: newStock }
             })
@@ -42,9 +41,7 @@ if (jwt) {
 
     // Fetch Repuestos (fetching all to filter by stock_minimo correctly in JS)
     // Optimization: Filter by a safe upper bound on server side first, e.g., stock <= 50
-    const res = await fetch('http://localhost:1337/api/repuestos?filters[stock][$lte]=50&pagination[limit]=100', {
-      headers: { 'Authorization': `Bearer ${jwt}` }
-    });
+    const res = await fetchStrapi('/api/repuestos?filters[stock][$lte]=50&pagination[limit]=100');
     const data = await res.json();
     const allRepuestos = data.data || [];
 

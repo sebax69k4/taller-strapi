@@ -1,9 +1,12 @@
 ---
+export const prerender = false;
+
 import '../../styles/global.css';
+import { createStrapiItem } from '../../lib/strapi';
 
-const token = Astro.cookies.get('jwt')?.value;
+const userRole = Astro.cookies.get('user_role')?.value;
 
-if (!token) {
+if (!userRole) {
   return Astro.redirect('/login');
 }
 
@@ -12,47 +15,33 @@ let messageType = Astro.url.searchParams.get('type');
 
 if (Astro.request.method === 'POST') {
   try {
-    const formData = await Astro.request.formData();
-    const nombre = formData.get('nombre');
-    const apellido = formData.get('apellido');
-    const email = formData.get('email');
-    const telefono = formData.get('telefono');
-    const rut = formData.get('rut');
+    const body = await Astro.request.text();
+    const params = new URLSearchParams(body);
+    const nombre = params.get('nombre');
+    const apellido = params.get('apellido');
+    const email = params.get('email');
+    const telefono = params.get('telefono');
+    const rut = params.get('rut');
 
     // Validación básica
     if (!nombre || !apellido || !email || !telefono || !rut) {
         return Astro.redirect(`/recepcion/crear_cliente?message=${encodeURIComponent('Todos los campos son obligatorios.')}&type=error`);
     }
 
-    const response = await fetch('http://localhost:1337/api/clientes', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        data: {
-          nombre,
-          apellido,
-          email,
-          telefono,
-          rut
-        }
-      })
+    await createStrapiItem('clientes', {
+      nombre,
+      apellido,
+      email,
+      telefono,
+      rut
     });
 
-    const responseData = await response.json();
+    const successMessage = `Cliente "${nombre} ${apellido}" creado exitosamente.`;
+    return Astro.redirect(`/recepcion/crear_cliente?message=${encodeURIComponent(successMessage)}&type=success`);
 
-    if (response.ok) {
-      const successMessage = `Cliente "${nombre} ${apellido}" creado exitosamente.`;
-      return Astro.redirect(`/recepcion/crear_cliente?message=${encodeURIComponent(successMessage)}&type=success`);
-    } else {
-      // Manejo de errores de validación de Strapi u otros problemas
-      const errorMessage = responseData.error?.message || 'Error desconocido al crear el cliente.';
-      return Astro.redirect(`/recepcion/crear_cliente?message=${encodeURIComponent(errorMessage)}&type=error`);
-    }
   } catch (error: any) {
-    return Astro.redirect(`/recepcion/crear_cliente?message=${encodeURIComponent(error.message)}&type=error`);
+    const errorMessage = error.message || 'Error al crear el cliente.';
+    return Astro.redirect(`/recepcion/crear_cliente?message=${encodeURIComponent(errorMessage)}&type=error`);
   }
 }
 ---

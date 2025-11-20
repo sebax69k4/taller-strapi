@@ -1,4 +1,6 @@
 ---
+export const prerender = false;
+import { fetchStrapi, strapiGet, strapiPost, strapiPut } from '../../lib/strapi';
 import '../../styles/global.css';
 
 const jwt = Astro.cookies.get('jwt')?.value;
@@ -8,17 +10,13 @@ let zones = [];
 if (jwt) {
   try {
     // Fetch Mechanics
-    const mecRes = await fetch('http://localhost:1337/api/mecenicos?populate=orden_de_trabajos', {
-      headers: { 'Authorization': `Bearer ${jwt}` }
-    });
+    const mecRes = await fetchStrapi('/api/mecenicos?populate=orden_de_trabajos');
     const mecData = await mecRes.json();
     mechanics = mecData.data || [];
 
     // Fetch Zones with active orders
     // Note: Deep filtering in populate is supported in Strapi v4
-    const zoneRes = await fetch('http://localhost:1337/api/zonas?populate[orden_de_trabajos][filters][estado][$ne]=Entregado&populate[orden_de_trabajos][populate]=vehiculo', {
-      headers: { 'Authorization': `Bearer ${jwt}` }
-    });
+    const zoneRes = await fetchStrapi('/api/zonas?populate[orden_de_trabajos][filters][estado][$ne]=Entregado&populate[orden_de_trabajos][populate]=vehiculo');
     const zoneData = await zoneRes.json();
     zones = zoneData.data || [];
 

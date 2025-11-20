@@ -1,8 +1,14 @@
 ---
-import '../../styles/global.css';
+export const prerender = false;
 
-const jwt = Astro.cookies.get('jwt')?.value;
-if (!jwt) {
+import '../../styles/global.css';
+import { fetchStrapi } from '../../lib/strapi';
+
+// Verificar sesión
+const userRole = Astro.cookies.get('user_role')?.value;
+const userName = Astro.cookies.get('user_name')?.value || 'Usuario';
+
+if (!userRole) {
   return Astro.redirect('/login');
 }
 
@@ -33,27 +39,17 @@ let recentOrders: Order[] = [];
 let error = '';
 
 try {
-    const [activeOrdersRes, vehiclesRes, pendingOrdersRes, recentOrdersRes] = await Promise.all([
-        fetch('http://localhost:1337/api/orden-de-trabajos?filters[estado][$ne]=Entregado&pagination[pageSize]=1', { headers: { 'Authorization': `Bearer ${jwt}` } }),
-        fetch('http://localhost:1337/api/vehiculos?pagination[pageSize]=1', { headers: { 'Authorization': `Bearer ${jwt}` } }),
-        fetch('http://localhost:1337/api/orden-de-trabajos?filters[estado][$eq]=Pendiente&pagination[pageSize]=1', { headers: { 'Authorization': `Bearer ${jwt}` } }),
-        fetch('http://localhost:1337/api/orden-de-trabajos?sort[0]=createdAt:desc&pagination[limit]=5&populate=vehiculo', { headers: { 'Authorization': `Bearer ${jwt}` } })
+    const [activeOrdersData, vehiclesData, pendingOrdersData, recentOrdersData] = await Promise.all([
+        fetchStrapi('/api/orden-de-trabajos?filters[estado][$ne]=Entregado&pagination[pageSize]=1'),
+        fetchStrapi('/api/vehiculos?pagination[pageSize]=1'),
+        fetchStrapi('/api/orden-de-trabajos?filters[estado][$eq]=Pendiente&pagination[pageSize]=1'),
+        fetchStrapi('/api/orden-de-trabajos?sort[0]=createdAt:desc&pagination[limit]=5&populate=vehiculo')
     ]);
 
-    if (!activeOrdersRes.ok || !vehiclesRes.ok || !pendingOrdersRes.ok || !recentOrdersRes.ok) {
-        throw new Error('Hubo un problema al cargar los datos del dashboard.');
-    }
-
-    const activeOrdersData = await activeOrdersRes.json();
     activeOrdersCount = activeOrdersData.meta?.pagination?.total || 0;
-
-    const vehiclesData = await vehiclesRes.json();
     vehiclesCount = vehiclesData.meta?.pagination?.total || 0;
 
-    const pendingOrdersData = await pendingOrdersRes.json();
     pendingOrdersCount = pendingOrdersData.meta?.pagination?.total || 0;
-
-    const recentOrdersData = await recentOrdersRes.json();
     recentOrders = recentOrdersData.data || [];
 
 } catch (e: any) {
@@ -134,7 +130,7 @@ try {
         </a>
     </nav>
     <div class="mt-auto flex flex-col gap-2">
-        <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/login">
+        <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/logout">
             <span class="material-symbols-outlined">logout</span>
             <p class="text-sm font-medium">Cerrar Sesión</p>
         </a>
@@ -147,7 +143,7 @@ try {
     
     <div class="flex flex-wrap justify-between items-center gap-4">
         <div>
-            <h1 class="text-gray-900 dark:text-white text-3xl font-bold">¡Bienvenido, Recepcionista!</h1>
+            <h1 class="text-gray-900 dark:text-white text-3xl font-bold">¡Bienvenido, {userName}!</h1>
             <p class="text-gray-500 dark:text-gray-400">Aquí tienes un resumen de la actividad y accesos rápidos.</p>
         </div>
     </div>

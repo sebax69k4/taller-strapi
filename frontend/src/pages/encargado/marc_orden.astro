@@ -1,4 +1,6 @@
 ---
+export const prerender = false;
+import { fetchStrapi, strapiGet, strapiPost, strapiPut } from '../../lib/strapi';
 import '../../styles/global.css';
 
 const jwt = Astro.cookies.get('jwt')?.value;
@@ -10,9 +12,7 @@ let error = '';
 if (jwt) {
   try {
     // Fetch Active Orders
-    const response = await fetch('http://localhost:1337/api/orden-de-trabajos?filters[estado][$ne]=Entregado&populate=cliente&populate=vehiculo', {
-      headers: { 'Authorization': `Bearer ${jwt}` }
-    });
+    const response = await fetchStrapi('/api/orden-de-trabajos?filters[estado][$ne]=Entregado&populate=cliente&populate=vehiculo');
     const data = await response.json();
     activeOrders = data.data || [];
 
@@ -31,10 +31,7 @@ if (jwt) {
       if (updateOrderId) {
         const updateRes = await fetch(`http://localhost:1337/api/orden-de-trabajos/${updateOrderId}`, {
           method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${jwt}`
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             data: {
               estado: 'Entregado',
