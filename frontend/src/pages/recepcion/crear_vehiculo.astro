@@ -79,7 +79,15 @@ if (Astro.request.method === 'POST') {
 ---
 
 <DashboardLayout title="Añadir Nuevo Vehículo" role="recepcionista" currentPath={Astro.url.pathname}>
-    <div class="w-full max-w-3xl mx-auto" x-data={`{ message: ${JSON.stringify(message || '')}, messageType: ${JSON.stringify(messageType || '')} }`}>
+    <script define:vars={{ message, messageType }}>
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('vehiculoForm', () => ({
+                message: message || '',
+                messageType: messageType || ''
+            }));
+        });
+    </script>
+    <div class="w-full max-w-3xl mx-auto" x-data="vehiculoForm">
         <div class="flex flex-col gap-2 mb-8">
             <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Añadir Nuevo Vehículo</h1>
             <p class="text-gray-500 dark:text-gray-400">Seleccione un cliente y complete los detalles para registrar un nuevo vehículo.</p>
@@ -182,5 +190,4 @@ if (Astro.request.method === 'POST') {
             </form>
         </Card>
     </div>
-    <script src="//unpkg.com/alpinejs" defer></script>
 </DashboardLayout>

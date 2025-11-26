@@ -72,7 +72,15 @@ if (Astro.request.method === 'POST') {
 ---
 
 <DashboardLayout title={isEditMode ? 'Editar Cliente' : 'Registrar Nuevo Cliente'} role="recepcionista" currentPath={Astro.url.pathname}>
-    <div class="w-full max-w-2xl mx-auto" x-data={`{ message: ${JSON.stringify(message || '')}, messageType: ${JSON.stringify(messageType || '')} }`}>
+    <script define:vars={{ message, messageType }}>
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('clienteForm', () => ({
+                message: message || '',
+                messageType: messageType || ''
+            }));
+        });
+    </script>
+    <div class="w-full max-w-2xl mx-auto" x-data="clienteForm">
         <div class="flex flex-col gap-2 mb-6">
             <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">{isEditMode ? 'Editar' : 'Registrar Nuevo'} Cliente</h1>
             <p class="text-gray-500 dark:text-gray-400">{isEditMode ? 'Modifique los datos del cliente.' : 'Complete los siguientes campos para añadir un nuevo cliente al sistema.'}</p>
@@ -154,5 +162,4 @@ if (Astro.request.method === 'POST') {
             </form>
         </Card>
     </div>
-    <script src="//unpkg.com/alpinejs" defer></script>
 </DashboardLayout>

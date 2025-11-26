@@ -96,7 +96,7 @@ if (Astro.request.method === 'POST') {
         )}
 
         <Card>
-            <form method="POST" class="space-y-8" x-data={`formController({ allVehiculos: ${JSON.stringify(vehiculos)} })`}>
+            <form method="POST" class="space-y-8" x-data="formController()">
                 
                 <!-- Client and Vehicle Selection -->
                 <div>
@@ -167,13 +167,13 @@ if (Astro.request.method === 'POST') {
         </Card>
     </div>
 
-    <script>
+    <script define:vars={{ vehiculos }}>
         document.addEventListener('alpine:init', () => {
-            Alpine.data('formController', ({ allVehiculos }) => ({
+            Alpine.data('formController', () => ({
                 message: new URLSearchParams(window.location.search).get('message'),
                 messageType: new URLSearchParams(window.location.search).get('type'),
                 selectedClientId: null,
-                allVehiculos: allVehiculos,
+                allVehiculos: vehiculos,
                 filteredVehiculos: [],
                 filterVehiculos(clientId) {
                     this.selectedClientId = clientId;
