@@ -3,33 +3,25 @@ export const prerender = false;
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
 import Card from '../../components/ui/Card.astro';
 import Button from '../../components/ui/Button.astro';
-import { fetchStrapi, strapiGet, strapiPost, strapiPut } from '../../lib/strapi';
+import { strapiGet, strapiPost } from '../../lib/strapi';
 import '../../styles/global.css';
 
 // TypeScript Interfaces
-interface ClienteAttributes {
+interface Cliente {
+  id: number;
+  documentId: string;
   nombre: string;
   apellido: string;
   rut: string;
 }
 
-interface Cliente {
+interface Vehiculo {
   id: number;
-  attributes: ClienteAttributes;
-}
-
-interface VehiculoAttributes {
+  documentId: string;
   patente: string;
   marca: string;
   modelo: string;
-  cliente: {
-    data: Cliente | null;
-  };
-}
-
-interface Vehiculo {
-  id: number;
-  attributes: VehiculoAttributes;
+  cliente: Cliente | null;
 }
 
 const userRole = Astro.cookies.get('user_role')?.value;

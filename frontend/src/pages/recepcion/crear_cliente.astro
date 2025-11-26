@@ -5,7 +5,7 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
 import Card from '../../components/ui/Card.astro';
 import Button from '../../components/ui/Button.astro';
 import Input from '../../components/ui/Input.astro';
-import { strapiPost, strapiPut, getStrapiItem } from '../../lib/strapi';
+import { strapiGet, strapiPost, strapiPut } from '../../lib/strapi';
 
 const userRole = Astro.cookies.get('user_role')?.value;
 
@@ -19,7 +19,7 @@ let isEditMode = !!clientId;
 
 if (isEditMode && clientId) {
     try {
-        const response = await getStrapiItem('clientes', clientId);
+        const response = await strapiGet(`/api/clientes/${clientId}?populate=*`);
         cliente = response.data;
     } catch (error) {
         console.error("Error fetching client for editing:", error);
@@ -45,7 +45,8 @@ if (Astro.request.method === 'POST') {
     // Validación básica
     if (!nombre || !apellido || !email || !telefono || !rut) {
         const redirectUrl = idToUpdate ? `/recepcion/crear_cliente?id=${idToUpdate}` : '/recepcion/crear_cliente';
-        return Astro.redirect(`${redirectUrl}&message=${encodeURIComponent('Todos los campos son obligatorios.')}&type=error`);
+        const separator = idToUpdate ? '&' : '?';
+        return Astro.redirect(`${redirectUrl}${separator}message=${encodeURIComponent('Todos los campos son obligatorios.')}&type=error`);
     }
 
     const clientData = { nombre, apellido, email, telefono, rut };
@@ -64,7 +65,8 @@ if (Astro.request.method === 'POST') {
   } catch (error: any) {
     const errorMessage = error.message || 'Ocurrió un error.';
     const redirectUrl = clientId ? `/recepcion/crear_cliente?id=${clientId}` : '/recepcion/crear_cliente';
-    return Astro.redirect(`${redirectUrl}&message=${encodeURIComponent(errorMessage)}&type=error`);
+    const separator = clientId ? '&' : '?';
+    return Astro.redirect(`${redirectUrl}${separator}message=${encodeURIComponent(errorMessage)}&type=error`);
   }
 }
 ---

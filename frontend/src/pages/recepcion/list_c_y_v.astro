@@ -19,18 +19,8 @@ let error = '';
 
 try {
   const response = await strapiGet('/api/clientes?populate=vehiculos');
-  // Extraer data de la respuesta de Strapi
-  const rawData = response.data || [];
-  clientes = rawData.map((item: any) => ({
-    id: item.id,
-    documentId: item.documentId,
-    nombre: item.nombre,
-    apellido: item.apellido,
-    telefono: item.telefono,
-    email: item.email,
-    rut: item.rut,
-    vehiculos: item.vehiculos || []
-  }));
+  // strapiGet ya aplana la respuesta, así que usamos los datos directamente
+  clientes = response.data || [];
 } catch (e) {
   console.error(e);
   error = 'Error al cargar clientes';
@@ -165,7 +155,7 @@ try {
                                                                 <span class="material-symbols-outlined text-gray-400">directions_car</span>
                                                             </div>
                                                             <div class="mt-2 text-xs text-gray-500">
-                                                                Año: <span x-text="vehiculo.anio"></span>
+                                                                Año: <span x-text="vehiculo.ano"></span>
                                                             </div>
                                                         </div>
                                                     </template>
