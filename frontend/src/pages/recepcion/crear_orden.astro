@@ -62,11 +62,10 @@ if (Astro.request.method === 'POST') {
     }
 
     const result = await strapiPost('/api/orden-de-trabajos', {
-      cliente: parseInt(clienteId as string, 10),
       vehiculo: parseInt(vehiculoId as string, 10),
-      fecha_entrada: fechaEntrada,
+      fecha_ingreso: fechaEntrada,
       descripcion: descripcion,
-      estado: 'Pendiente'
+      estado: 'ingresado'
     });
 
     return Astro.redirect(`/recepcion/dash_recep?message=${encodeURIComponent('Orden creada exitosamente.')}&type=success`);
