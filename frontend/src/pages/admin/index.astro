@@ -8,7 +8,7 @@ import Layout from '../../layouts/Layout.astro';
     
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       <!-- Clientes -->
-      <a href="/admin/clientes" class="bg-white rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow">
+      <a href="/admin/clientes" class="card p-6 flex flex-col h-full">
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-2xl font-bold text-gray-800">Clientes</h2>
           <svg class="w-12 h-12 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -19,7 +19,7 @@ import Layout from '../../layouts/Layout.astro';
       </a>
 
       <!-- Vehículos -->
-      <a href="/admin/vehiculos" class="bg-white rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow">
+      <a href="/admin/vehiculos" class="card p-6 flex flex-col h-full">
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-2xl font-bold text-gray-800">Vehículos</h2>
           <svg class="w-12 h-12 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -30,7 +30,7 @@ import Layout from '../../layouts/Layout.astro';
       </a>
 
       <!-- Mecánicos -->
-      <a href="/admin/mecanicos" class="bg-white rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow">
+      <a href="/admin/mecanicos" class="card p-6 flex flex-col h-full">
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-2xl font-bold text-gray-800">Mecánicos</h2>
           <svg class="w-12 h-12 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -41,7 +41,7 @@ import Layout from '../../layouts/Layout.astro';
       </a>
 
       <!-- Repuestos -->
-      <a href="/admin/repuestos" class="bg-white rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow">
+      <a href="/admin/repuestos" class="card p-6 flex flex-col h-full">
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-2xl font-bold text-gray-800">Repuestos</h2>
           <svg class="w-12 h-12 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -52,7 +52,7 @@ import Layout from '../../layouts/Layout.astro';
       </a>
 
       <!-- Zonas -->
-      <a href="/admin/zonas" class="bg-white rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow">
+      <a href="/admin/zonas" class="card p-6 flex flex-col h-full">
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-2xl font-bold text-gray-800">Zonas</h2>
           <svg class="w-12 h-12 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -63,7 +63,7 @@ import Layout from '../../layouts/Layout.astro';
       </a>
 
       <!-- Órdenes de Trabajo -->
-      <a href="/admin/ordenes" class="bg-white rounded-lg shadow-lg p-6 hover:shadow-xl transition-shadow">
+      <a href="/admin/ordenes" class="card p-6 flex flex-col h-full">
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-2xl font-bold text-gray-800">Órdenes</h2>
           <svg class="w-12 h-12 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -78,16 +78,16 @@ import Layout from '../../layouts/Layout.astro';
     <div class="mt-12 bg-gray-50 rounded-lg p-6">
       <h2 class="text-2xl font-bold mb-4">Acceso Rápido</h2>
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <a href="/admin/ordenes/crear" class="bg-blue-500 hover:bg-blue-600 text-white text-center py-3 px-4 rounded-lg font-medium">
+        <a href="/admin/ordenes/crear" class="btn-primary text-center">
           + Nueva Orden
         </a>
-        <a href="/admin/clientes/crear" class="bg-green-500 hover:bg-green-600 text-white text-center py-3 px-4 rounded-lg font-medium">
+        <a href="/admin/clientes/crear" class="btn-primary text-center bg-green-600 hover:bg-green-700">
           + Nuevo Cliente
         </a>
-        <a href="/admin/vehiculos/crear" class="bg-purple-500 hover:bg-purple-600 text-white text-center py-3 px-4 rounded-lg font-medium">
+        <a href="/admin/vehiculos/crear" class="btn-primary text-center bg-purple-600 hover:bg-purple-700">
           + Nuevo Vehículo
         </a>
-        <a href="/admin/repuestos/crear" class="bg-orange-500 hover:bg-orange-600 text-white text-center py-3 px-4 rounded-lg font-medium">
+        <a href="/admin/repuestos/crear" class="btn-primary text-center bg-orange-600 hover:bg-orange-700">
           + Nuevo Repuesto
         </a>
       </div>

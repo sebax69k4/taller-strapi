@@ -1,7 +1,10 @@
 ---
 export const prerender = false;
 
-import '../../styles/global.css';
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import Card from '../../components/ui/Card.astro';
+import Button from '../../components/ui/Button.astro';
+import Input from '../../components/ui/Input.astro';
 import { strapiPost, strapiPut, getStrapiItem } from '../../lib/strapi';
 
 const userRole = Astro.cookies.get('user_role')?.value;
@@ -65,114 +68,89 @@ if (Astro.request.method === 'POST') {
   }
 }
 ---
-<!DOCTYPE html>
-<html class="light" lang="es">
-<head>
-    <meta charset="utf-8"/>
-    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-    <title>{isEditMode ? 'Editar' : 'Registrar Nuevo'} Cliente</title>
-    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
-    <style>
-        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
-        [x-cloak] { display: none !important; }
-    </style>
-    <script src="//unpkg.com/alpinejs" defer></script>
-</head>
-<body class="font-display bg-background-light dark:bg-background-dark">
-<div class="relative flex min-h-screen w-full">
-<!-- SideNavBar -->
-<aside class="flex w-64 flex-col gap-4 p-4 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800">
-    <div class="flex gap-3 items-center">
-        <div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://cdn.usegalileo.ai/stability/a4b1f6ac-1498-420f-bb19-91ee46e9ce70.png");'></div>
-        <div class="flex flex-col">
-            <h1 class="text-gray-900 dark:text-white text-base font-medium">Taller Veloz</h1>
-            <p class="text-gray-500 dark:text-gray-400 text-sm">Panel Recepción</p>
+
+<DashboardLayout title={isEditMode ? 'Editar Cliente' : 'Registrar Nuevo Cliente'} role="recepcionista" currentPath={Astro.url.pathname}>
+    <div class="w-full max-w-2xl mx-auto" x-data={`{ message: ${JSON.stringify(message || '')}, messageType: ${JSON.stringify(messageType || '')} }`}>
+        <div class="flex flex-col gap-2 mb-6">
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">{isEditMode ? 'Editar' : 'Registrar Nuevo'} Cliente</h1>
+            <p class="text-gray-500 dark:text-gray-400">{isEditMode ? 'Modifique los datos del cliente.' : 'Complete los siguientes campos para añadir un nuevo cliente al sistema.'}</p>
         </div>
-    </div>
-    <nav class="flex flex-col gap-2 mt-4">
-        <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/recepcion/dash_recep">
-            <span class="material-symbols-outlined">dashboard</span>
-            <p class="text-sm font-medium">Dashboard</p>
-        </a>
-        <a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/10 text-primary" href="/recepcion/crear_cliente">
-            <span class="material-symbols-outlined text-primary">person_add</span>
-            <p class="text-sm font-medium">Crear Cliente</p>
-        </a>
-        <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/recepcion/crear_vehiculo">
-            <span class="material-symbols-outlined">directions_car</span>
-            <p class="text-sm font-medium">Crear Vehículo</p>
-        </a>
-        <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/recepcion/crear_orden">
-            <span class="material-symbols-outlined">post_add</span>
-            <p class="text-sm font-medium">Crear Orden</p>
-        </a>
-        <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/recepcion/list_c_y_v">
-            <span class="material-symbols-outlined">group</span>
-            <p class="text-sm font-medium">Listar C y V</p>
-        </a>
-    </nav>
-    <div class="mt-auto flex flex-col gap-2">
-        <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/logout">
-            <span class="material-symbols-outlined">logout</span>
-            <p class="text-sm font-medium">Cerrar Sesión</p>
-        </a>
-    </div>
-</aside>
-
-<!-- Main Content -->
-<main class="flex-1 p-8">
-    <div class="w-full max-w-2xl mx-auto">
-        <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm" x-data="{ message: '{{ message }}', messageType: '{{ messageType }}' }">
-            <div class="p-6 sm:p-8">
-                <div class="flex flex-col gap-2">
-                    <h1 class="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-slate-50">{isEditMode ? 'Editar' : 'Registrar Nuevo'} Cliente</h1>
-                    <p class="text-sm text-slate-500 dark:text-slate-400">{isEditMode ? 'Modifique los datos del cliente.' : 'Complete los siguientes campos para añadir un nuevo cliente al sistema.'}</p>
-                </div>
-                
-                <template x-if="message">
-                    <div x-show="message" x-transition class="p-4 my-6 rounded-lg text-sm" :class="{ 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300': messageType === 'success', 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300': messageType === 'error' }" role="alert">
-                        <span x-text="message"></span>
-                    </div>
-                </template>
-
-                <form method="POST" class="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2">
-                    {isEditMode && <input type="hidden" name="id" value={clientId} />}
-                    <div class="flex flex-col sm:col-span-1">
-                        <label class="text-sm font-medium text-slate-800 dark:text-slate-200 pb-2" for="nombre">Nombre</label>
-                        <input name="nombre" class="form-input w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-primary dark:text-slate-200" id="nombre" placeholder="ej: Juan" type="text" required value={cliente?.nombre || ''}/>
-                    </div>
-                    <div class="flex flex-col sm:col-span-1">
-                        <label class="text-sm font-medium text-slate-800 dark:text-slate-200 pb-2" for="apellido">Apellido</label>
-                        <input name="apellido" class="form-input w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-primary dark:text-slate-200" id="apellido" placeholder="ej: Pérez" type="text" required value={cliente?.apellido || ''}/>
-                    </div>
-                    <div class="flex flex-col sm:col-span-2">
-                        <label class="text-sm font-medium text-slate-800 dark:text-slate-200 pb-2" for="rut">RUT</label>
-                        <input name="rut" class="form-input w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-primary dark:text-slate-200" id="rut" placeholder="ej: 12.345.678-9" type="text" required value={cliente?.rut || ''}/>
-                    </div>
-                    <div class="flex flex-col sm:col-span-2">
-                        <label class="text-sm font-medium text-slate-800 dark:text-slate-200 pb-2" for="email">Email</label>
-                        <input name="email" class="form-input w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-primary dark:text-slate-200" id="email" placeholder="ej: juan.perez@email.com" type="email" required value={cliente?.email || ''}/>
-                    </div>
-                    <div class="flex flex-col sm:col-span-2">
-                        <label class="text-sm font-medium text-slate-800 dark:text-slate-200 pb-2" for="telefono">Teléfono</label>
-                        <input name="telefono" class="form-input w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-primary dark:text-slate-200" id="telefono" placeholder="ej: +56912345678" type="tel" required value={cliente?.telefono || ''}/>
-                    </div>
-                    <div class="sm:col-span-2 flex justify-end gap-4 pt-4">
-                         <a href="/recepcion/list_c_y_v" class="inline-flex items-center justify-center rounded-lg bg-white dark:bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 ring-1 ring-inset ring-slate-300 dark:ring-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                            Cancelar
-                        </a>
-                        <button class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90" type="submit">
-                            <span class="material-symbols-outlined mr-2 text-base">save</span>
-                            {isEditMode ? 'Actualizar Cliente' : 'Guardar Cliente'}
-                        </button>
-                    </div>
-                </form>
+        
+        <template x-if="message">
+            <div x-show="message" x-transition class="p-4 mb-6 rounded-lg text-sm flex items-center gap-2" :class="{ 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300': messageType === 'success', 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300': messageType === 'error' }" role="alert">
+                <span class="material-symbols-outlined text-lg" x-text="messageType === 'success' ? 'check_circle' : 'error'"></span>
+                <span x-text="message"></span>
             </div>
-        </div>
+        </template>
+
+        <Card>
+            <form method="POST" class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                {isEditMode && <input type="hidden" name="id" value={clientId} />}
+                
+                <Input 
+                    name="nombre" 
+                    id="nombre" 
+                    label="Nombre" 
+                    placeholder="ej: Juan" 
+                    required 
+                    value={cliente?.nombre || ''}
+                    class="sm:col-span-1"
+                />
+                
+                <Input 
+                    name="apellido" 
+                    id="apellido" 
+                    label="Apellido" 
+                    placeholder="ej: Pérez" 
+                    required 
+                    value={cliente?.apellido || ''}
+                    class="sm:col-span-1"
+                />
+                
+                <Input 
+                    name="rut" 
+                    id="rut" 
+                    label="RUT" 
+                    placeholder="ej: 12.345.678-9" 
+                    required 
+                    value={cliente?.rut || ''}
+                    class="sm:col-span-2"
+                />
+                
+                <Input 
+                    name="email" 
+                    id="email" 
+                    label="Email" 
+                    type="email"
+                    placeholder="ej: juan.perez@email.com" 
+                    required 
+                    value={cliente?.email || ''}
+                    class="sm:col-span-2"
+                />
+                
+                <Input 
+                    name="telefono" 
+                    id="telefono" 
+                    label="Teléfono" 
+                    type="tel"
+                    placeholder="ej: +56912345678" 
+                    required 
+                    value={cliente?.telefono || ''}
+                    class="sm:col-span-2"
+                />
+
+                <div class="sm:col-span-2 flex justify-end gap-3 pt-4 border-t border-gray-100 dark:border-gray-800 mt-2">
+                     <a href="/recepcion/list_c_y_v">
+                        <Button type="button" variant="secondary">
+                            Cancelar
+                        </Button>
+                    </a>
+                    <Button type="submit" icon="save">
+                        {isEditMode ? 'Actualizar Cliente' : 'Guardar Cliente'}
+                    </Button>
+                </div>
+            </form>
+        </Card>
     </div>
-</main>
-</div>
-</body>
-</html>
+    <script src="//unpkg.com/alpinejs" defer></script>
+</DashboardLayout>

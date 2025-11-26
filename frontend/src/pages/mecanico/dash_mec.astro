@@ -1,12 +1,15 @@
 ---
 export const prerender = false;
-import { strapiGet, strapiPost, strapiPut } from '../../lib/strapi';
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import Card from '../../components/ui/Card.astro';
+import Button from '../../components/ui/Button.astro';
 import '../../styles/global.css';
+import { strapiGet } from '../../lib/strapi';
 
 const userRole = Astro.cookies.get('user_role')?.value;
-const mecenicoId = Astro.cookies.get('mecanico_id')?.value;
+const mecanicoId = Astro.cookies.get('mecanico_id')?.value;
 
-if (!userRole || (userRole === 'mecanico' && !mecenicoId)) {
+if (!userRole || (userRole === 'mecanico' && !mecanicoId)) {
   return Astro.redirect('/login');
 }
 
@@ -28,12 +31,12 @@ let mechanicName = "Mecánico";
 let error = '';
 
 // Status mapping for colors and text
-const statusConfig: { [key: string]: { color: string; label: string } } = {
-  'Pendiente': { color: '#007BFF', label: 'Pendiente' },
-  'En Progreso': { color: '#FFC107', label: 'En Progreso' },
-  'Finalizada': { color: '#28A745', label: 'Finalizada' },
-  'Bloqueada': { color: '#DC3545', label: 'Bloqueada' },
-  'Entregado': { color: '#6c757d', label: 'Entregado' },
+const statusConfig: { [key: string]: { color: string; label: string; bg: string } } = {
+  'Pendiente': { color: 'text-blue-700', bg: 'bg-blue-50', label: 'Pendiente' },
+  'En Progreso': { color: 'text-yellow-700', bg: 'bg-yellow-50', label: 'En Progreso' },
+  'Finalizada': { color: 'text-green-700', bg: 'bg-green-50', label: 'Finalizada' },
+  'Bloqueada': { color: 'text-red-700', bg: 'bg-red-50', label: 'Bloqueada' },
+  'Entregado': { color: 'text-gray-700', bg: 'bg-gray-50', label: 'Entregado' },
 };
 
 try {
@@ -41,7 +44,7 @@ try {
   mechanicName = userName || 'Mecánico';
 
   // Fetch work orders assigned to the logged-in mechanic
-  const ordersRes = await strapiGet(`/api/orden-de-trabajos?filters[mecanico][id][$eq]=${mecenicoId}&populate=vehiculo&sort=createdAt:desc`);
+  const ordersRes = await strapiGet(`/api/orden-de-trabajos?filters[mecanico][id][$eq]=${mecanicoId}&populate=vehiculo&sort=createdAt:desc`);
   assignedOrders = ordersRes.data || [];
 
 } catch (e: any) {
@@ -56,133 +59,93 @@ if (statusFilter && statusFilter !== 'Todas') {
 } else {
   filteredOrders = assignedOrders;
 }
-
 ---
-<!DOCTYPE html>
 
-<html class="light" lang="es"><head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Dashboard Mecánico - Taller Veloz</title>
-<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<link href="https://fonts.googleapis.com" rel="preconnect"/>
-<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&amp;display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
-<script id="tailwind-config">
-    tailwind.config = {
-      darkMode: "class",
-      theme: {
-        extend: {
-          colors: {
-            "primary": "#135bec",
-            "background-light": "#f6f6f8",
-            "background-dark": "#101622",
-          },
-          fontFamily: {
-            "display": ["Inter", "sans-serif"]
-          },
-          borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
-        },
-      },
-    }
-  </script>
-</head>
-<body class="font-display bg-background-light dark:bg-background-dark">
-<div class="relative flex min-h-screen w-full">
-<!-- SideNavBar -->
-<aside class="flex w-64 flex-col bg-white dark:bg-gray-900 p-4 border-r border-gray-200 dark:border-gray-800">
-<div class="flex flex-col gap-4">
-<div class="flex items-center gap-3">
-<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://cdn.usegalileo.ai/stability/a4b1f6ac-1498-420f-bb19-91ee46e9ce70.png");'></div>
-<div class="flex flex-col">
-<h1 class="text-gray-900 dark:text-white text-base font-medium leading-normal">Taller Veloz</h1>
-<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Panel Mecánico</p>
-</div>
-</div>
-<nav class="flex flex-col gap-2 mt-4">
-<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/10 text-primary" href="/mecanico/dash_mec">
-<span class="material-symbols-outlined text-primary">dashboard</span>
-<p class="text-sm font-medium leading-normal">Mis Órdenes</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/mecanico/detalle_orden_trabajo">
-<span class="material-symbols-outlined">build</span>
-<p class="text-sm font-medium leading-normal">Detalle Orden</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/mecanico/bitacora_repuestos">
-<span class="material-symbols-outlined">inventory</span>
-<p class="text-sm font-medium leading-normal">Bitácora</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/mecanico/desc_stock">
-<span class="material-symbols-outlined">check_circle</span>
-<p class="text-sm font-medium leading-normal">Descontar Stock</p>
-</a>
-</nav>
-</div>
-<div class="mt-auto flex flex-col gap-2">
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/settings">
-<span class="material-symbols-outlined">settings</span>
-<p class="text-sm font-medium leading-normal">Configuración</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/logout">
-<span class="material-symbols-outlined">logout</span>
-<p class="text-sm font-medium leading-normal">Cerrar Sesión</p>
-</a>
-</div>
-</aside>
-<!-- Main Content -->
-<main class="flex-1 p-6 lg:p-8">
-<div class="flex flex-wrap justify-between items-center gap-4 px-4 sm:px-10">
-<div class="flex min-w-72 flex-col gap-2">
-<p class="text-3xl lg:text-4xl font-black leading-tight tracking-[-0.033em] text-gray-900 dark:text-white">Mis Órdenes de Trabajo</p>
-<p class="text-base font-normal leading-normal text-gray-500 dark:text-gray-400">Hola {mechanicName}, aquí tienes un resumen de tus órdenes asignadas.</p>
-</div>
-</div>
+<DashboardLayout title="Dashboard Mecánico" role="mecanico" currentPath={Astro.url.pathname}>
+    <div class="flex flex-col gap-1">
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Mis Órdenes de Trabajo</h1>
+        <p class="text-gray-500 dark:text-gray-400">Hola {mechanicName}, aquí tienes un resumen de tus órdenes asignadas.</p>
+    </div>
 
-{error && <p class="text-red-500 px-4 sm:px-10 mt-4">{error}</p>}
-
-<div class="flex gap-2 sm:gap-3 px-4 sm:px-10 overflow-x-auto py-4">
-    <a href="/mecanico/dash_mec?status=Todas" class={`flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-lg px-4 text-sm font-medium leading-normal ${!statusFilter || statusFilter === 'Todas' ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-900 dark:text-gray-200'}`}>Todas</a>
-    {Object.keys(statusConfig).filter(s => s !== 'Entregado').map(status => (
-        <a href={`/mecanico/dash_mec?status=${status}`} class={`flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-lg px-4 text-sm font-medium leading-normal ${statusFilter === status ? 'bg-primary text-white' : 'bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 text-gray-900 dark:text-gray-200'}`}>{status}</a>
-    ))}
-</div>
-
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 px-4 sm:px-10">
-    {filteredOrders.length > 0 ? (
-        filteredOrders.map((order: Order) => {
-            const statusInfo = statusConfig[order.estado] || { color: '#6c757d', label: order.estado };
-            const vehicleName = order.vehiculo ? `${order.vehiculo.marca} ${order.vehiculo.modelo}` : 'Vehículo no especificado';
-            const imageUrl = order.vehiculo?.imagen_url || 'https://cdn.usegalileo.ai/stability/64938e55-2324-4692-a43a-99badb3a964a.png';
-
-            return (
-                <div class="flex flex-col items-stretch justify-start rounded-xl shadow-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    <div class="w-full bg-center bg-no-repeat aspect-[16/9] bg-cover" style={`background-image: url("${imageUrl}");`}></div>
-                    <div class="flex w-full grow flex-col items-stretch justify-center gap-3 p-4">
-                        <div class="flex items-center gap-2">
-                            <span class="inline-block h-2 w-2 rounded-full" style={`background-color: ${statusInfo.color}`}></span>
-                            <p class="text-sm font-medium leading-normal" style={`color: ${statusInfo.color}`}>{statusInfo.label}</p>
-                        </div>
-                        <p class="text-lg font-bold leading-tight tracking-[-0.015em] text-gray-900 dark:text-white">OT-{order.id} - {vehicleName}</p>
-                        <div class="flex flex-col gap-1">
-                            <p class="text-base font-normal leading-normal text-gray-500 dark:text-gray-400">{order.descripcion || 'Sin descripción.'}</p>
-                            <p class="text-sm font-normal leading-normal text-gray-400 dark:text-gray-500">
-                                Asignada: {new Date(order.createdAt).toLocaleDateString()}
-                            </p>
-                        </div>
-                        <a href={`/mecanico/detalle_orden_trabajo?id=${order.id}`} class="flex mt-2 w-full max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-primary text-white text-sm font-medium leading-normal hover:bg-primary/90">
-                            <span class="truncate">Ver Detalles</span>
-                        </a>
-                    </div>
-                </div>
-            )
-        })
-    ) : (
-        <div class="col-span-full text-center py-10">
-            <p class="text-gray-500 dark:text-gray-400">No tienes órdenes de trabajo asignadas con este estado.</p>
+    {error && (
+        <div class="p-4 text-sm text-red-700 bg-red-50 rounded-lg border border-red-100 flex items-center gap-2" role="alert">
+            <span class="material-symbols-outlined text-lg">error</span>
+            <span>{error}</span>
         </div>
     )}
-</div>
-</main>
-</div>
-</body></html>
+
+    <div class="flex gap-2 overflow-x-auto pb-2">
+        <a href="/mecanico/dash_mec?status=Todas" 
+           class:list={[
+               "flex items-center justify-center px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap",
+               !statusFilter || statusFilter === 'Todas' 
+                   ? "bg-primary-600 text-white shadow-sm" 
+                   : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
+           ]}>
+           Todas
+        </a>
+        {Object.keys(statusConfig).filter(s => s !== 'Entregado').map(status => (
+            <a href={`/mecanico/dash_mec?status=${status}`} 
+               class:list={[
+                   "flex items-center justify-center px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap",
+                   statusFilter === status 
+                       ? "bg-primary-600 text-white shadow-sm" 
+                       : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
+               ]}>
+               {status}
+            </a>
+        ))}
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {filteredOrders.length > 0 ? (
+            filteredOrders.map((order: Order) => {
+                const statusInfo = statusConfig[order.estado] || { color: 'text-gray-700', bg: 'bg-gray-50', label: order.estado };
+                const vehicleName = order.vehiculo ? `${order.vehiculo.marca} ${order.vehiculo.modelo}` : 'Vehículo no especificado';
+                const imageUrl = order.vehiculo?.imagen_url || 'https://cdn.usegalileo.ai/stability/64938e55-2324-4692-a43a-99badb3a964a.png';
+
+                return (
+                    <Card noPadding class="flex flex-col h-full group hover:shadow-lg transition-all duration-300">
+                        <div class="relative h-48 overflow-hidden">
+                            <div class="absolute inset-0 bg-center bg-cover transition-transform duration-500 group-hover:scale-105" style={`background-image: url("${imageUrl}");`}></div>
+                            <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+                            <div class="absolute bottom-4 left-4 right-4">
+                                <span class:list={["inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-white/90 backdrop-blur-sm shadow-sm", statusInfo.color]}>
+                                    {statusInfo.label}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="p-5 flex flex-col flex-1 gap-4">
+                            <div>
+                                <h3 class="text-lg font-bold text-gray-900 dark:text-white leading-tight">OT-{order.id} - {vehicleName}</h3>
+                                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-1">
+                                    <span class="material-symbols-outlined text-sm">calendar_today</span>
+                                    {new Date(order.createdAt).toLocaleDateString()}
+                                </p>
+                            </div>
+                            
+                            <p class="text-sm text-gray-600 dark:text-gray-300 line-clamp-2 flex-1">
+                                {order.descripcion || 'Sin descripción.'}
+                            </p>
+                            
+                            <a href={`/mecanico/detalle_orden_trabajo?id=${order.id}`} class="mt-auto">
+                                <Button variant="primary" block>
+                                    Ver Detalles
+                                </Button>
+                            </a>
+                        </div>
+                    </Card>
+                )
+            })
+        ) : (
+            <div class="col-span-full py-12 flex flex-col items-center justify-center text-center">
+                <div class="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
+                    <span class="material-symbols-outlined text-3xl text-gray-400">assignment_late</span>
+                </div>
+                <h3 class="text-lg font-medium text-gray-900 dark:text-white">No hay órdenes</h3>
+                <p class="text-gray-500 dark:text-gray-400 max-w-sm mt-1">No tienes órdenes de trabajo asignadas con este filtro.</p>
+                <a href="/mecanico/dash_mec?status=Todas" class="mt-4 text-primary-600 font-medium hover:underline">Ver todas las órdenes</a>
+            </div>
+        )}
+    </div>
+</DashboardLayout>

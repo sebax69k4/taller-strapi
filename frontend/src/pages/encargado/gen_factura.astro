@@ -2,13 +2,7 @@
 export const prerender = false;
 import { strapiGet } from '../../lib/strapi';
 import '../../styles/global.css';
-
-interface InvoiceItem {
-  description: string;
-  quantity: number;
-  unitPrice: number;
-  total: number;
-}
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
 
 const userRole = Astro.cookies.get('user_role')?.value;
 if (!userRole) {
@@ -16,340 +10,113 @@ if (!userRole) {
 }
 
 let completedOrders = [];
-let selectedOrder = null;
-let invoiceData = {
-  number: `FACT-${new Date().getFullYear()}-${Math.floor(Math.random() * 10000)}`,
-  date: new Date().toISOString().split('T')[0],
-  clientName: '',
-  clientAddress: '',
-  clientPhone: '',
-  vehicle: '',
-  items: [] as InvoiceItem[],
-  subtotal: 0,
-  tax: 0,
-  total: 0,
-  notes: 'Pago requerido a la recepción de la factura. Gracias por su confianza.'
-};
-
 try {
-  // Fetch completed orders (Entregado)
-  const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=Entregado&populate[0]=vehiculo&populate[1]=cliente');
+  const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=Finalizado&populate[0]=cliente&populate[1]=vehiculo&sort[0]=updatedAt:desc');
   completedOrders = data.data || [];
-
-  // Check for selected order
-  const url = new URL(Astro.request.url);
-  const selectedId = url.searchParams.get('id');
-
-  if (selectedId) {
-    const orderData = await strapiGet(`/api/orden-de-trabajos/${selectedId}?populate[0]=vehiculo&populate[1]=cliente&populate[2]=repuestos&populate[3]=presupuesto`);
-    selectedOrder = orderData.data[0];
-
-    if (selectedOrder) {
-      const client = selectedOrder.vehiculo?.cliente;
-      const vehicle = selectedOrder.vehiculo;
-      const repuestos = selectedOrder.repuestos || [];
-      const presupuesto = selectedOrder.presupuesto;
-
-      invoiceData.clientName = client?.nombre || 'Cliente Desconocido';
-      invoiceData.clientAddress = client?.direccion || 'Dirección no disponible'; // Assuming address exists or using placeholder
-      invoiceData.clientPhone = client?.telefono || 'Sin teléfono';
-      invoiceData.vehicle = `${vehicle?.marca} ${vehicle?.modelo} (${vehicle?.ano}) - ${vehicle?.patente}`;
-
-      // Build items from repuestos
-      let items = repuestos.map((r: any) => ({
-        description: r.nombre,
-        quantity: 1, // Assuming 1 for now as relation is many-to-many without quantity field in pivot
-        unitPrice: r.precio || 0,
-        total: r.precio || 0
-      }));
-
-      // Add labor/service item if budget exists
-      if (presupuesto && presupuesto.monto_total) {
-        const partsTotal = items.reduce((sum: number, item: any) => sum + item.total, 0);
-        const labor = parseFloat(presupuesto.monto_total) - partsTotal;
-        if (labor > 0) {
-          items.push({
-            description: 'Mano de Obra / Servicios',
-            quantity: 1,
-            unitPrice: labor,
-            total: labor
-          });
-        }
-      } else if (items.length === 0) {
-          // Fallback if no parts and no budget
-          items.push({
-              description: 'Servicio de Taller (Detalles en Orden)',
-              quantity: 1,
-              unitPrice: 0,
-              total: 0
-          });
-      }
-
-      invoiceData.items = items;
-      invoiceData.subtotal = items.reduce((sum: number, item: any) => sum + item.total, 0);
-      invoiceData.tax = invoiceData.subtotal * 0.21; // 21% IVA
-      invoiceData.total = invoiceData.subtotal + invoiceData.tax;
-    }
-  }
-
-} catch (error) {
-  console.error('Error fetching data:', error);
+} catch (e) {
+  console.error('Error fetching orders:', e);
 }
-
-// Format currency
-const formatCurrency = (amount: number) => {
-  return new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(amount);
-};
 ---
-<!DOCTYPE html>
-<html class="light" lang="es">
-<head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Generar Factura - Taller Veloz</title>
-<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<link href="https://fonts.googleapis.com" rel="preconnect"/>
-<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
-<style>
-    .material-symbols-outlined {
-      font-variation-settings:
-      'FILL' 0,
-      'wght' 400,
-      'GRAD' 0,
-      'opsz' 24
-    }
-  </style>
-<script id="tailwind-config">
-    tailwind.config = {
-      darkMode: "class",
-      theme: {
-        extend: {
-          colors: {
-            "primary": "#135bec",
-            "background-light": "#f6f6f8",
-            "background-dark": "#101622",
-          },
-          fontFamily: {
-            "display": ["Inter", "sans-serif"]
-          },
-          borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
-        },
-      },
-    }
-  </script>
-</head>
-<body class="font-display bg-background-light dark:bg-background-dark">
-<div class="relative flex min-h-screen w-full">
-<!-- SideNavBar -->
-<aside class="flex w-64 flex-col bg-white dark:bg-gray-900 p-4 border-r border-gray-200 dark:border-gray-800">
-<div class="flex flex-col gap-4">
-<div class="flex items-center gap-3">
-<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://cdn.usegalileo.ai/stability/a4b1f6ac-1498-420f-bb19-91ee46e9ce70.png");'></div>
-<div class="flex flex-col">
-<h1 class="text-gray-900 dark:text-white text-base font-medium leading-normal">Taller Veloz</h1>
-<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Gestión de Taller</p>
-</div>
-</div>
-<nav class="flex flex-col gap-2 mt-4">
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/dash_enc">
-<span class="material-symbols-outlined">dashboard</span>
-<p class="text-sm font-medium leading-normal">Dashboard</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/alert_stock">
-<span class="material-symbols-outlined">inventory_2</span>
-<p class="text-sm font-medium leading-normal">Alertas Stock</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/asig_orden">
-<span class="material-symbols-outlined">assignment_ind</span>
-<p class="text-sm font-medium leading-normal">Asignar Orden</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/disp_mec">
-<span class="material-symbols-outlined">calendar_view_week</span>
-<p class="text-sm font-medium leading-normal">Disponibilidad</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/trabajos_en_curso">
-<span class="material-symbols-outlined">construction</span>
-<p class="text-sm font-medium leading-normal">Trabajos en Curso</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/10 text-primary" href="/encargado/gen_factura">
-<span class="material-symbols-outlined text-primary">receipt_long</span>
-<p class="text-sm font-medium leading-normal">Generar Factura</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/marc_orden">
-<span class="material-symbols-outlined">flag</span>
-<p class="text-sm font-medium leading-normal">Marcar Orden</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/disp_mec_zonas">
-<span class="material-symbols-outlined">view_quilt</span>
-<p class="text-sm font-medium leading-normal">Disp. Mec. Zonas</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/asignar_orden_zona">
-<span class="material-symbols-outlined">add_road</span>
-<p class="text-sm font-medium leading-normal">Asignar Orden Zona</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/detalles_de_orden">
-<span class="material-symbols-outlined">info</span>
-<p class="text-sm font-medium leading-normal">Detalles de Orden</p>
-</a>
-</nav>
-</div>
-<div class="mt-auto flex flex-col gap-2">
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/settings">
-<span class="material-symbols-outlined">settings</span>
-<p class="text-sm font-medium leading-normal">Configuración</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/logout">
-<span class="material-symbols-outlined">logout</span>
-<p class="text-sm font-medium leading-normal">Cerrar Sesión</p>
-</a>
-</div>
-</aside>
-<!-- Main Content -->
-<main class="flex-1 p-6 lg:p-8">
-<div class="max-w-7xl mx-auto">
-<!-- PageHeading and Actions -->
-<div class="flex flex-wrap items-center justify-between gap-4 mb-8">
-<p class="text-gray-900 dark:text-white text-4xl font-black leading-tight tracking-[-0.033em]">Crear Nueva Factura</p>
-<div class="flex items-center gap-2">
-<button class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700" onclick="window.location.href='/encargado/dash_enc'">Cancelar</button>
-<button class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary/90 flex items-center gap-2" onclick="window.print()">
-<span class="material-symbols-outlined text-base">print</span>
-              Imprimir / Guardar PDF
-            </button>
-</div>
-</div>
-<div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
-<!-- Left Column: Form -->
-<div class="lg:col-span-3 flex flex-col gap-6 print:hidden">
-<!-- SearchBar -->
-<div class="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800">
-<p class="text-gray-900 dark:text-white text-base font-medium leading-normal pb-3">1. Seleccionar Orden de Trabajo Completada</p>
-<div class="flex flex-col gap-2 max-h-60 overflow-y-auto">
-    {completedOrders.length === 0 ? (
-        <p class="text-gray-500 text-sm">No hay órdenes completadas pendientes de facturar.</p>
-    ) : (
-        completedOrders.map((order: any) => (
-            <a href={`?id=${order.documentId}`} class={`flex items-center justify-between p-3 rounded-lg border ${selectedOrder?.documentId === order.documentId ? 'border-primary bg-primary/5' : 'border-gray-200 hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-800'}`}>
-                <div>
-                    <p class="font-medium text-gray-900 dark:text-white">Orden #{order.documentId.slice(-6)}</p>
-                    <p class="text-sm text-gray-500">{order.vehiculo?.cliente?.nombre} - {order.vehiculo?.marca} {order.vehiculo?.modelo}</p>
+
+<DashboardLayout title="Generar Factura" role="encargado" currentPath="/encargado/gen_factura">
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-6 print:hidden">Generar Factura</h1>
+        
+        <div class="grid gap-6 print:hidden">
+            {completedOrders.map(order => (
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                    <div>
+                        <h3 class="font-bold text-lg text-gray-900 dark:text-white">Orden #{order.documentId.slice(0, 6)}</h3>
+                        <p class="text-gray-600 dark:text-gray-400">{order.cliente.nombre} {order.cliente.apellido} - {order.vehiculo.marca}</p>
+                    </div>
+                    <button onclick={`window.printInvoice('${order.documentId}')`} class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors">
+                        Generar PDF
+                    </button>
                 </div>
-                <span class="material-symbols-outlined text-gray-400">chevron_right</span>
-            </a>
-        ))
-    )}
-</div>
-</div>
+            ))}
+            {completedOrders.length === 0 && (
+                <p class="text-gray-500 dark:text-gray-400 text-center py-12">No hay órdenes finalizadas pendientes de facturación.</p>
+            )}
+        </div>
 
-{selectedOrder && (
-    <>
-    <!-- Invoice Details -->
-    <div class="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800">
-    <h2 class="text-gray-900 dark:text-white text-[22px] font-bold leading-tight tracking-[-0.015em] pb-4">Detalles de la Factura</h2>
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-    <label class="flex flex-col">
-    <p class="text-gray-900 dark:text-white text-sm font-medium leading-normal pb-2">Número de Factura</p>
-    <input class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-gray-900 dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-gray-300 dark:border-gray-700 bg-background-light dark:bg-background-dark h-12 placeholder:text-gray-500 dark:placeholder:text-gray-400 p-3 text-base font-normal leading-normal" value={invoiceData.number} readonly/>
-    </label>
-    <label class="flex flex-col">
-    <p class="text-gray-900 dark:text-white text-sm font-medium leading-normal pb-2">Fecha de Emisión</p>
-    <input class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-gray-900 dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border border-gray-300 dark:border-gray-700 bg-background-light dark:bg-background-dark h-12 placeholder:text-gray-500 dark:placeholder:text-gray-400 p-3 text-base font-normal leading-normal" type="date" value={invoiceData.date} readonly/>
-    </label>
-    </div>
-    </div>
-    <!-- Client Details -->
-    <div class="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-800">
-    <h2 class="text-gray-900 dark:text-white text-[22px] font-bold leading-tight tracking-[-0.015em] pb-4">Información del Cliente</h2>
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-gray-700 dark:text-gray-300">
-    <div>
-    <p class="font-semibold text-gray-900 dark:text-white">{invoiceData.clientName}</p>
-    <p>{invoiceData.clientAddress}</p>
-    <p>{invoiceData.clientPhone}</p>
-    </div>
-    <div>
-    <p class="font-semibold text-gray-900 dark:text-white">Vehículo</p>
-    <p>{invoiceData.vehicle}</p>
-    </div>
-    </div>
-    </div>
-    </>
-)}
-</div>
+        <!-- Invoice Template (Hidden by default, shown when printing) -->
+        <div id="invoice-template" class="hidden print:block bg-white p-8 text-black">
+            <div class="flex justify-between items-start mb-8">
+                <div>
+                    <h1 class="text-4xl font-bold text-gray-900">FACTURA</h1>
+                    <p class="text-gray-600 mt-2">Taller Veloz S.A.</p>
+                    <p class="text-gray-600">Av. Principal 123</p>
+                </div>
+                <div class="text-right">
+                    <p class="font-bold text-xl" id="inv-id">FACT-XXXX</p>
+                    <p class="text-gray-600" id="inv-date">Fecha: DD/MM/YYYY</p>
+                </div>
+            </div>
+            
+            <div class="border-t border-b border-gray-200 py-4 mb-8">
+                <div class="grid grid-cols-2 gap-8">
+                    <div>
+                        <h3 class="font-bold text-gray-900 mb-2">Cliente</h3>
+                        <p class="text-gray-600" id="inv-customer">Nombre Cliente</p>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-gray-900 mb-2">Vehículo</h3>
+                        <p class="text-gray-600" id="inv-vehicle">Marca Modelo</p>
+                    </div>
+                </div>
+            </div>
 
-<!-- Right Column: Live Preview -->
-<div class="lg:col-span-2 print:col-span-5 print:w-full">
-<div class="sticky top-8 bg-white dark:bg-gray-900 shadow-lg rounded-xl border border-gray-200 dark:border-gray-800 print:shadow-none print:border-0">
-<div class="p-6 border-b border-gray-200 dark:border-gray-800 print:hidden">
-<h3 class="text-lg font-semibold text-gray-900 dark:text-white">Previsualización de Factura</h3>
-</div>
-<div class="p-8 aspect-[210/297] text-sm text-gray-800 dark:text-gray-200 print:aspect-auto">
-<!-- Invoice Preview Content -->
-<div class="flex justify-between items-start mb-8">
-<div>
-<h1 class="text-xl font-bold text-gray-900 dark:text-white">Taller Veloz</h1>
-<p>Av. Principal 123</p>
-<p>Santiago, Chile</p>
-<p>RUT: 76.123.456-K</p>
-</div>
-<div class="text-right">
-<h2 class="text-2xl font-bold text-gray-900 dark:text-white">FACTURA</h2>
-<p class="text-gray-500 dark:text-gray-400">#{invoiceData.number}</p>
-<p>Fecha: {invoiceData.date}</p>
-</div>
-</div>
-<div class="mb-8">
-<h3 class="font-semibold text-gray-900 dark:text-white border-b pb-1 mb-2">Facturar a:</h3>
-<p>{invoiceData.clientName}</p>
-<p>{invoiceData.clientAddress}</p>
-<p>{invoiceData.clientPhone}</p>
-</div>
-<table class="w-full mb-8">
-<thead class="bg-gray-100 dark:bg-gray-800">
-<tr>
-<th class="text-left font-semibold p-2">Descripción</th>
-<th class="text-center font-semibold p-2">Cant.</th>
-<th class="text-right font-semibold p-2">P. Unit.</th>
-<th class="text-right font-semibold p-2">Total</th>
-</tr>
-</thead>
-<tbody>
-    {invoiceData.items.map((item: InvoiceItem) => (
-        <tr class="border-b dark:border-gray-800">
-        <td class="p-2">{item.description}</td>
-        <td class="text-center p-2">{item.quantity}</td>
-        <td class="text-right p-2">{formatCurrency(item.unitPrice)}</td>
-        <td class="text-right p-2">{formatCurrency(item.total)}</td>
-        </tr>
-    ))}
-</tbody>
-</table>
-<div class="flex justify-end">
-<div class="w-1/2">
-<div class="flex justify-between text-gray-700 dark:text-gray-300">
-<p>Subtotal</p>
-<p>{formatCurrency(invoiceData.subtotal)}</p>
-</div>
-<div class="flex justify-between text-gray-700 dark:text-gray-300">
-<p>IVA (21%)</p>
-<p>{formatCurrency(invoiceData.tax)}</p>
-</div>
-<div class="flex justify-between font-bold text-gray-900 dark:text-white mt-2 pt-2 border-t dark:border-gray-700">
-<p>Total a Pagar</p>
-<p>{formatCurrency(invoiceData.total)}</p>
-</div>
-</div>
-</div>
-<div class="mt-8 text-xs text-gray-500 dark:text-gray-400">
-<p class="font-semibold">Notas:</p>
-<p>{invoiceData.notes}</p>
-</div>
-</div>
-</div>
-</div>
-</div>
-</div>
-</main>
-</div>
-</body></html>
+            <table class="w-full mb-8">
+                <thead>
+                    <tr class="border-b-2 border-gray-900">
+                        <th class="text-left py-2">Descripción</th>
+                        <th class="text-right py-2">Precio</th>
+                    </tr>
+                </thead>
+                <tbody id="inv-items">
+                    <!-- Items injected via JS -->
+                </tbody>
+                <tfoot>
+                    <tr class="border-t-2 border-gray-900 font-bold text-xl">
+                        <td class="pt-4 text-right">Total:</td>
+                        <td class="pt-4 text-right" id="inv-total">$0</td>
+                    </tr>
+                </tfoot>
+            </table>
+            
+            <div class="text-center text-gray-500 text-sm mt-12">
+                <p>Gracias por su preferencia.</p>
+            </div>
+        </div>
+    </div>
+</DashboardLayout>
+
+<script define:vars={{ completedOrders }}>
+    window.printInvoice = (orderId) => {
+        const order = completedOrders.find(o => o.documentId === orderId);
+        if (!order) return;
+
+        // Populate invoice
+        document.getElementById('inv-id').textContent = `FACT-${order.documentId.slice(0, 6).toUpperCase()}`;
+        document.getElementById('inv-date').textContent = new Date().toLocaleDateString();
+        document.getElementById('inv-customer').textContent = `${order.cliente.nombre} ${order.cliente.apellido}`;
+        document.getElementById('inv-vehicle').textContent = `${order.vehiculo.marca} ${order.vehiculo.modelo}`;
+        
+        // Mock items
+        const items = [
+            { desc: 'Servicio de Mantenimiento', price: 150000 }
+        ];
+        
+        const tbody = document.getElementById('inv-items');
+        tbody.innerHTML = items.map(item => `
+            <tr class="border-b border-gray-200">
+                <td class="py-2">${item.desc}</td>
+                <td class="py-2 text-right">$${item.price.toLocaleString()}</td>
+            </tr>
+        `).join('');
+        
+        document.getElementById('inv-total').textContent = `$${items.reduce((acc, item) => acc + item.price, 0).toLocaleString()}`;
+
+        window.print();
+    };
+</script>

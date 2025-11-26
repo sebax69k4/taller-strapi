@@ -1,7 +1,9 @@
+
 ---
 export const prerender = false;
 import { strapiGet } from '../../lib/strapi';
 import '../../styles/global.css';
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
 
 const userRole = Astro.cookies.get('user_role')?.value;
 if (!userRole) {
@@ -17,7 +19,7 @@ if (!orderId) {
 
 try {
   const data = await strapiGet(`/api/orden-de-trabajos/${orderId}?populate[0]=cliente&populate[1]=vehiculo&populate[2]=mecanico&populate[3]=repuestos&populate[4]=bitacoras`);
-  order = data.data[0];
+  order = data.data;
 } catch (e) {
   console.error('Error fetching order:', e);
 }
@@ -60,285 +62,199 @@ const grandTotal = total + iva;
 
 --- 
 
-<!DOCTYPE html>
+<DashboardLayout title="Detalles de Orden" role="encargado" currentPath="/encargado/detalles_de_orden">
+    <div class="mx-auto max-w-6xl">
+        <!-- Header Bar -->
+        <header class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
+            <div>
+                <!-- Breadcrumbs -->
+                <div class="flex flex-wrap items-center gap-2">
+                    <a class="text-gray-500 dark:text-gray-400 text-base font-medium leading-normal hover:text-primary-600 dark:hover:text-primary-400" href="/encargado/trabajos_en_curso">Órdenes</a>
+                    <span class="text-gray-400 dark:text-gray-500 text-base font-medium leading-normal">/</span>
+                    <span class="text-gray-800 dark:text-gray-200 text-base font-medium leading-normal">Orden #{order.documentId.slice(0, 6)}</span>
+                </div>
+                <div class="flex items-center gap-3 mt-2">
+                    <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Orden de Trabajo #{order.documentId.slice(0, 6)}</h1>
+                    <!-- Chip -->
+                    <div class={`flex h-8 shrink-0 items-center justify-center gap-x-2 rounded-full px-3 ${getStatusColor(order.estado)}`}>
+                        <span class="w-2 h-2 rounded-full bg-current"></span>
+                        <p class="text-sm font-medium leading-normal">{getStatusLabel(order.estado)}</p>
+                    </div>
+                </div>
+            </div>
+            <!-- Toolbar -->
+            <div class="flex gap-2">
+                <a href={`/encargado/asignar_orden_zona?id=${order.documentId}`} class="flex items-center justify-center gap-2 p-2 h-10 w-10 rounded-lg text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-sm transition-colors">
+                    <span class="material-symbols-outlined">edit</span>
+                </a>
+                <button class="flex items-center justify-center gap-2 p-2 h-10 w-10 rounded-lg text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-sm transition-colors">
+                    <span class="material-symbols-outlined">print</span>
+                </button>
+                <button class="flex items-center justify-center gap-2 h-10 px-4 rounded-lg bg-primary-600 text-white hover:bg-primary-700 shadow-sm transition-colors">
+                    <span class="material-symbols-outlined">picture_as_pdf</span>
+                    <span class="text-sm font-medium">Exportar a PDF</span>
+                </button>
+            </div>
+        </header>
 
-<html class="light" lang="es"><head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Detalles de Orden - Taller Veloz</title>
-<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
-<style>
-        .material-symbols-outlined {
-            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-            font-size: 24px;
-        }
-        .material-symbols-outlined.fill {
-            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-        }
-    </style>
-<script id="tailwind-config">
-        tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    colors: {
-                        "primary": "#135bec",
-                        "background-light": "#f6f6f8",
-                        "background-dark": "#101622",
-                    },
-                    fontFamily: {
-                        "display": ["Inter", "sans-serif"]
-                    },
-                    borderRadius: {
-                        "DEFAULT": "0.25rem",
-                        "lg": "0.5rem",
-                        "xl": "0.75rem",
-                        "full": "9999px"
-                    },
-                },
-            },
-        }
-    </script>
-</head>
-<body class="font-display bg-background-light dark:bg-background-dark text-gray-800 dark:text-gray-200">
-<div class="relative flex min-h-screen w-full">
-<!-- SideNavBar -->
-<aside class="flex w-64 flex-col bg-white dark:bg-gray-900/50 p-4 border-r border-gray-200 dark:border-gray-800">
-<div class="flex flex-col gap-4">
-<div class="flex items-center gap-3">
-<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://cdn.usegalileo.ai/stability/a4b1f6ac-1498-420f-bb19-91ee46e9ce70.png");'></div>
-<div class="flex flex-col">
-<h1 class="text-gray-900 dark:text-white text-base font-medium leading-normal">Taller Veloz</h1>
-<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Gestión de Taller</p>
-</div>
-</div>
-<nav class="flex flex-col gap-2 mt-4">
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/dash_enc">
-<span class="material-symbols-outlined">dashboard</span>
-<p class="text-sm font-medium leading-normal">Dashboard</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/alert_stock">
-<span class="material-symbols-outlined">inventory_2</span>
-<p class="text-sm font-medium leading-normal">Alertas Stock</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/asig_orden">
-<span class="material-symbols-outlined">assignment_ind</span>
-<p class="text-sm font-medium leading-normal">Asignar Orden</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/disp_mec">
-<span class="material-symbols-outlined">calendar_view_week</span>
-<p class="text-sm font-medium leading-normal">Disponibilidad</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/trabajos_en_curso">
-<span class="material-symbols-outlined">construction</span>
-<p class="text-sm font-medium leading-normal">Trabajos en Curso</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/gen_factura">
-<span class="material-symbols-outlined">receipt_long</span>
-<p class="text-sm font-medium leading-normal">Generar Factura</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/marc_orden">
-<span class="material-symbols-outlined">flag</span>
-<p class="text-sm font-medium leading-normal">Marcar Orden</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/disp_mec_zonas">
-<span class="material-symbols-outlined">view_quilt</span>
-<p class="text-sm font-medium leading-normal">Disp. Mec. Zonas</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/asignar_orden_zona">
-<span class="material-symbols-outlined">add_road</span>
-<p class="text-sm font-medium leading-normal">Asignar Orden Zona</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/10 text-primary" href="/encargado/detalles_de_orden">
-<span class="material-symbols-outlined text-primary">info</span>
-<p class="text-sm font-medium leading-normal">Detalles de Orden</p>
-</a>
-</nav>
-</div>
-<div class="mt-auto flex flex-col gap-2">
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/settings">
-<span class="material-symbols-outlined">settings</span>
-<p class="text-sm font-medium leading-normal">Configuración</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="#">
-<span class="material-symbols-outlined">logout</span>
-<p class="text-sm font-medium leading-normal">Cerrar Sesión</p>
-</a>
-</div>
-</aside>
-<!-- Main Content -->
-<main class="flex-1 p-8">
-<div class="mx-auto max-w-6xl">
-<!-- Header Bar -->
-<header class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
-<div>
-<!-- Breadcrumbs -->
-<div class="flex flex-wrap items-center gap-2">
-<a class="text-gray-500 dark:text-gray-400 text-base font-medium leading-normal hover:text-primary" href="/encargado/trabajos_en_curso">Órdenes</a>
-<span class="text-gray-400 dark:text-gray-500 text-base font-medium leading-normal">/</span>
-<span class="text-gray-800 dark:text-gray-200 text-base font-medium leading-normal">Orden #{order.documentId.slice(0, 6)}</span>
-</div>
-<div class="flex items-center gap-3 mt-2">
-<h1 class="text-3xl font-bold text-gray-900 dark:text-white">Orden de Trabajo #{order.documentId.slice(0, 6)}</h1>
-<!-- Chip -->
-<div class={`flex h-8 shrink-0 items-center justify-center gap-x-2 rounded-full px-3 ${getStatusColor(order.estado)}`}>
-<span class="w-2 h-2 rounded-full bg-current"></span>
-<p class="text-sm font-medium leading-normal">{getStatusLabel(order.estado)}</p>
-</div>
-</div>
-</div>
-<!-- Toolbar -->
-<div class="flex gap-2">
-<a href={`/encargado/asignar_orden_zona?id=${order.documentId}`} class="flex items-center justify-center gap-2 p-2 h-10 w-10 rounded-lg text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700/50 border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700">
-<span class="material-symbols-outlined">edit</span>
-</a>
-<button class="flex items-center justify-center gap-2 p-2 h-10 w-10 rounded-lg text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700/50 border border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700">
-<span class="material-symbols-outlined">print</span>
-</button>
-<button class="flex items-center justify-center gap-2 h-10 px-4 rounded-lg bg-primary text-white hover:bg-primary/90">
-<span class="material-symbols-outlined">picture_as_pdf</span>
-<span class="text-sm font-medium">Exportar a PDF</span>
-</button>
-</div>
-</header>
-<!-- Grid Layout for Content -->
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-<!-- Left Column: Details -->
-<div class="lg:col-span-2 flex flex-col gap-6">
-<!-- Customer & Vehicle Card -->
-<div class="bg-white dark:bg-[#18202F] p-6 rounded-xl border border-gray-200 dark:border-gray-700">
-<h2 class="text-xl font-bold text-gray-900 dark:text-white pb-4 border-b border-gray-200 dark:border-gray-700">Información del Cliente y Vehículo</h2>
-<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-<div>
-<h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">CLIENTE</h3>
-<p class="font-medium text-gray-800 dark:text-gray-200">{order.cliente?.nombre} {order.cliente?.apellido}</p>
-<p class="text-gray-600 dark:text-gray-300">{order.cliente?.email}</p>
-<p class="text-gray-600 dark:text-gray-300">{order.cliente?.telefono}</p>
-</div>
-<div>
-<h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">VEHÍCULO</h3>
-<p class="font-medium text-gray-800 dark:text-gray-200">{order.vehiculo?.marca} {order.vehiculo?.modelo} ({order.vehiculo?.ano})</p>
-<p class="text-gray-600 dark:text-gray-300">Matrícula: {order.vehiculo?.patente}</p>
-<p class="text-gray-600 dark:text-gray-300">VIN: {order.vehiculo?.vin || 'N/A'}</p>
-</div>
-</div>
-</div>
-<!-- Parts & Labor Card -->
-<div class="bg-white dark:bg-[#18202F] p-6 rounded-xl border border-gray-200 dark:border-gray-700">
-<h2 class="text-xl font-bold text-gray-900 dark:text-white pb-4 mb-4 border-b border-gray-200 dark:border-gray-700">Repuestos y Servicios</h2>
-<div class="overflow-x-auto">
-<table class="w-full text-left">
-<thead>
-<tr class="text-sm text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
-<th class="py-2 font-medium">Descripción</th>
-<th class="py-2 font-medium text-center">Cantidad</th>
-<th class="py-2 font-medium text-right">Precio Unitario</th>
-<th class="py-2 font-medium text-right">Total</th>
-</tr>
-</thead>
-<tbody>
-{order.repuestos?.map((part: any) => (
-<tr class="border-b border-gray-200 dark:border-gray-700">
-<td class="py-3">{part.nombre}</td>
-<td class="py-3 text-center">1</td>
-<td class="py-3 text-right">€{part.precio}</td>
-<td class="py-3 text-right">€{part.precio}</td>
-</tr>
-))}
-{(!order.repuestos || order.repuestos.length === 0) && (
-    <tr class="border-b border-gray-200 dark:border-gray-700">
-        <td class="py-3 text-gray-500 italic" colspan="4">No hay repuestos asignados</td>
-    </tr>
-)}
-</tbody>
-<tfoot>
-<tr>
-<td class="pt-4 text-right font-medium text-gray-600 dark:text-gray-300" colspan="3">Subtotal</td>
-<td class="pt-4 text-right font-medium text-gray-800 dark:text-gray-200">€{total.toFixed(2)}</td>
-</tr>
-<tr>
-<td class="py-1 text-right font-medium text-gray-600 dark:text-gray-300" colspan="3">IVA (21%)</td>
-<td class="py-1 text-right font-medium text-gray-800 dark:text-gray-200">€{iva.toFixed(2)}</td>
-</tr>
-<tr>
-<td class="pt-2 text-right text-lg font-bold text-gray-900 dark:text-white" colspan="3">Total</td>
-<td class="pt-2 text-right text-lg font-bold text-gray-900 dark:text-white">€{grandTotal.toFixed(2)}</td>
-</tr>
-</tfoot>
-</table>
-</div>
-</div>
-</div>
-<!-- Right Column: Summary & History -->
-<div class="lg:col-span-1 flex flex-col gap-6">
-<!-- Summary Card -->
-<div class="bg-white dark:bg-[#18202F] p-6 rounded-xl border border-gray-200 dark:border-gray-700">
-<h2 class="text-xl font-bold text-gray-900 dark:text-white pb-4 mb-4 border-b border-gray-200 dark:border-gray-700">Resumen de la Orden</h2>
-<div class="space-y-4 text-sm">
-<div class="flex justify-between">
-<span class="text-gray-500 dark:text-gray-400">Fecha de Ingreso:</span>
-<span class="font-medium text-gray-800 dark:text-gray-200">{formatDate(order.fecha_ingreso)}</span>
-</div>
-<div class="flex justify-between">
-<span class="text-gray-500 dark:text-gray-400">Mecánico Asignado:</span>
-<span class="font-medium text-gray-800 dark:text-gray-200">
-    {order.mecanico ? `${order.mecanico.nombre} ${order.mecanico.apellido}` : 'Sin asignar'}
-</span>
-</div>
-<div class="flex justify-between">
-<span class="text-gray-500 dark:text-gray-400">Inicio Planificado:</span>
-<span class="font-medium text-gray-800 dark:text-gray-200">{formatDate(order.fecha_inicio_planificada)}</span>
-</div>
-<div class="flex justify-between">
-<span class="text-gray-500 dark:text-gray-400">Fin Planificado:</span>
-<span class="font-medium text-gray-800 dark:text-gray-200">{formatDate(order.fecha_fin_planificada)}</span>
-</div>
-<div class="flex justify-between">
-<span class="text-gray-500 dark:text-gray-400">Entrega Estimada:</span>
-<span class="font-medium text-gray-800 dark:text-gray-200">{formatDate(order.fecha_estimada)}</span>
-</div>
-<div>
-<span class="text-gray-500 dark:text-gray-400">Descripción:</span>
-<p class="font-medium text-gray-800 dark:text-gray-200 mt-1">{order.descripcion}</p>
-</div>
-</div>
-</div>
-<!-- Timeline Component -->
-<div class="bg-white dark:bg-[#18202F] p-6 rounded-xl border border-gray-200 dark:border-gray-700">
-<h2 class="text-xl font-bold text-gray-900 dark:text-white pb-4 border-b border-gray-200 dark:border-gray-700">Historial y Bitácora</h2>
-<div class="mt-4 space-y-6">
+        <!-- Grid Layout for Content -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Left Column: Details -->
+            <div class="lg:col-span-2 flex flex-col gap-6">
+                <!-- Customer & Vehicle Card -->
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                    <h2 class="text-xl font-bold text-gray-900 dark:text-white pb-4 border-b border-gray-200 dark:border-gray-700">Información del Cliente y Vehículo</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+                        <div>
+                            <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">Cliente</h3>
+                            <p class="font-bold text-gray-900 dark:text-white text-lg">{order.cliente?.nombre} {order.cliente?.apellido}</p>
+                            <div class="flex items-center gap-2 mt-1 text-gray-600 dark:text-gray-300">
+                                <span class="material-symbols-outlined text-sm">email</span>
+                                <p>{order.cliente?.email}</p>
+                            </div>
+                            <div class="flex items-center gap-2 mt-1 text-gray-600 dark:text-gray-300">
+                                <span class="material-symbols-outlined text-sm">phone</span>
+                                <p>{order.cliente?.telefono}</p>
+                            </div>
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">Vehículo</h3>
+                            <p class="font-bold text-gray-900 dark:text-white text-lg">{order.vehiculo?.marca} {order.vehiculo?.modelo} <span class="text-gray-500 font-normal">({order.vehiculo?.ano})</span></p>
+                            <div class="flex items-center gap-2 mt-1 text-gray-600 dark:text-gray-300">
+                                <span class="material-symbols-outlined text-sm">pin</span>
+                                <p>Matrícula: {order.vehiculo?.patente}</p>
+                            </div>
+                            <div class="flex items-center gap-2 mt-1 text-gray-600 dark:text-gray-300">
+                                <span class="material-symbols-outlined text-sm">fingerprint</span>
+                                <p>VIN: {order.vehiculo?.vin || 'N/A'}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-{order.bitacoras?.map((bitacora: any) => (
-<div class="relative flex gap-4">
-<div class="absolute left-[11px] top-10 h-full w-0.5 bg-gray-200 dark:bg-gray-700"></div>
-<div class="z-10 flex h-6 w-6 items-center justify-center rounded-full bg-blue-500 text-white">
-<span class="material-symbols-outlined !text-[16px]">history</span>
-</div>
-<div>
-<p class="font-medium text-gray-800 dark:text-gray-200">{bitacora.procedimientos}</p>
-<p class="text-xs text-gray-500 dark:text-gray-400">{formatDate(bitacora.fecha)}</p>
-<p class="text-sm text-gray-600 dark:text-gray-300 mt-1">{bitacora.observaciones}</p>
-</div>
-</div>
-))}
+                <!-- Parts & Labor Card -->
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                    <h2 class="text-xl font-bold text-gray-900 dark:text-white pb-4 mb-4 border-b border-gray-200 dark:border-gray-700">Repuestos y Servicios</h2>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left">
+                            <thead>
+                                <tr class="text-sm text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
+                                    <th class="py-3 font-medium">Descripción</th>
+                                    <th class="py-3 font-medium text-center">Cantidad</th>
+                                    <th class="py-3 font-medium text-right">Precio Unitario</th>
+                                    <th class="py-3 font-medium text-right">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                                {order.repuestos?.map((part: any) => (
+                                    <tr>
+                                        <td class="py-4 text-gray-900 dark:text-white">{part.nombre}</td>
+                                        <td class="py-4 text-center text-gray-600 dark:text-gray-300">1</td>
+                                        <td class="py-4 text-right text-gray-600 dark:text-gray-300">€{part.precio}</td>
+                                        <td class="py-4 text-right font-medium text-gray-900 dark:text-white">€{part.precio}</td>
+                                    </tr>
+                                ))}
+                                {(!order.repuestos || order.repuestos.length === 0) && (
+                                    <tr>
+                                        <td class="py-8 text-center text-gray-500 dark:text-gray-400 italic" colspan="4">
+                                            <div class="flex flex-col items-center gap-2">
+                                                <span class="material-symbols-outlined text-3xl opacity-50">inventory_2</span>
+                                                <p>No hay repuestos asignados a esta orden</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <td class="pt-6 text-right font-medium text-gray-600 dark:text-gray-300" colspan="3">Subtotal</td>
+                                    <td class="pt-6 text-right font-medium text-gray-900 dark:text-white">€{total.toFixed(2)}</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-2 text-right font-medium text-gray-600 dark:text-gray-300" colspan="3">IVA (21%)</td>
+                                    <td class="py-2 text-right font-medium text-gray-900 dark:text-white">€{iva.toFixed(2)}</td>
+                                </tr>
+                                <tr>
+                                    <td class="pt-4 text-right text-lg font-bold text-gray-900 dark:text-white" colspan="3">Total</td>
+                                    <td class="pt-4 text-right text-lg font-bold text-primary-600 dark:text-primary-400">€{grandTotal.toFixed(2)}</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
 
-<div class="relative flex gap-4">
-<div class="z-10 flex h-6 w-6 items-center justify-center rounded-full bg-gray-400 text-white">
-<span class="material-symbols-outlined !text-[16px]">add</span>
-</div>
-<div>
-<p class="font-medium text-gray-800 dark:text-gray-200">Orden Creada</p>
-<p class="text-xs text-gray-500 dark:text-gray-400">{formatDate(order.createdAt)}</p>
-<p class="text-sm text-gray-600 dark:text-gray-300 mt-1">Vehículo recibido en el taller.</p>
-</div>
-</div>
-</div>
-</div>
-</div>
-</div>
-</div>
-</main>
-</div>
-</body></html>
+            <!-- Right Column: Summary & History -->
+            <div class="lg:col-span-1 flex flex-col gap-6">
+                <!-- Summary Card -->
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                    <h2 class="text-xl font-bold text-gray-900 dark:text-white pb-4 mb-4 border-b border-gray-200 dark:border-gray-700">Resumen de la Orden</h2>
+                    <div class="space-y-4 text-sm">
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-500 dark:text-gray-400">Fecha de Ingreso</span>
+                            <span class="font-medium text-gray-900 dark:text-white">{formatDate(order.fecha_ingreso)}</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-500 dark:text-gray-400">Mecánico Asignado</span>
+                            <span class="font-medium text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
+                                {order.mecanico ? `${order.mecanico.nombre} ${order.mecanico.apellido}` : 'Sin asignar'}
+                            </span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-500 dark:text-gray-400">Inicio Planificado</span>
+                            <span class="font-medium text-gray-900 dark:text-white">{formatDate(order.fecha_inicio_planificada)}</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-500 dark:text-gray-400">Fin Planificado</span>
+                            <span class="font-medium text-gray-900 dark:text-white">{formatDate(order.fecha_fin_planificada)}</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-500 dark:text-gray-400">Entrega Estimada</span>
+                            <span class="font-medium text-gray-900 dark:text-white">{formatDate(order.fecha_estimada)}</span>
+                        </div>
+                        <div class="pt-4 border-t border-gray-100 dark:border-gray-700">
+                            <span class="text-gray-500 dark:text-gray-400 block mb-2">Descripción del Problema</span>
+                            <p class="font-medium text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-900/50 p-3 rounded-lg border border-gray-100 dark:border-gray-700 text-sm leading-relaxed">
+                                {order.descripcion}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Timeline Component -->
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                    <h2 class="text-xl font-bold text-gray-900 dark:text-white pb-4 border-b border-gray-200 dark:border-gray-700">Historial y Bitácora</h2>
+                    <div class="mt-6 space-y-8 relative">
+                        <!-- Vertical line -->
+                        <div class="absolute left-[11px] top-2 bottom-2 w-0.5 bg-gray-200 dark:bg-gray-700"></div>
+
+                        {order.bitacoras?.map((bitacora: any) => (
+                            <div class="relative flex gap-4">
+                                <div class="z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-500 text-white ring-4 ring-white dark:ring-gray-800">
+                                    <span class="material-symbols-outlined !text-[14px]">history</span>
+                                </div>
+                                <div class="flex-1 -mt-1">
+                                    <p class="font-bold text-gray-900 dark:text-white text-sm">{bitacora.procedimientos}</p>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">{formatDate(bitacora.fecha)}</p>
+                                    <p class="text-sm text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-900/50 p-2 rounded border border-gray-100 dark:border-gray-700">{bitacora.observaciones}</p>
+                                </div>
+                            </div>
+                        ))}
+
+                        <div class="relative flex gap-4">
+                            <div class="z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-green-500 text-white ring-4 ring-white dark:ring-gray-800">
+                                <span class="material-symbols-outlined !text-[14px]">add</span>
+                            </div>
+                            <div class="flex-1 -mt-1">
+                                <p class="font-bold text-gray-900 dark:text-white text-sm">Orden Creada</p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">{formatDate(order.createdAt)}</p>
+                                <p class="text-sm text-gray-600 dark:text-gray-300">Vehículo recibido en el taller.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</DashboardLayout>
+```

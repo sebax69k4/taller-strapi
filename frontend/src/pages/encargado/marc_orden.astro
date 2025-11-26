@@ -1,7 +1,8 @@
 ---
 export const prerender = false;
-import { strapiGet, strapiPut } from '../../lib/strapi';
+import { strapiGet } from '../../lib/strapi';
 import '../../styles/global.css';
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
 
 const userRole = Astro.cookies.get('user_role')?.value;
 if (!userRole) {
@@ -9,267 +10,78 @@ if (!userRole) {
 }
 
 let activeOrders = [];
-let selectedOrder = null;
-let successMessage = '';
-let error = '';
-
 try {
-  // Fetch Active Orders
-  const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$ne]=Entregado&populate[0]=cliente&populate[1]=vehiculo');
+  const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$ne]=Entregado&populate[0]=cliente&populate[1]=vehiculo&sort[0]=updatedAt:desc');
   activeOrders = data.data || [];
-
-  // Get Selected Order ID from URL
-  const orderId = Astro.url.searchParams.get('orderId');
-  if (orderId) {
-    selectedOrder = activeOrders.find((o: any) => o.documentId === orderId);
-  }
-
-  // Handle Status Update
-  if (Astro.request.method === 'POST') {
-    const formData = await Astro.request.formData();
-    const updateOrderId = formData.get('orderId');
-    const notes = formData.get('notes');
-
-    if (updateOrderId) {
-      await strapiPut(`/api/orden-de-trabajos/${updateOrderId}`, {
-        estado: 'Entregado',
-        descripcion: notes ? `${selectedOrder?.descripcion || ''}\nNota Final: ${notes}` : selectedOrder?.descripcion
-      });
-      successMessage = 'Orden marcada como entregada';
-      return Astro.redirect('/encargado/marc_orden');
-    }
-  }
-
 } catch (e) {
   console.error('Error fetching orders:', e);
-  error = 'Error de conexión';
 }
 ---
-<!DOCTYPE html>
 
-<html class="light" lang="es"><head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Marcar Orden Completa - Taller Veloz</title>
-<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<link href="https://fonts.googleapis.com" rel="preconnect"/>
-<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
-<script>
-    tailwind.config = {
-      darkMode: "class",
-      theme: {
-        extend: {
-          colors: {
-            "primary": "#135bec",
-            "background-light": "#f6f6f8",
-            "background-dark": "#101622",
-          },
-          fontFamily: {
-            "display": ["Inter", "sans-serif"]
-          },
-          borderRadius: {
-            "DEFAULT": "0.25rem",
-            "lg": "0.5rem",
-            "xl": "0.75rem",
-            "full": "9999px"
-          },
-        },
-      },
-    }
-  </script>
-<style>
-    body {
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-    }
-  </style>
-</head>
-<body class="font-display bg-background-light dark:bg-background-dark">
-<div class="relative flex min-h-screen w-full">
-<!-- SideNavBar -->
-<aside class="flex w-64 flex-col bg-white dark:bg-gray-900 p-4 border-r border-gray-200 dark:border-gray-800">
-<div class="flex flex-col gap-4">
-<div class="flex items-center gap-3">
-<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://cdn.usegalileo.ai/stability/a4b1f6ac-1498-420f-bb19-91ee46e9ce70.png");'></div>
-<div class="flex flex-col">
-<h1 class="text-gray-900 dark:text-white text-base font-medium leading-normal">Taller Veloz</h1>
-<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Gestión de Taller</p>
-</div>
-</div>
-<nav class="flex flex-col gap-2 mt-4">
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/dash_enc">
-<span class="material-symbols-outlined">dashboard</span>
-<p class="text-sm font-medium leading-normal">Dashboard</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/alert_stock">
-<span class="material-symbols-outlined">inventory_2</span>
-<p class="text-sm font-medium leading-normal">Alertas Stock</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/asig_orden">
-<span class="material-symbols-outlined">assignment_ind</span>
-<p class="text-sm font-medium leading-normal">Asignar Orden</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/disp_mec">
-<span class="material-symbols-outlined">calendar_view_week</span>
-<p class="text-sm font-medium leading-normal">Disponibilidad</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/trabajos_en_curso">
-<span class="material-symbols-outlined">construction</span>
-<p class="text-sm font-medium leading-normal">Trabajos en Curso</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/gen_factura">
-<span class="material-symbols-outlined">receipt_long</span>
-<p class="text-sm font-medium leading-normal">Generar Factura</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/10 text-primary" href="/encargado/marc_orden">
-<span class="material-symbols-outlined">flag</span>
-<p class="text-sm font-medium leading-normal">Marcar Orden</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/disp_mec_zonas">
-<span class="material-symbols-outlined">view_quilt</span>
-<p class="text-sm font-medium leading-normal">Disp. Mec. Zonas</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/asignar_orden_zona">
-<span class="material-symbols-outlined">add_road</span>
-<p class="text-sm font-medium leading-normal">Asignar Orden Zona</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/detalles_de_orden">
-<span class="material-symbols-outlined">info</span>
-<p class="text-sm font-medium leading-normal">Detalles de Orden</p>
-</a>
-</nav>
-</div>
-<div class="mt-auto flex flex-col gap-2">
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/settings">
-<span class="material-symbols-outlined">settings</span>
-<p class="text-sm font-medium leading-normal">Configuración</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/logout">
-<span class="material-symbols-outlined">logout</span>
-<p class="text-sm font-medium leading-normal">Cerrar Sesión</p>
-</a>
-</div>
-</aside>
-<!-- Main Content -->
-<main class="flex-1 flex flex-col h-screen overflow-y-auto">
-<!-- Top Nav Bar -->
-<header class="flex items-center justify-end whitespace-nowrap border-b border-solid border-gray-200 dark:border-gray-800 px-6 py-3 bg-white dark:bg-background-dark sticky top-0 z-10">
-<div class="flex items-center gap-4">
-<button class="flex items-center justify-center rounded-lg h-10 w-10 hover:bg-gray-100 dark:hover:bg-white/10 text-gray-500 dark:text-gray-400">
-<span class="material-symbols-outlined">notifications</span>
-</button>
-<button class="flex items-center justify-center rounded-lg h-10 w-10 hover:bg-gray-100 dark:hover:bg-white/10 text-gray-500 dark:text-gray-400">
-<span class="material-symbols-outlined">settings</span>
-</button>
-<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" data-alt="User profile picture" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBfywIESnUT5P9I3kzdvZMJEHPNW6YSUAhI8lsK31PXfAKGRb3aBohMJNnEXP0Ay8xKHkxb9AXGCIxnVSADxHiNlyGr9w8mOv17URJ2CcyRzPCBc10EsXwrc5RjhqBQSO-aErbwvtdrxAsRlVqS4sLenTqGGVIWHREXK8x48NwJCSbm8U0iSDcp-F8QOh6q96sphgp9B02N2B8wUnpHyxbOSPQNH73YODJu2ebErCohJ2G9zzDfV37vRFsypGdO291QCX1QkQ28AoJj");'></div>
-</div>
-</header>
-<!-- Page Content -->
-<div class="flex-1 grid grid-cols-1 xl:grid-cols-2 gap-0">
-<!-- Left Panel: Order List -->
-<div class="flex flex-col bg-white dark:bg-background-dark p-6 border-r border-gray-200 dark:border-gray-800">
-<!-- Page Heading -->
-<div class="flex flex-wrap justify-between gap-3 mb-4">
-<div class="flex flex-col gap-1">
-<h1 class="text-gray-900 dark:text-white text-3xl font-bold leading-tight tracking-tight">Finalizar Órdenes de Trabajo</h1>
-<p class="text-gray-500 dark:text-gray-400 text-base font-normal leading-normal">Selecciona una orden para añadir notas y marcarla como 'Lista para Entrega'.</p>
-</div>
-</div>
-<!-- Search Bar -->
-<div class="py-3">
-<label class="flex flex-col w-full">
-<div class="flex w-full flex-1 items-stretch rounded-lg h-12 bg-gray-100 dark:bg-gray-800">
-<div class="text-gray-500 dark:text-gray-400 flex items-center justify-center pl-4">
-<span class="material-symbols-outlined">search</span>
-</div>
-<input class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-gray-900 dark:text-gray-100 focus:outline-0 focus:ring-0 border-none bg-transparent h-full placeholder:text-gray-500 dark:placeholder:text-gray-400 px-2 text-base font-normal" placeholder="Buscar por cliente, vehículo, Nº de orden..." value=""/>
-</div>
-</label>
-</div>
-<!-- Chips / Filters -->
-<div class="flex gap-3 py-3 overflow-x-auto">
-<button class="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-lg bg-gray-100 dark:bg-gray-800 pl-4 pr-3 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700">
-<p class="text-sm font-medium">Filtrar por Estado</p>
-<span class="material-symbols-outlined text-lg">expand_more</span>
-</button>
-<button class="flex h-9 shrink-0 items-center justify-center gap-x-2 rounded-lg bg-gray-100 dark:bg-gray-800 pl-4 pr-3 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700">
-<p class="text-sm font-medium">Ordenar por: Fecha</p>
-<span class="material-symbols-outlined text-lg">expand_more</span>
-</button>
-</div>
-<!-- Order List -->
-<div class="flex flex-col gap-3 mt-4 overflow-y-auto pr-2 -mr-2">
-{activeOrders.map((order: any) => (
-  <a href={`?orderId=${order.documentId}`} class={`flex flex-col gap-2 p-4 border rounded-xl cursor-pointer ${selectedOrder?.documentId === order.documentId ? 'bg-primary/10 dark:bg-primary/20 border-primary' : 'bg-transparent dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-white/5'}`}>
-    <div class="flex justify-between items-start">
-      <p class="text-gray-900 dark:text-white font-bold">Orden #{order.documentId.slice(0, 6)}</p>
-      <span class={`text-xs font-semibold px-2.5 py-1 rounded-full ${
-        order.estado === 'En Progreso' ? 'bg-yellow-500/20 text-yellow-700 dark:bg-yellow-400/30 dark:text-yellow-300' :
-        order.estado === 'Pendiente' ? 'bg-red-500/20 text-red-700 dark:bg-red-400/30 dark:text-red-300' :
-        'bg-green-500/20 text-green-700 dark:bg-green-400/30 dark:text-green-300'
-      }`}>
-        {order.estado}
-      </span>
+<DashboardLayout title="Marcar Orden como Entregada" role="encargado" currentPath="/encargado/marc_orden">
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-6">Marcar Orden como Entregada</h1>
+        
+        <div class="grid gap-6">
+            {activeOrders.map(order => (
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row justify-between items-center gap-4">
+                    <div>
+                        <div class="flex items-center gap-3 mb-1">
+                            <h3 class="font-bold text-lg text-gray-900 dark:text-white">Orden #{order.documentId.slice(0, 6)}</h3>
+                            <span class={`px-2 py-1 rounded-full text-xs font-medium ${
+                                order.estado === 'Finalizado' ? 'bg-green-100 text-green-800' : 
+                                order.estado === 'En Proceso' ? 'bg-blue-100 text-blue-800' : 'bg-yellow-100 text-yellow-800'
+                            }`}>
+                                {order.estado}
+                            </span>
+                        </div>
+                        <p class="text-gray-600 dark:text-gray-400">{order.cliente.nombre} {order.cliente.apellido} - {order.vehiculo.marca} {order.vehiculo.modelo}</p>
+                    </div>
+                    <button 
+                        onclick={`markAsDelivered('${order.documentId}')`}
+                        class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+                    >
+                        <span class="material-symbols-outlined">check_circle</span>
+                        Entregar Vehículo
+                    </button>
+                </div>
+            ))}
+            {activeOrders.length === 0 && (
+                <div class="text-center py-12 text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <span class="material-symbols-outlined text-4xl mb-2 opacity-50">task_alt</span>
+                    <p>No hay órdenes pendientes de entrega.</p>
+                </div>
+            )}
+        </div>
     </div>
-    <p class="text-gray-800 dark:text-gray-200">
-      {order.cliente ? `${order.cliente.nombre} ${order.cliente.apellido}` : 'Cliente N/A'} - 
-      {order.vehiculo ? `${order.vehiculo.marca} ${order.vehiculo.modelo}` : 'Vehículo N/A'}
-    </p>
-    <p class="text-sm text-gray-500 dark:text-gray-400">Actualizado: {new Date(order.updatedAt).toLocaleDateString()}</p>
-  </a>
-))}
-{activeOrders.length === 0 && <p class="text-center text-gray-500">No hay órdenes activas.</p>}
-</div>
-</div>
-<!-- Right Panel: Order Details -->
-<div class="flex flex-col bg-background-light dark:bg-black/20 p-6 xl:p-8">
-{selectedOrder ? (
-  <div class="flex-1 flex flex-col gap-6 max-w-2xl mx-auto w-full">
-    <header>
-      <h2 class="text-2xl font-bold text-gray-900 dark:text-white">Detalles de la Orden #{selectedOrder.documentId.slice(0, 6)}</h2>
-      <p class="text-gray-500 dark:text-gray-400 mt-1">{selectedOrder.descripcion || 'Sin descripción'}</p>
-    </header>
-    <div class="border-t border-gray-200 dark:border-gray-800"></div>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-      <div>
-        <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Cliente</h3>
-        <p class="text-base text-gray-900 dark:text-white mt-1">{selectedOrder.cliente ? `${selectedOrder.cliente.nombre} ${selectedOrder.cliente.apellido}` : 'N/A'}</p>
-        <p class="text-base text-gray-500 dark:text-gray-300">{selectedOrder.cliente?.email || 'N/A'}</p>
-        <p class="text-base text-gray-500 dark:text-gray-300">{selectedOrder.cliente?.telefono || 'N/A'}</p>
-      </div>
-      <div>
-        <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Vehículo</h3>
-        <p class="text-base text-gray-900 dark:text-white mt-1">{selectedOrder.vehiculo ? `${selectedOrder.vehiculo.marca} ${selectedOrder.vehiculo.modelo}` : 'N/A'}</p>
-        <p class="text-base text-gray-500 dark:text-gray-300">Año: {selectedOrder.vehiculo?.ano || 'N/A'}</p>
-        <p class="text-base text-gray-500 dark:text-gray-300">Placa: {selectedOrder.vehiculo?.placa || 'N/A'}</p>
-      </div>
-    </div>
-    
-    <form method="POST" class="flex-1 flex flex-col">
-      <input type="hidden" name="orderId" value={selectedOrder.documentId} />
-      <label class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2" for="notes">Notas Finales / Observaciones Internas</label>
-      <textarea class="form-textarea w-full rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-primary focus:border-primary placeholder:text-gray-400 dark:placeholder:text-gray-500" id="notes" name="notes" placeholder="Añadir comentarios para el cliente o notas para el equipo..." rows="6"></textarea>
-      
-      <div class="mt-auto pt-6 border-t border-gray-200 dark:border-gray-800 flex flex-col sm:flex-row gap-4">
-        <button type="submit" class="flex-1 flex items-center justify-center gap-2 h-12 px-6 bg-primary text-white rounded-lg text-base font-bold hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 dark:focus:ring-offset-background-dark">
-          <span class="material-symbols-outlined">task_alt</span>
-          Marcar como Entregada
-        </button>
-        <a href="/encargado/marc_orden" class="flex-1 sm:flex-none flex items-center justify-center h-12 px-6 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg text-base font-medium hover:bg-gray-300 dark:hover:bg-gray-600">
-          Cancelar
-        </a>
-      </div>
-    </form>
-  </div>
-) : (
-  <div class="flex-1 flex items-center justify-center text-gray-500 dark:text-gray-400">
-    <p>Selecciona una orden de la lista para ver los detalles.</p>
-  </div>
-)}
-</div>
-</div>
-</main>
-</div>
-</body></html>
+</DashboardLayout>
+
+<script is:inline>
+    window.markAsDelivered = async (documentId) => {
+        if (!confirm('¿Está seguro de marcar esta orden como Entregada? Esta acción no se puede deshacer.')) return;
+        
+        try {
+            const response = await fetch(`http://localhost:1337/api/orden-de-trabajos/${documentId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    data: {
+                        estado: 'Entregado'
+                    }
+                })
+            });
+            
+            if (response.ok) {
+                alert('Orden marcada como entregada.');
+                window.location.reload();
+            } else {
+                alert('Error al actualizar la orden.');
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Error de conexión.');
+        }
+    };
+</script>

@@ -1,5 +1,8 @@
 ---
 export const prerender = false;
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import Card from '../../components/ui/Card.astro';
+import Button from '../../components/ui/Button.astro';
 import { strapiGet } from '../../lib/strapi';
 import '../../styles/global.css';
 
@@ -11,10 +14,10 @@ let lowStockCount = 0;
 let recentOrders = [];
 let lowStockItems = [];
 
+const today = new Date().toISOString().split('T')[0];
+
 if (userRole) {
   try {
-    const today = new Date().toISOString().split('T')[0];
-
     // Active Orders
     const activeRes = await strapiGet('/api/orden-de-trabajos?filters[estado][$ne]=Entregado');
     activeOrdersCount = activeRes.meta?.pagination?.total || 0;
@@ -39,252 +42,143 @@ if (userRole) {
   return Astro.redirect('/login');
 }
 ---
-<!DOCTYPE html>
 
-<html class="light" lang="es"><head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Dashboard - Taller Veloz</title>
-<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&amp;display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
-<script id="tailwind-config">
-    tailwind.config = {
-      darkMode: "class",
-      theme: {
-        extend: {
-          colors: {
-            "primary": "#135bec",
-            "background-light": "#f6f6f8",
-            "background-dark": "#101622",
-            "brand-primary": "#1E3A8A",
-            "brand-accent": "#F59E0B",
-            "brand-background": "#F3F4F6",
-            "brand-success": "#10B981",
-            "brand-warning": "#FBBF24",
-            "brand-danger": "#EF4444",
-            "brand-text-primary": "#111827",
-            "brand-text-secondary": "#6B7280",
-            "brand-border": "#E5E7EB",
+<DashboardLayout title="Dashboard Encargado" role="encargado" currentPath={Astro.url.pathname}>
+    <div class="max-w-7xl mx-auto">
+        <!-- PageHeading -->
+        <div class="flex flex-col gap-2 mb-8">
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Dashboard del Encargado</h1>
+            <p class="text-gray-500 dark:text-gray-400">Bienvenido, aquí tienes un resumen de la actividad del taller.</p>
+        </div>
 
-            /* Dark Mode Colors */
-            "dark-brand-primary": "#3B82F6",
-            "dark-brand-accent": "#F59E0B",
-            "dark-brand-background": "#111827",
-            "dark-brand-card": "#1F2937",
-            "dark-brand-success": "#34D399",
-            "dark-brand-warning": "#FBBF24",
-            "dark-brand-danger": "#F87171",
-            "dark-brand-text-primary": "#F9FAFB",
-            "dark-brand-text-secondary": "#9CA3AF",
-            "dark-brand-border": "#374151"
-          },
-          fontFamily: {
-            "display": ["Inter"]
-          },
-          borderRadius: {
-            "DEFAULT": "0.25rem",
-            "lg": "0.5rem",
-            "xl": "0.75rem",
-            "full": "9999px"
-          },
-        },
-      },
-    }
-  </script>
-</head>
-<body class="font-display bg-background-light dark:bg-background-dark">
-<div class="relative flex h-auto min-h-screen w-full flex-col group/design-root overflow-x-hidden">
-<div class="flex flex-row min-h-screen">
-<!-- SideNavBar -->
-<div class="flex flex-col gap-4 p-4 bg-white dark:bg-background-dark border-r border-gray-200 dark:border-gray-800 w-64">
-<div class="flex gap-3 items-center">
-<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://cdn.usegalileo.ai/stability/a4b1f6ac-1498-420f-bb19-91ee46e9ce70.png");'></div>
-<div class="flex flex-col">
-<h1 class="text-gray-900 dark:text-white text-base font-medium leading-normal">Taller Veloz</h1>
-<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Gestión de Taller</p>
-</div>
-</div>
-<div class="flex flex-col gap-2 mt-4">
-<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/10 text-primary" href="/encargado/dash_enc">
-<span class="material-symbols-outlined text-primary">dashboard</span>
-<p class="text-sm font-medium leading-normal">Dashboard</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/alert_stock">
-<span class="material-symbols-outlined">inventory_2</span>
-<p class="text-sm font-medium leading-normal">Alertas Stock</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/asig_orden">
-<span class="material-symbols-outlined">assignment_ind</span>
-<p class="text-sm font-medium leading-normal">Asignar Orden</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/disp_mec">
-<span class="material-symbols-outlined">calendar_view_week</span>
-<p class="text-sm font-medium leading-normal">Disponibilidad</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/trabajos_en_curso">
-<span class="material-symbols-outlined">construction</span>
-<p class="text-sm font-medium leading-normal">Trabajos en Curso</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/gen_factura">
-<span class="material-symbols-outlined">receipt_long</span>
-<p class="text-sm font-medium leading-normal">Generar Factura</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/marc_orden">
-<span class="material-symbols-outlined">flag</span>
-<p class="text-sm font-medium leading-normal">Marcar Orden</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/disp_mec_zonas">
-<span class="material-symbols-outlined">view_quilt</span>
-<p class="text-sm font-medium leading-normal">Disp. Mec. Zonas</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/asignar_orden_zona">
-<span class="material-symbols-outlined">add_road</span>
-<p class="text-sm font-medium leading-normal">Asignar Orden Zona</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/detalles_de_orden">
-<span class="material-symbols-outlined">info</span>
-<p class="text-sm font-medium leading-normal">Detalles de Orden</p>
-</a>
-</div>
-<div class="mt-auto flex flex-col gap-2">
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/settings">
-<span class="material-symbols-outlined">settings</span>
-<p class="text-sm font-medium leading-normal">Configuración</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/logout">
-<span class="material-symbols-outlined">logout</span>
-<p class="text-sm font-medium leading-normal">Cerrar Sesión</p>
-</a>
-</div>
-</div>
-<!-- Main Content -->
-<div class="flex-1 flex flex-col">
-<main class="flex-1 p-8">
-<!-- PageHeading -->
-<div class="flex flex-wrap justify-between gap-3 p-4">
-<div class="flex min-w-72 flex-col gap-2">
-<p class="text-brand-text-primary dark:text-dark-brand-text-primary text-4xl font-black leading-tight tracking-[-0.033em]">Dashboard del Encargado</p>
-<p class="text-brand-text-secondary dark:text-dark-brand-text-secondary text-base font-normal leading-normal">Bienvenido, aquí tienes un resumen de la actividad del taller.</p>
-</div>
-</div>
-<!-- Stats -->
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-4">
-<div class="flex flex-col gap-2 rounded-xl p-6 border border-brand-border dark:border-dark-brand-border bg-white dark:bg-dark-brand-card hover:shadow-lg transition-shadow cursor-pointer">
-<div class="flex items-center justify-between">
-<p class="text-brand-text-secondary dark:text-dark-brand-text-secondary text-base font-medium leading-normal">Órdenes Activas</p>
-<span class="material-symbols-outlined text-brand-warning">build_circle</span>
-</div>
-<p class="text-brand-text-primary dark:text-dark-brand-text-primary tracking-light text-4xl font-bold leading-tight">{activeOrdersCount}</p>
-<p class="text-brand-success dark:text-dark-brand-success text-sm font-medium leading-normal">En proceso</p>
-</div>
-<div class="flex flex-col gap-2 rounded-xl p-6 border border-brand-border dark:border-dark-brand-border bg-white dark:bg-dark-brand-card hover:shadow-lg transition-shadow cursor-pointer">
-<div class="flex items-center justify-between">
-<p class="text-brand-text-secondary dark:text-dark-brand-text-secondary text-base font-medium leading-normal">Completadas Hoy</p>
-<span class="material-symbols-outlined text-brand-success">task_alt</span>
-</div>
-<p class="text-brand-text-primary dark:text-dark-brand-text-primary tracking-light text-4xl font-bold leading-tight">{completedTodayCount}</p>
-<p class="text-brand-success dark:text-dark-brand-success text-sm font-medium leading-normal">Entregadas</p>
-</div>
-<div class="flex flex-col gap-2 rounded-xl p-6 border border-brand-danger/50 dark:border-brand-danger/50 bg-red-50 dark:bg-brand-danger/10 hover:shadow-lg transition-shadow cursor-pointer">
-<div class="flex items-center justify-between">
-<p class="text-brand-text-secondary dark:text-dark-brand-text-secondary text-base font-medium leading-normal">Stock Bajo Mínimo</p>
-<span class="material-symbols-outlined text-brand-danger">inventory_2</span>
-</div>
-<p class="text-brand-danger dark:text-dark-brand-danger tracking-light text-4xl font-bold leading-tight">{lowStockCount}</p>
-<p class="text-brand-text-secondary dark:text-dark-brand-text-secondary text-sm font-medium leading-normal">Requiere atención</p>
-</div>
-</div>
-<!-- SectionHeader -->
-<h2 class="text-brand-text-primary dark:text-dark-brand-text-primary text-[22px] font-bold leading-tight tracking-[-0.015em] px-4 pb-3 pt-5">Accesos Rápidos</h2>
-<!-- ButtonGroup -->
-<div class="flex justify-stretch">
-<div class="flex flex-1 gap-4 flex-wrap px-4 py-3 justify-start">
-<a href="/encargado/alert_stock" class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 px-5 bg-brand-accent text-white text-base font-bold leading-normal tracking-[0.015em] gap-2 hover:opacity-90 transition-opacity">
-<span class="material-symbols-outlined">warning</span>
-<span class="truncate">Alertas de Stock Bajo</span>
-</a>
-<a href="/encargado/asig_orden" class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 px-5 bg-brand-primary text-white text-base font-bold leading-normal tracking-[0.015em] gap-2 hover:opacity-90 transition-opacity">
-<span class="material-symbols-outlined">add_circle</span>
-<span class="truncate">Asignar Orden</span>
-</a>
-<a href="/encargado/disp_mec" class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 px-5 bg-gray-200 dark:bg-dark-brand-card dark:border dark:border-dark-brand-border text-brand-text-primary dark:text-dark-brand-text-primary text-base font-bold leading-normal tracking-[0.015em] gap-2 hover:bg-gray-300 dark:hover:bg-gray-700 transition-colors">
-<span class="material-symbols-outlined">group</span>
-<span class="truncate">Disponibilidad Mecánicos</span>
-</a>
-</div>
-</div>
-<div class="grid grid-cols-1 lg:grid-cols-5 gap-6 p-4 mt-6">
-<!-- Summary Table -->
-<div class="lg:col-span-3">
-<h2 class="text-brand-text-primary dark:text-dark-brand-text-primary text-[22px] font-bold leading-tight tracking-[-0.015em] pb-4">Actividad Reciente</h2>
-<div class="w-full bg-white dark:bg-dark-brand-card rounded-xl border border-brand-border dark:border-dark-brand-border overflow-hidden">
-<div class="overflow-x-auto">
-<table class="w-full text-sm text-left text-brand-text-secondary dark:text-dark-brand-text-secondary">
-<thead class="text-xs text-brand-text-secondary dark:text-dark-brand-text-secondary uppercase bg-brand-background dark:bg-dark-brand-card border-b border-brand-border dark:border-dark-brand-border">
-<tr>
-<th class="px-6 py-3" scope="col">ID Orden</th>
-<th class="px-6 py-3" scope="col">Cliente</th>
-<th class="px-6 py-3" scope="col">Vehículo</th>
-<th class="px-6 py-3" scope="col">Mecánico</th>
-<th class="px-6 py-3" scope="col">Estado</th>
-</tr>
-</thead>
-<tbody>
-{recentOrders.map((order: any) => (
-  <tr class="bg-white dark:bg-dark-brand-card border-b dark:border-dark-brand-border hover:bg-gray-50 dark:hover:bg-gray-800">
-    <th class="px-6 py-4 font-medium text-brand-text-primary dark:text-dark-brand-text-primary whitespace-nowrap" scope="row">
-      #{order.documentId.slice(0, 6)}
-    </th>
-    <td class="px-6 py-4">{order.cliente ? `${order.cliente.nombre} ${order.cliente.apellido}` : 'N/A'}</td>
-    <td class="px-6 py-4">{order.vehiculo ? `${order.vehiculo.marca} ${order.vehiculo.modelo}` : 'N/A'}</td>
-    <td class="px-6 py-4">{order.mecanico ? order.mecanico.nombre : 'Sin asignar'}</td>
-    <td class="px-6 py-4">
-      <span class={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-        order.estado === 'Entregado' ? 'bg-brand-success/20 text-green-800 dark:bg-brand-success/30 dark:text-green-200' :
-        order.estado === 'Pendiente' ? 'bg-brand-danger/20 text-red-800 dark:bg-brand-danger/30 dark:text-red-200' :
-        'bg-brand-warning/20 text-yellow-800 dark:bg-brand-warning/30 dark:text-yellow-200'
-      }`}>
-        {order.estado}
-      </span>
-    </td>
-  </tr>
-))}
-{recentOrders.length === 0 && (
-  <tr>
-    <td colspan="5" class="px-6 py-4 text-center">No hay actividad reciente.</td>
-  </tr>
-)}
-</tbody>
-</table>
-</div>
-</div>
-</div>
-<!-- Bar Chart (Stock Summary) -->
-<div class="lg:col-span-2">
-<h2 class="text-brand-text-primary dark:text-dark-brand-text-primary text-[22px] font-bold leading-tight tracking-[-0.015em] pb-4">Alertas de Stock</h2>
-<div class="w-full bg-white dark:bg-dark-brand-card rounded-xl p-6 border border-brand-border dark:border-dark-brand-border">
-<div class="space-y-6">
-{lowStockItems.length > 0 ? lowStockItems.map((item: any) => (
-  <div>
-    <div class="flex justify-between items-center mb-1">
-      <span class="text-base font-medium text-brand-text-secondary dark:text-dark-brand-text-secondary">{item.nombre}</span>
-      <span class="text-sm font-medium text-brand-danger dark:text-dark-brand-danger">{item.stock} unid.</span>
+        <!-- Stats -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            <Card class="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-l-primary-500">
+                <div class="flex items-center justify-between mb-4">
+                    <p class="text-gray-500 dark:text-gray-400 font-medium">Órdenes Activas</p>
+                    <span class="material-symbols-outlined text-primary-500 bg-primary-50 dark:bg-primary-900/20 p-2 rounded-lg">build_circle</span>
+                </div>
+                <p class="text-4xl font-bold text-gray-900 dark:text-white mb-1">{activeOrdersCount}</p>
+                <p class="text-sm text-green-600 dark:text-green-400 font-medium flex items-center gap-1">
+                    <span class="material-symbols-outlined text-sm">trending_up</span> En proceso
+                </p>
+            </Card>
+
+            <Card class="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-l-green-500">
+                <div class="flex items-center justify-between mb-4">
+                    <p class="text-gray-500 dark:text-gray-400 font-medium">Completadas Hoy</p>
+                    <span class="material-symbols-outlined text-green-500 bg-green-50 dark:bg-green-900/20 p-2 rounded-lg">task_alt</span>
+                </div>
+                <p class="text-4xl font-bold text-gray-900 dark:text-white mb-1">{completedTodayCount}</p>
+                <p class="text-sm text-green-600 dark:text-green-400 font-medium flex items-center gap-1">
+                    <span class="material-symbols-outlined text-sm">check_circle</span> Entregadas
+                </p>
+            </Card>
+
+            <Card class="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-l-red-500">
+                <div class="flex items-center justify-between mb-4">
+                    <p class="text-gray-500 dark:text-gray-400 font-medium">Stock Bajo Mínimo</p>
+                    <span class="material-symbols-outlined text-red-500 bg-red-50 dark:bg-red-900/20 p-2 rounded-lg">inventory_2</span>
+                </div>
+                <p class="text-4xl font-bold text-gray-900 dark:text-white mb-1">{lowStockCount}</p>
+                <p class="text-sm text-red-600 dark:text-red-400 font-medium flex items-center gap-1">
+                    <span class="material-symbols-outlined text-sm">warning</span> Requiere atención
+                </p>
+            </Card>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="mb-8">
+            <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">Accesos Rápidos</h2>
+            <div class="flex flex-wrap gap-4">
+                <a href="/encargado/alert_stock">
+                    <Button variant="secondary" icon="warning" class="bg-amber-100 text-amber-800 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:hover:bg-amber-900/50 border-amber-200 dark:border-amber-800">Alertas Stock</Button>
+                </a>
+                <a href="/encargado/asig_orden">
+                    <Button icon="add_circle">Asignar Orden</Button>
+                </a>
+                <a href="/encargado/disp_mec">
+                    <Button variant="secondary" icon="group">Disponibilidad</Button>
+                </a>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+            <!-- Recent Activity Table -->
+            <div class="lg:col-span-3">
+                <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">Actividad Reciente</h2>
+                <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400">
+                            <thead class="text-xs text-gray-700 dark:text-gray-300 uppercase bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700">
+                                <tr>
+                                    <th class="px-6 py-3">ID</th>
+                                    <th class="px-6 py-3">Cliente</th>
+                                    <th class="px-6 py-3">Vehículo</th>
+                                    <th class="px-6 py-3">Mecánico</th>
+                                    <th class="px-6 py-3">Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                                {recentOrders.map((order: any) => (
+                                    <tr class="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                        <td class="px-6 py-4 font-medium text-gray-900 dark:text-white">#{order.id}</td>
+                                        <td class="px-6 py-4">{order.cliente ? `${order.cliente.nombre} ${order.cliente.apellido}` : 'N/A'}</td>
+                                        <td class="px-6 py-4">{order.vehiculo ? `${order.vehiculo.marca} ${order.vehiculo.modelo}` : 'N/A'}</td>
+                                        <td class="px-6 py-4">{order.mecanico ? order.mecanico.nombre : 'Sin asignar'}</td>
+                                        <td class="px-6 py-4">
+                                            <span class={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                                order.estado === 'Entregado' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' :
+                                                order.estado === 'Pendiente' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' :
+                                                'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
+                                            }`}>
+                                                {order.estado}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {recentOrders.length === 0 && (
+                                    <tr>
+                                        <td colspan="5" class="px-6 py-8 text-center text-gray-500 dark:text-gray-400">No hay actividad reciente.</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stock Alerts -->
+            <div class="lg:col-span-2">
+                <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">Alertas de Stock</h2>
+                <Card>
+                    <div class="space-y-6">
+                        {lowStockItems.length > 0 ? lowStockItems.map((item: any) => (
+                            <div>
+                                <div class="flex justify-between items-center mb-1">
+                                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{item.nombre}</span>
+                                    <span class="text-xs font-bold text-red-600 dark:text-red-400">{item.stock} unid.</span>
+                                </div>
+                                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                                    <div class="bg-red-500 h-2 rounded-full transition-all duration-500" style={`width: ${Math.min(item.stock * 10, 100)}%`}></div>
+                                </div>
+                            </div>
+                        )) : (
+                            <div class="text-center py-8">
+                                <span class="material-symbols-outlined text-green-500 text-4xl mb-2">check_circle</span>
+                                <p class="text-gray-500 dark:text-gray-400">No hay alertas de stock bajo.</p>
+                            </div>
+                        )}
+                    </div>
+                    {lowStockItems.length > 0 && (
+                        <div class="mt-6 pt-4 border-t border-gray-100 dark:border-gray-700">
+                            <a href="/encargado/alert_stock" class="text-sm text-primary-600 dark:text-primary-400 hover:underline flex items-center justify-center gap-1">
+                                Ver todo el inventario <span class="material-symbols-outlined text-sm">arrow_forward</span>
+                            </a>
+                        </div>
+                    )}
+                </Card>
+            </div>
+        </div>
     </div>
-    <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
-      <div class="bg-brand-danger h-2.5 rounded-full" style={`width: ${Math.min(item.stock * 10, 100)}%`}></div>
-    </div>
-  </div>
-)) : (
-  <p class="text-brand-text-secondary dark:text-dark-brand-text-secondary">No hay alertas de stock bajo.</p>
-)}
-</div>
-</div>
-</div>
-</div>
-</main>
-</div>
-</div>
-</div>
-</div>
-</body></html>
+</DashboardLayout>

@@ -34,23 +34,50 @@ export async function strapiGet(endpoint: string) {
   
   // Si tiene data, devolver la estructura completa con data aplanado
   if (response.data) {
-    // Aplanar cada elemento en data.data
-    const flattenedData = Array.isArray(response.data) 
-      ? response.data.map((item: any) => ({
-          id: item.id,
-          documentId: item.documentId || item.id,
-          ...item.attributes,
-        }))
-      : response.data;
-    
     return {
-      data: flattenedData,
+      data: flattenAttributes(response.data),
       meta: response.meta
     };
   }
   
   return response;
 }
+
+// Función recursiva para aplanar la estructura de Strapi
+function flattenAttributes(data: any): any {
+  // Check if data is a plain object; null, arrays, and non-objects are returned as is
+  if (!data || typeof data !== 'object') {
+    return data;
+  }
+
+  // If it's an array, map over it
+  if (Array.isArray(data)) {
+    return data.map(flattenAttributes);
+  }
+
+  // Handle the "data" wrapper
+  if (data.data !== undefined) {
+    return flattenAttributes(data.data);
+  }
+
+  // Handle the "attributes" wrapper
+  if (data.attributes !== undefined) {
+    const { attributes, id, ...rest } = data;
+    return {
+      id,
+      ...rest,
+      ...flattenAttributes(attributes),
+    };
+  }
+
+  // Recursively flatten all keys in the object
+  const flattened: any = {};
+  for (const key in data) {
+    flattened[key] = flattenAttributes(data[key]);
+  }
+  return flattened;
+}
+
 
 export async function strapiPost(endpoint: string, body: any) {
   return fetchStrapi(endpoint, {

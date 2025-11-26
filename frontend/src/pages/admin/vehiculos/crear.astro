@@ -21,16 +21,16 @@ try {
 <Layout title="Crear Vehículo">
   <div class="container mx-auto px-4 py-8 max-w-2xl">
     <div class="flex items-center mb-6">
-      <a href="/admin/vehiculos" class="text-blue-500 hover:text-blue-700 mr-4">
+      <a href="/admin/vehiculos" class="text-gray-600 hover:text-blue-600 mr-4 transition-colors">
         ← Volver
       </a>
-      <h1 class="text-3xl font-bold">Crear Nuevo Vehículo</h1>
+      <h1 class="text-3xl font-bold text-gray-800">Crear Nuevo Vehículo</h1>
     </div>
 
     <div id="errorMessage" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4"></div>
     <div id="successMessage" class="hidden bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4"></div>
 
-    <form id="vehiculoForm" class="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
+    <form id="vehiculoForm" class="card p-8 mb-4">
       <div class="mb-4">
         <label class="block text-gray-700 text-sm font-bold mb-2" for="patente">
           Patente *
@@ -40,7 +40,7 @@ try {
           id="patente"
           name="patente"
           required
-          class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
           placeholder="ABC123"
         />
       </div>
@@ -54,7 +54,7 @@ try {
           id="marca"
           name="marca"
           required
-          class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
           placeholder="Toyota"
         />
       </div>
@@ -68,7 +68,7 @@ try {
           id="modelo"
           name="modelo"
           required
-          class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
           placeholder="Corolla"
         />
       </div>
@@ -83,7 +83,7 @@ try {
           name="ano"
           min="1900"
           max="2100"
-          class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
           placeholder="2020"
         />
       </div>
@@ -96,7 +96,7 @@ try {
           type="text"
           id="numero_de_chasis"
           name="numero_de_chasis"
-          class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
           placeholder="1HGBH41JXMN109186"
         />
       </div>
@@ -109,7 +109,7 @@ try {
           id="cliente"
           name="cliente"
           required
-          class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
         >
           <option value="">Seleccione un cliente</option>
           {clientesList.map((cliente: any) => (
@@ -125,7 +125,7 @@ try {
         <select
           id="mecanico"
           name="mecanico"
-          class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
         >
           <option value="">Sin asignar</option>
           {mecanicosList.map((mecanico: any) => (
@@ -134,16 +134,16 @@ try {
         </select>
       </div>
 
-      <div class="flex items-center justify-between">
+      <div class="flex items-center justify-between pt-4">
         <button
           type="submit"
-          class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+          class="btn-primary"
         >
           Crear Vehículo
         </button>
         <a
           href="/admin/vehiculos"
-          class="inline-block align-baseline font-bold text-sm text-gray-500 hover:text-gray-800"
+          class="text-gray-600 hover:text-gray-800 font-medium"
         >
           Cancelar
         </a>

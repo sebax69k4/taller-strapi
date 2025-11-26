@@ -2,6 +2,7 @@
 export const prerender = false;
 import { strapiGet } from '../../lib/strapi';
 import '../../styles/global.css';
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
 
 const userRole = Astro.cookies.get('user_role')?.value;
 if (!userRole) {
@@ -16,237 +17,160 @@ try {
 } catch (e) {
   console.error('Error fetching active orders:', e);
 }
-
-const getProgress = (status: string) => {
-  switch(status) {
-    case 'Pendiente': return 10;
-    case 'En Proceso': return 50;
-    case 'Esperando Repuestos': return 30; // If this status exists
-    case 'Finalizado': return 90;
-    case 'Entregado': return 100;
-    default: return 0;
-  }
-};
-
-const getStatusColor = (status: string) => {
-    switch(status) {
-        case 'Pendiente': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
-        case 'En Proceso': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
-        case 'Finalizado': return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
-        default: return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
-    }
-};
 ---
 
-<!DOCTYPE html>
-
-<html class="light" lang="es"><head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Trabajos en Curso - Taller Veloz</title>
-<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<link href="https://fonts.googleapis.com" rel="preconnect"/>
-<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&amp;display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-<style>
-    .material-symbols-outlined {
-      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-    }
-    .material-symbols-outlined.fill {
-      font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-    }
-  </style>
-</head>
-<body class="font-display bg-background-light dark:bg-background-dark text-gray-800 dark:text-gray-200">
-<div class="relative flex min-h-screen w-full">
-<!-- SideNavBar -->
-<aside class="flex w-64 flex-col bg-white dark:bg-gray-900/50 p-4 border-r border-gray-200 dark:border-gray-800">
-<div class="flex flex-col gap-4">
-<div class="flex items-center gap-3">
-<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://cdn.usegalileo.ai/stability/a4b1f6ac-1498-420f-bb19-91ee46e9ce70.png");'></div>
-<div class="flex flex-col">
-<h1 class="text-gray-900 dark:text-white text-base font-medium leading-normal">Taller Veloz</h1>
-<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Gestión de Taller</p>
-</div>
-</div>
-<nav class="flex flex-col gap-2 mt-4">
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/dash_enc">
-<span class="material-symbols-outlined">dashboard</span>
-<p class="text-sm font-medium leading-normal">Dashboard</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/alert_stock">
-<span class="material-symbols-outlined">inventory_2</span>
-<p class="text-sm font-medium leading-normal">Alertas Stock</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/asig_orden">
-<span class="material-symbols-outlined">assignment_ind</span>
-<p class="text-sm font-medium leading-normal">Asignar Orden</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/disp_mec">
-<span class="material-symbols-outlined">calendar_view_week</span>
-<p class="text-sm font-medium leading-normal">Disponibilidad</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/10 text-primary" href="/encargado/trabajos_en_curso">
-<span class="material-symbols-outlined">construction</span>
-<p class="text-sm font-medium leading-normal">Trabajos en Curso</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/gen_factura">
-<span class="material-symbols-outlined">receipt_long</span>
-<p class="text-sm font-medium leading-normal">Generar Factura</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/marc_orden">
-<span class="material-symbols-outlined">flag</span>
-<p class="text-sm font-medium leading-normal">Marcar Orden</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/disp_mec_zonas">
-<span class="material-symbols-outlined">view_quilt</span>
-<p class="text-sm font-medium leading-normal">Disp. Mec. Zonas</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/asignar_orden_zona">
-<span class="material-symbols-outlined">add_road</span>
-<p class="text-sm font-medium leading-normal">Asignar Orden Zona</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/detalles_de_orden">
-<span class="material-symbols-outlined">info</span>
-<p class="text-sm font-medium leading-normal">Detalles de Orden</p>
-</a>
-</nav>
-</div>
-<div class="mt-auto flex flex-col gap-2">
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/settings">
-<span class="material-symbols-outlined">settings</span>
-<p class="text-sm font-medium leading-normal">Configuración</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/logout">
-<span class="material-symbols-outlined">logout</span>
-<p class="text-sm font-medium leading-normal">Cerrar Sesión</p>
-</a>
-</div>
-</aside>
-<!-- Main Content -->
-<main class="flex-1 p-8"
-    x-data=`{
-        searchQuery: '',
-        orders: ${JSON.stringify(activeOrders)},
-        currentPage: 1,
-        itemsPerPage: 5,
-        get filteredOrders() {
-            if (!this.searchQuery) return this.orders;
-            const query = this.searchQuery.toLowerCase();
-            return this.orders.filter(order =>
-                (order.cliente && (order.cliente.nombre.toLowerCase().includes(query) || order.cliente.apellido.toLowerCase().includes(query))) ||
-                (order.vehiculo && (order.vehiculo.marca.toLowerCase().includes(query) || order.vehiculo.modelo.toLowerCase().includes(query))) ||
-                (order.mecanico && order.mecanico.nombre.toLowerCase().includes(query)) ||
-                (order.documentId && order.documentId.toLowerCase().includes(query))
-            );
-        },
-        get paginatedOrders() {
-            const start = (this.currentPage - 1) * this.itemsPerPage;
-            const end = start + this.itemsPerPage;
-            return this.filteredOrders.slice(start, end);
-        },
-        get totalPages() {
-            return Math.ceil(this.filteredOrders.length / this.itemsPerPage);
-        },
-        nextPage() {
-            if (this.currentPage < this.totalPages) this.currentPage++;
-        },
-        prevPage() {
-            if (this.currentPage > 1) this.currentPage--;
-        },
-        goToPage(page) {
-            this.currentPage = page;
-        }
-    }`>
-<div class="max-w-7xl mx-auto">
-<!-- PageHeading -->
-<header class="flex flex-wrap justify-between items-center gap-4 mb-6">
-<h1 class="text-3xl font-black tracking-tight">Órdenes de Trabajo en Progreso</h1>
-<a href="/recepcion/crear_orden" class="flex items-center justify-center gap-2 h-10 px-5 bg-primary text-white rounded-lg text-sm font-bold shadow-sm hover:bg-primary/90 transition-colors">
-<span class="material-symbols-outlined text-base">add_circle</span>
-<span>Crear Nueva Orden</span>
-</a>
-</header>
-<!-- SearchBar -->
-<div class="mb-6">
-<div class="relative">
-<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-neutral-gray-light dark:text-neutral-gray-dark">search</span>
-<input x-model="searchQuery" class="form-input w-full h-12 pl-12 pr-4 rounded-lg bg-surface-light dark:bg-surface-dark border-border-light dark:border-border-dark focus:ring-primary focus:border-primary placeholder:text-neutral-gray-light dark:placeholder:text-neutral-gray-dark" placeholder="Buscar por cliente, vehículo o mecánico..." type="text"/>
-</div>
-</div>
-<!-- Table -->
-<div class="bg-surface-light dark:bg-surface-dark rounded-xl shadow-sm overflow-hidden border border-border-light dark:border-border-dark">
-<div class="overflow-x-auto">
-<table class="w-full text-sm text-left">
-<thead class="bg-background-light dark:bg-background-dark/50">
-<tr>
-<th class="px-6 py-3 font-bold uppercase text-xs tracking-wider text-text-secondary-light dark:text-text-secondary-dark">Nº Orden</th>
-<th class="px-6 py-3 font-bold uppercase text-xs tracking-wider text-text-secondary-light dark:text-text-secondary-dark">Cliente</th>
-<th class="px-6 py-3 font-bold uppercase text-xs tracking-wider text-text-secondary-light dark:text-text-secondary-dark">Vehículo</th>
-<th class="px-6 py-3 font-bold uppercase text-xs tracking-wider text-text-secondary-light dark:text-textsecondary-dark">Mecánico Asignado</th>
-<th class="px-6 py-3 font-bold uppercase text-xs tracking-wider text-text-secondary-light dark:text-text-secondary-dark">Estado</th>
-<th class="px-6 py-3 font-bold uppercase text-xs tracking-wider text-text-secondary-light dark:text-textsecondary-dark">Progreso</th>
-<th class="px-6 py-3 font-bold uppercase text-xs tracking-wider text-text-secondary-light dark:text-text-secondary-dark text-right">Acciones</th>
-</tr>
-</thead>
-<tbody class="divide-y divide-border-light dark:divide-border-dark">
-    <template x-if="paginatedOrders.length > 0">
-        <template x-for="order in paginatedOrders" :key="order.documentId">
-            <tr class="hover:bg-background-light dark:hover:bg-background-dark/50 transition-colors">
-                <td class="px-6 py-4 whitespace-nowrap font-medium text-text-secondary-light dark:text-text-secondary-dark">#<span x-text="order.documentId.slice(0, 6)"></span></td>
-                <td class="px-6 py-4 whitespace-nowrap font-semibold" x-text="order.cliente ? `${order.cliente.nombre} ${order.cliente.apellido}` : 'N/A'"></td>
-                <td class="px-6 py-4 whitespace-nowrap text-text-secondary-light dark:text-text-secondary-dark" x-text="order.vehiculo ? `${order.vehiculo.marca} ${order.vehiculo.modelo}` : 'N/A'"></td>
-                <td class="px-6 py-4 whitespace-nowrap text-text-secondary-light dark:text-textsecondary-dark" x-text="order.mecanico ? order.mecanico.nombre : 'Sin asignar'"></td>
-                <td class="px-6 py-4 whitespace-nowrap">
-                    <span :class="`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(order.estado)}`" x-text="order.estado"></span>
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap">
-                    <div class="flex items-center gap-3">
-                        <div class="w-24 bg-border-light dark:bg-border-dark rounded-full h-1.5">
-                            <div :class="`h-1.5 rounded-full ${order.estado === 'Pendiente' ? 'bg-yellow-500' : 'bg-blue-500'}`" :style="`width: ${getProgress(order.estado)}%`"></div>
-                        </div>
-                        <span class="font-medium" x-text="`${getProgress(order.estado)}%`"></span>
-                    </div>
-                </td>
-                <td class="px-6 py-4 whitespace-nowrap text-right">
-                    <a class="font-bold text-primary hover:underline" :href="`/encargado/detalles_de_orden?id=${order.documentId}`">Ver Detalles</a>
-                </td>
-            </tr>
-        </template>
-    </template>
-    <template x-if="paginatedOrders.length === 0">
-        <tr>
-            <td colspan="7" class="px-6 py-8 text-center text-gray-500">
-                <span x-text="orders.length > 0 ? 'No se encontraron órdenes que coincidan con la búsqueda.' : 'No hay órdenes en curso.'"></span>
-            </td>
-        </tr>
-    </template>
-</tbody>
-</table>
-</div>
-</div>
-<!-- Pagination -->
-<div class="flex items-center justify-between pt-6">
-    <div class="text-sm text-gray-600 dark:text-gray-400">
-        Mostrando <span x-text="(currentPage - 1) * itemsPerPage + 1"></span> a <span x-text="Math.min(currentPage * itemsPerPage, filteredOrders.length)"></span> de <span x-text="filteredOrders.length"></span> órdenes
+
+<script define:vars={{ activeOrders }}>
+    document.addEventListener('alpine:init', () => {
+        Alpine.data('trabajosEnCurso', () => ({
+            searchQuery: '',
+            orders: activeOrders,
+            currentPage: 1,
+            itemsPerPage: 10,
+            
+            getProgress(status) {
+                switch(status) {
+                    case 'Pendiente': return 10;
+                    case 'En Proceso': return 50;
+                    case 'Esperando Repuestos': return 30;
+                    case 'Finalizado': return 90;
+                    case 'Entregado': return 100;
+                    default: return 0;
+                }
+            },
+
+            getStatusColor(status) {
+                switch(status) {
+                    case 'Pendiente': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
+                    case 'En Proceso': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
+                    case 'Finalizado': return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
+                    default: return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
+                }
+            },
+
+            get filteredOrders() {
+                if (!this.searchQuery) return this.orders;
+                const query = this.searchQuery.toLowerCase();
+                return this.orders.filter(order =>
+                    (order.cliente && (order.cliente.nombre.toLowerCase().includes(query) || order.cliente.apellido.toLowerCase().includes(query))) ||
+                    (order.vehiculo && (order.vehiculo.marca.toLowerCase().includes(query) || order.vehiculo.modelo.toLowerCase().includes(query))) ||
+                    (order.mecanico && order.mecanico.nombre.toLowerCase().includes(query)) ||
+                    (order.documentId && order.documentId.toLowerCase().includes(query))
+                );
+            },
+            get paginatedOrders() {
+                const start = (this.currentPage - 1) * this.itemsPerPage;
+                const end = start + this.itemsPerPage;
+                return this.filteredOrders.slice(start, end);
+            },
+            get totalPages() {
+                return Math.ceil(this.filteredOrders.length / this.itemsPerPage);
+            },
+            nextPage() {
+                if (this.currentPage < this.totalPages) this.currentPage++;
+            },
+            prevPage() {
+                if (this.currentPage > 1) this.currentPage--;
+            },
+            goToPage(page) {
+                this.currentPage = page;
+            }
+        }));
+    });
+</script>
+
+<DashboardLayout title="Trabajos en Curso" role="encargado" currentPath="/encargado/trabajos_en_curso">
+    <div class="max-w-7xl mx-auto" x-data="trabajosEnCurso">
+        
+        <!-- PageHeading -->
+        <header class="flex flex-wrap justify-between items-center gap-4 mb-6">
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Órdenes de Trabajo en Progreso</h1>
+            <a href="/recepcion/crear_orden" class="flex items-center justify-center gap-2 h-10 px-5 bg-primary-600 text-white rounded-lg text-sm font-bold shadow-sm hover:bg-primary-700 transition-colors">
+                <span class="material-symbols-outlined text-base">add_circle</span>
+                <span>Crear Nueva Orden</span>
+            </a>
+        </header>
+
+        <!-- SearchBar -->
+        <div class="mb-6">
+            <div class="relative">
+                <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">search</span>
+                <input x-model="searchQuery" class="form-input w-full h-12 pl-12 pr-4 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 placeholder:text-gray-400 dark:placeholder:text-gray-500 text-gray-900 dark:text-white" placeholder="Buscar por cliente, vehículo o mecánico..." type="text"/>
+            </div>
+        </div>
+
+        <!-- Table -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden border border-gray-200 dark:border-gray-700">
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm text-left">
+                    <thead class="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
+                        <tr>
+                            <th class="px-6 py-3 font-bold uppercase text-xs tracking-wider text-gray-500 dark:text-gray-400">Nº Orden</th>
+                            <th class="px-6 py-3 font-bold uppercase text-xs tracking-wider text-gray-500 dark:text-gray-400">Cliente</th>
+                            <th class="px-6 py-3 font-bold uppercase text-xs tracking-wider text-gray-500 dark:text-gray-400">Vehículo</th>
+                            <th class="px-6 py-3 font-bold uppercase text-xs tracking-wider text-gray-500 dark:text-gray-400">Mecánico Asignado</th>
+                            <th class="px-6 py-3 font-bold uppercase text-xs tracking-wider text-gray-500 dark:text-gray-400">Estado</th>
+                            <th class="px-6 py-3 font-bold uppercase text-xs tracking-wider text-gray-500 dark:text-gray-400">Progreso</th>
+                            <th class="px-6 py-3 font-bold uppercase text-xs tracking-wider text-gray-500 dark:text-gray-400 text-right">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                        <template x-if="paginatedOrders.length > 0">
+                            <template x-for="order in paginatedOrders" :key="order.documentId">
+                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                    <td class="px-6 py-4 whitespace-nowrap font-medium text-gray-900 dark:text-white">#<span x-text="order.documentId.slice(0, 6)"></span></td>
+                                    <td class="px-6 py-4 whitespace-nowrap font-semibold text-gray-900 dark:text-white" x-text="order.cliente ? `${order.cliente.nombre} ${order.cliente.apellido}` : 'N/A'"></td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-400" x-text="order.vehiculo ? `${order.vehiculo.marca} ${order.vehiculo.modelo}` : 'N/A'"></td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-400" x-text="order.mecanico ? order.mecanico.nombre : 'Sin asignar'"></td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <span :class="`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(order.estado)}`" x-text="order.estado"></span>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap">
+                                        <div class="flex items-center gap-3">
+                                            <div class="w-24 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+                                                <div :class="`h-1.5 rounded-full ${order.estado === 'Pendiente' ? 'bg-yellow-500' : 'bg-blue-500'}`" :style="`width: ${getProgress(order.estado)}%`"></div>
+                                            </div>
+                                            <span class="font-medium text-xs text-gray-600 dark:text-gray-400" x-text="`${getProgress(order.estado)}%`"></span>
+                                        </div>
+                                    </td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-right">
+                                        <a class="font-bold text-primary-600 hover:text-primary-700 hover:underline" :href="`/encargado/detalles_de_orden?id=${order.documentId}`">Ver Detalles</a>
+                                    </td>
+                                </tr>
+                            </template>
+                        </template>
+                        <template x-if="paginatedOrders.length === 0">
+                            <tr>
+                                <td colspan="7" class="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                                    <span class="material-symbols-outlined text-4xl mb-2 opacity-50">search_off</span>
+                                    <p x-text="orders.length > 0 ? 'No se encontraron órdenes que coincidan con la búsqueda.' : 'No hay órdenes en curso.'"></p>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Pagination -->
+        <div class="flex items-center justify-between pt-6" x-show="totalPages > 1">
+            <div class="text-sm text-gray-600 dark:text-gray-400">
+                Mostrando <span x-text="(currentPage - 1) * itemsPerPage + 1"></span> a <span x-text="Math.min(currentPage * itemsPerPage, filteredOrders.length)"></span> de <span x-text="filteredOrders.length"></span> órdenes
+            </div>
+            <nav class="flex items-center gap-1">
+                <button @click="prevPage()" :disabled="currentPage === 1" class="flex size-9 items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-gray-600 dark:text-gray-400">
+                    <span class="material-symbols-outlined text-lg">chevron_left</span>
+                </button>
+                <template x-for="page in totalPages" :key="page">
+                    <button @click="goToPage(page)" class="text-sm font-bold flex size-9 items-center justify-center rounded-lg transition-colors" :class="{'bg-primary-600 text-white': currentPage === page, 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400': currentPage !== page}">
+                        <span x-text="page"></span>
+                    </button>
+                </template>
+                <button @click="nextPage()" :disabled="currentPage === totalPages" class="flex size-9 items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-gray-600 dark:text-gray-400">
+                    <span class="material-symbols-outlined text-lg">chevron_right</span>
+                </button>
+            </nav>
+        </div>
     </div>
-    <nav class="flex items-center gap-1">
-        <button @click="prevPage()" :disabled="currentPage === 1" class="flex size-9 items-center justify-center rounded-lg hover:bg-primary/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-            <span class="material-symbols-outlined text-lg">chevron_left</span>
-        </button>
-        <template x-for="page in totalPages" :key="page">
-            <button @click="goToPage(page)" class="text-sm font-bold flex size-9 items-center justify-center rounded-lg" :class="{'bg-primary text-white': currentPage === page, 'hover:bg-primary/10': currentPage !== page}">
-                <span x-text="page"></span>
-            </button>
-        </template>
-        <button @click="nextPage()" :disabled="currentPage === totalPages" class="flex size-9 items-center justify-center rounded-lg hover:bg-primary/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-            <span class="material-symbols-outlined text-lg">chevron_right</span>
-        </button>
-    </nav>
-</div>
-</div>
-</main>
-</div>
-</body></html>
+</DashboardLayout>

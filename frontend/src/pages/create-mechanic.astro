@@ -1,0 +1,31 @@
+---
+import { strapiPost } from '../lib/strapi';
+
+let result = '';
+let error = '';
+
+try {
+  const newMechanic = {
+    nombre: 'Juan',
+    apellido: 'Perez',
+    email: 'mecanico@taller.com',
+    especialidad: 'General',
+    estado: 'disponible'
+  };
+
+  const response = await strapiPost('/api/mecenicos', newMechanic);
+  result = JSON.stringify(response, null, 2);
+} catch (e: any) {
+  error = e.message;
+}
+---
+
+<html>
+<body>
+  <h1>Create Mechanic</h1>
+  <h2>Result:</h2>
+  <pre>{result}</pre>
+  <h2>Error:</h2>
+  <pre>{error}</pre>
+</body>
+</html>

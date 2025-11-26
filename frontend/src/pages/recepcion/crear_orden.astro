@@ -1,5 +1,8 @@
 ---
 export const prerender = false;
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import Card from '../../components/ui/Card.astro';
+import Button from '../../components/ui/Button.astro';
 import { fetchStrapi, strapiGet, strapiPost, strapiPut } from '../../lib/strapi';
 import '../../styles/global.css';
 
@@ -74,182 +77,123 @@ if (Astro.request.method === 'POST') {
       estado: 'Pendiente'
     });
 
-    const ordenId = result.data.id;
-    const successMessage = `Orden de trabajo #${ordenId} creada exitosamente.`;
-    return Astro.redirect(`/recepcion/crear_orden?message=${encodeURIComponent(successMessage)}&type=success`);
+    return Astro.redirect(`/recepcion/dash_recep?message=${encodeURIComponent('Orden creada exitosamente.')}&type=success`);
 
   } catch (error: any) {
-    const errorMessage = error.message || 'Error al crear la orden.';
-    return Astro.redirect(`/recepcion/crear_orden?message=${encodeURIComponent(errorMessage)}&type=error`);
+    console.error('Error creating order:', error);
+    message = 'Error al crear la orden. ' + error.message;
+    messageType = 'error';
   }
 }
 ---
-<!DOCTYPE html>
-<html class="light" lang="es">
-<head>
-    <meta charset="utf-8"/>
-    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-    <title>Nueva Orden de Trabajo</title>
-    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
-    <style>
-        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
-        [x-cloak] { display: none !important; }
-    </style>
-    <script src="//unpkg.com/alpinejs" defer></script>
-</head>
-<body class="font-display bg-background-light dark:bg-background-dark">
-<div class="relative flex min-h-screen w-full">
-<!-- SideNavBar -->
-<aside class="flex w-64 flex-col gap-4 p-4 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800">
-    <div class="flex gap-3 items-center">
-        <div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://cdn.usegalileo.ai/stability/a4b1f6ac-1498-420f-bb19-91ee46e9ce70.png");'></div>
-        <div class="flex flex-col">
-            <h1 class="text-gray-900 dark:text-white text-base font-medium">Taller Veloz</h1>
-            <p class="text-gray-500 dark:text-gray-400 text-sm">Panel Recepción</p>
-        </div>
-    </div>
-    <nav class="flex flex-col gap-2 mt-4">
-        <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/recepcion/dash_recep">
-            <span class="material-symbols-outlined">dashboard</span>
-            <p class="text-sm font-medium">Dashboard</p>
-        </a>
-        <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/recepcion/crear_cliente">
-            <span class="material-symbols-outlined">person_add</span>
-            <p class="text-sm font-medium">Crear Cliente</p>
-        </a>
-        <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/recepcion/crear_vehiculo">
-            <span class="material-symbols-outlined">directions_car</span>
-            <p class="text-sm font-medium">Crear Vehículo</p>
-        </a>
-        <a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/10 text-primary" href="/recepcion/crear_orden">
-            <span class="material-symbols-outlined text-primary">post_add</span>
-            <p class="text-sm font-medium">Crear Orden</p>
-        </a>
-        <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/recepcion/list_c_y_v">
-            <span class="material-symbols-outlined">group</span>
-            <p class="text-sm font-medium">Listar C y V</p>
-        </a>
-    </nav>
-    <div class="mt-auto flex flex-col gap-2">
-        <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/logout">
-            <span class="material-symbols-outlined">logout</span>
-            <p class="text-sm font-medium">Cerrar Sesión</p>
-        </a>
-    </div>
-</aside>
 
-<!-- Main Content -->
-<main class="flex-1 p-8">
-    <div class="w-full max-w-4xl mx-auto"
-         x-data="formController({
-            allVehiculos: {{ JSON.stringify(vehiculos) }}
-         })">
-        <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
-            <div class="p-6 sm:p-8">
-                <div class="flex flex-col gap-2 mb-8">
-                    <h1 class="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-slate-50">Nueva Orden de Trabajo</h1>
-                    <p class="text-sm text-slate-500 dark:text-slate-400">Seleccione cliente, vehículo y describa el trabajo a realizar.</p>
+<DashboardLayout title="Crear Orden de Trabajo" role="recepcionista" currentPath="/recepcion/crear_orden">
+    <div class="max-w-4xl mx-auto">
+        <!-- Page Header -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Nueva Orden de Trabajo</h1>
+            <p class="text-gray-500 dark:text-gray-400 text-sm mt-1">Registra un nuevo vehículo para servicio</p>
+        </div>
+
+        <!-- Alert Messages -->
+        {message && (
+            <div class={`p-4 mb-6 rounded-lg border flex items-center gap-3 ${messageType === 'success' ? 'bg-green-50 border-green-200 text-green-800 dark:bg-green-900/30 dark:border-green-800 dark:text-green-300' : 'bg-red-50 border-red-200 text-red-800 dark:bg-red-900/30 dark:border-red-800 dark:text-red-300'}`}>
+                <span class="material-symbols-outlined">{messageType === 'success' ? 'check_circle' : 'error'}</span>
+                <p class="text-sm font-medium">{message}</p>
+            </div>
+        )}
+
+        <Card>
+            <form method="POST" class="space-y-8" x-data={`formController({ allVehiculos: ${JSON.stringify(vehiculos)} })`}>
+                
+                <!-- Client and Vehicle Selection -->
+                <div>
+                    <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                        <span class="flex items-center justify-center w-6 h-6 rounded-full bg-primary-100 dark:bg-primary-900/30 text-primary-600 text-xs">1</span>
+                        Información de Cliente y Vehículo
+                    </h2>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        <div class="flex flex-col gap-2">
+                            <label class="text-sm font-medium text-gray-700 dark:text-gray-300" for="cliente">Cliente</label>
+                            <select name="cliente" id="cliente" @change="filterVehiculos($event.target.value)" class="form-select w-full rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 focus:border-primary-500 focus:ring-primary-500 dark:text-gray-200" required>
+                                <option value="" disabled selected>Seleccione un cliente...</option>
+                                {clientes.map((cliente: any) => (
+                                    <option value={cliente.id}>{cliente.nombre} {cliente.apellido}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div class="flex flex-col gap-2">
+                            <label class="text-sm font-medium text-gray-700 dark:text-gray-300" for="vehiculo">Vehículo</label>
+                            <select name="vehiculo" id="vehiculo" class="form-select w-full rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 focus:border-primary-500 focus:ring-primary-500 dark:text-gray-200" required :disabled="filteredVehiculos.length === 0">
+                                <option value="" disabled selected>Seleccione un vehículo...</option>
+                                <template x-for="vehiculo in filteredVehiculos" :key="vehiculo.id">
+                                    <option :value="vehiculo.id" x-text="`${vehiculo.marca} ${vehiculo.modelo} (${vehiculo.patente})`"></option>
+                                </template>
+                            </select>
+                            <p x-show="selectedClientId && filteredVehiculos.length === 0" class="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
+                                <span class="material-symbols-outlined text-sm">warning</span>
+                                Este cliente no tiene vehículos. <a href="/recepcion/crear_vehiculo" class="font-medium hover:underline">Añadir uno</a>.
+                            </p>
+                        </div>
+                    </div>
                 </div>
 
-                <template x-if="message">
-                    <div x-show="message" x-transition class="p-4 my-6 rounded-lg text-sm" :class="{ 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300': messageType === 'success', 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300': messageType === 'error' }" role="alert">
-                        <span x-text="message"></span>
-                    </div>
-                </template>
+                <div class="border-t border-gray-100 dark:border-gray-800"></div>
 
-                <form method="POST" class="space-y-8">
-                    <!-- Customer and Vehicle Information -->
-                    <div>
-                        <h2 class="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-4">1. Información de Cliente y Vehículo</h2>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                            <div class="flex flex-col">
-                                <label class="text-sm font-medium text-slate-700 dark:text-slate-300 pb-2" for="cliente">Cliente</label>
-                                <select name="cliente" id="cliente" @change="filterVehiculos($event.target.value)" class="form-select w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark focus:border-primary focus:ring-primary dark:text-slate-200" required>
-                                    <option value="" disabled selected>Seleccione un cliente...</option>
-                                    {clientes.map((cliente: any) => (
-                                        <option value={cliente.id}>{cliente.nombre} {cliente.apellido}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div class="flex flex-col">
-                                <label class="text-sm font-medium text-slate-700 dark:text-slate-300 pb-2" for="vehiculo">Vehículo</label>
-                                <select name="vehiculo" id="vehiculo" class="form-select w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark focus:border-primary focus:ring-primary dark:text-slate-200" required :disabled="filteredVehiculos.length === 0">
-                                    <option value="" disabled selected>Seleccione un vehículo...</option>
-                                    <template x-for="vehiculo in filteredVehiculos" :key="vehiculo.id">
-                                        <option :value="vehiculo.id" x-text="`${vehiculo.marca} ${vehiculo.modelo} (${vehiculo.patente})`"></option>
-                                    </template>
-                                </select>
-                                <p x-show="selectedClientId && filteredVehiculos.length === 0" class="text-xs text-amber-600 dark:text-amber-400 mt-2">
-                                    Este cliente no tiene vehículos. <a href="/recepcion/crear_vehiculo" class="text-primary hover:underline">Añadir uno</a>.
-                                </p>
-                            </div>
+                <!-- Service Details -->
+                <div>
+                    <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+                        <span class="flex items-center justify-center w-6 h-6 rounded-full bg-primary-100 dark:bg-primary-900/30 text-primary-600 text-xs">2</span>
+                        Detalles del Servicio
+                    </h2>
+                    <div class="grid grid-cols-1 gap-6">
+                        <div class="flex flex-col sm:max-w-xs gap-2">
+                            <label class="text-sm font-medium text-gray-700 dark:text-gray-300" for="fecha_entrada">Fecha de Entrada</label>
+                            <input name="fecha_entrada" id="fecha_entrada" x-init="$el.value = new Date().toISOString().split('T')[0]" class="form-input w-full rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 focus:border-primary-500 focus:ring-primary-500 dark:text-gray-200" type="date" required/>
+                        </div>
+                        <div class="flex flex-col gap-2">
+                            <label class="text-sm font-medium text-gray-700 dark:text-gray-300" for="descripcion">Descripción del Problema / Tareas</label>
+                            <textarea name="descripcion" id="descripcion" class="form-textarea w-full rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 focus:border-primary-500 focus:ring-primary-500 dark:text-gray-200 placeholder:text-gray-400" placeholder="Ej: Ruido en el motor al acelerar, revisar frenos, cambio de aceite..." rows="5" required></textarea>
                         </div>
                     </div>
+                </div>
 
-                    <div class="border-t border-slate-200 dark:border-slate-700"></div>
+                <div class="border-t border-gray-100 dark:border-gray-800"></div>
 
-                    <!-- Service Details -->
-                    <div>
-                        <h2 class="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-6">2. Detalles del Servicio</h2>
-                        <div class="grid grid-cols-1 gap-6">
-                            <div class="flex flex-col sm:max-w-xs">
-                                <label class="text-sm font-medium text-slate-700 dark:text-slate-300 pb-2" for="fecha_entrada">Fecha de Entrada</label>
-                                <input name="fecha_entrada" id="fecha_entrada" x-init="$el.value = new Date().toISOString().split('T')[0]" class="form-input w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark focus:border-primary focus:ring-primary dark:text-slate-200" type="date" required/>
-                            </div>
-                            <div class="flex flex-col">
-                                <label class="text-sm font-medium text-slate-700 dark:text-slate-300 pb-2" for="descripcion">Descripción del Problema / Tareas</label>
-                                <textarea name="descripcion" id="descripcion" class="form-textarea w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-primary dark:text-slate-200" placeholder="Ej: Ruido en el motor al acelerar, revisar frenos, cambio de aceite..." rows="5" required></textarea>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="border-t border-slate-200 dark:border-slate-700"></div>
-
-                    <!-- Action Area -->
-                    <div class="flex justify-end gap-4 pt-2">
-                        <a href="/recepcion/dash_recep" class="inline-flex items-center justify-center rounded-lg bg-white dark:bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 ring-1 ring-inset ring-slate-300 dark:ring-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                <!-- Action Area -->
+                <div class="flex justify-end gap-3 pt-2">
+                    <a href="/recepcion/dash_recep">
+                        <Button type="button" variant="secondary">
                             Cancelar
-                        </a>
-                        <button class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90" type="submit">
-                            <span class="material-symbols-outlined mr-2 text-base">add_task</span>
-                            Crear Orden
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
+                        </Button>
+                    </a>
+                    <Button type="submit" icon="add_task">
+                        Crear Orden
+                    </Button>
+                </div>
+            </form>
+        </Card>
     </div>
-</main>
-</div>
 
-<script>
-    declare global {
-        interface Window {
-            Alpine: any;
-        }
-    }
-    document.addEventListener('alpine:init', () => {
-        window.Alpine.data('formController', ({ allVehiculos }: { allVehiculos: any[] }) => ({
-            message: new URLSearchParams(window.location.search).get('message'),
-            messageType: new URLSearchParams(window.location.search).get('type'),
-            selectedClientId: null as string | null,
-            allVehiculos: allVehiculos,
-            filteredVehiculos: [] as any[],
-            filterVehiculos(clientId: string) {
-                this.selectedClientId = clientId;
-                if (!clientId) {
-                    this.filteredVehiculos = [];
-                    return;
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('formController', ({ allVehiculos }) => ({
+                message: new URLSearchParams(window.location.search).get('message'),
+                messageType: new URLSearchParams(window.location.search).get('type'),
+                selectedClientId: null,
+                allVehiculos: allVehiculos,
+                filteredVehiculos: [],
+                filterVehiculos(clientId) {
+                    this.selectedClientId = clientId;
+                    if (!clientId) {
+                        this.filteredVehiculos = [];
+                        return;
+                    }
+                    this.filteredVehiculos = this.allVehiculos.filter(
+                        (vehiculo) => vehiculo.cliente && vehiculo.cliente.id == clientId
+                    );
                 }
-                this.filteredVehiculos = this.allVehiculos.filter(
-                    (vehiculo: any) => vehiculo.cliente && vehiculo.cliente.id == clientId
-                );
-            }
-        }));
-    });
-</script>
-
-</body>
-</html>
+            }));
+        });
+    </script>
+</DashboardLayout>

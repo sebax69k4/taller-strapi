@@ -1,5 +1,6 @@
 ---
 export const prerender = false;
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
 import { strapiGet, strapiPut } from '../../lib/strapi';
 import '../../styles/global.css';
 
@@ -19,7 +20,7 @@ try {
   pendingOrders = ordersData.data || [];
 
   // Fetch Mechanics with their orders to calculate workload
-  const mechanicsData = await strapiGet('/api/mecenico?populate=orden_de_trabajos');
+  const mechanicsData = await strapiGet('/api/mecenicos?populate=orden_de_trabajos');
   mechanics = mechanicsData.data || [];
 
   // Handle Assignment (POST request to self)
@@ -44,222 +45,164 @@ try {
   error = 'Error de conexión';
 }
 ---
-<!DOCTYPE html>
+<DashboardLayout title="Asignar Orden" role="encargado" currentPath="/encargado/asig_orden">
+    <!-- Page Heading -->
+    <header class="mb-8">
+        <div class="flex flex-col gap-2">
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Asignación de Órdenes de Trabajo</h1>
+            <p class="text-gray-500 dark:text-gray-400 text-base">Arrastra una orden pendiente y suéltala sobre un mecánico para asignarla.</p>
+            {successMessage && (
+                <div class="mt-4 p-4 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700 rounded-lg text-green-800 dark:text-green-200 flex items-center gap-2">
+                    <span class="material-symbols-outlined">check_circle</span>
+                    <p class="font-medium">{successMessage}</p>
+                </div>
+            )}
+            {error && (
+                <div class="mt-4 p-4 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg text-red-800 dark:text-red-200 flex items-center gap-2">
+                    <span class="material-symbols-outlined">error</span>
+                    <p class="font-medium">{error}</p>
+                </div>
+            )}
+        </div>
+    </header>
 
-<html class="light" lang="es"><head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-<title>Asignar Orden - Taller Veloz</title>
-<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<link href="https://fonts.googleapis.com" rel="preconnect"/>
-<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
-<script>
-        tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    colors: {
-                        "primary": "#135bec",
-                        "background-light": "#f6f6f8",
-                        "background-dark": "#101622",
-                    },
-                    fontFamily: {
-                        "display": ["Inter", "sans-serif"]
-                    },
-                    borderRadius: {
-                        "DEFAULT": "0.25rem",
-                        "lg": "0.5rem",
-                        "xl": "0.75rem",
-                        "full": "9999px"
-                    },
-                },
-            },
+    <!-- Main grid layout -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 h-[calc(100vh-250px)]">
+        <!-- Left Panel: Pending Orders -->
+        <div class="flex flex-col bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden h-full">
+            <!-- Section Header -->
+            <div class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+                <h2 class="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <span class="material-symbols-outlined text-gray-500">pending_actions</span>
+                    Órdenes Pendientes ({pendingOrders.length})
+                </h2>
+            </div>
+            
+            <!-- Search and Filters -->
+            <div class="p-4 border-b border-gray-200 dark:border-gray-700">
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <span class="material-symbols-outlined text-gray-400">search</span>
+                    </div>
+                    <input 
+                        class="block w-full pl-10 pr-3 py-2 border border-gray-200 dark:border-gray-700 rounded-lg leading-5 bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 sm:text-sm transition duration-150 ease-in-out" 
+                        placeholder="Buscar por ID, vehículo o servicio..." 
+                        type="text"
+                    />
+                </div>
+            </div>
+
+            <!-- Work Order List -->
+            <div class="flex-1 p-4 overflow-y-auto space-y-3 bg-gray-50/50 dark:bg-gray-900/20" id="pending-orders-list">
+                {pendingOrders.map((order: any) => (
+                    <div 
+                        draggable="true" 
+                        ondragstart={`event.dataTransfer.setData('text/plain', '${order.documentId}')`}
+                        class="cursor-grab active:cursor-grabbing p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm hover:shadow-md hover:border-primary-500 dark:hover:border-primary-500 transition-all group"
+                    >
+                        <div class="flex justify-between items-start mb-2">
+                            <span class="inline-flex items-center rounded-md bg-gray-100 dark:bg-gray-700 px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-300 ring-1 ring-inset ring-gray-500/10">
+                                ID: {order.documentId.slice(0, 8)}
+                            </span>
+                            <span class="inline-flex items-center rounded-full bg-yellow-100 dark:bg-yellow-900/30 px-2.5 py-0.5 text-xs font-semibold text-yellow-800 dark:text-yellow-300 ring-1 ring-inset ring-yellow-600/20">
+                                Pendiente
+                            </span>
+                        </div>
+                        <h3 class="text-gray-900 dark:text-white font-bold text-lg mb-1 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors">
+                            {order.vehiculo ? `${order.vehiculo.marca} ${order.vehiculo.modelo}` : 'Vehículo Desconocido'}
+                        </h3>
+                        <p class="text-gray-600 dark:text-gray-400 text-sm line-clamp-2">{order.descripcion || 'Sin descripción'}</p>
+                    </div>
+                ))}
+                {pendingOrders.length === 0 && (
+                    <div class="flex flex-col items-center justify-center h-40 text-gray-500 dark:text-gray-400">
+                        <span class="material-symbols-outlined text-4xl mb-2 text-gray-300 dark:text-gray-600">assignment_turned_in</span>
+                        <p>No hay órdenes pendientes.</p>
+                    </div>
+                )}
+            </div>
+        </div>
+
+        <!-- Right Panel: Mechanics -->
+        <div class="flex flex-col bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden h-full">
+            <!-- Section Header -->
+            <div class="p-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+                <h2 class="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    <span class="material-symbols-outlined text-gray-500">engineering</span>
+                    Mecánicos Disponibles
+                </h2>
+            </div>
+
+            <!-- Mechanics List -->
+            <div class="flex-1 p-4 overflow-y-auto space-y-4 bg-gray-50/50 dark:bg-gray-900/20">
+                {mechanics.map((mechanic: any) => {
+                    const activeOrders = mechanic.orden_de_trabajos ? mechanic.orden_de_trabajos.filter((o: any) => o.estado !== 'Entregado').length : 0;
+                    const workloadPercentage = Math.min((activeOrders / 5) * 100, 100); // Assuming max 5 orders
+                    
+                    return (
+                        <div 
+                            ondragover="event.preventDefault()" 
+                            ondrop={`handleDrop(event, '${mechanic.documentId}')`}
+                            class="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-primary-50 dark:hover:bg-primary-900/10 hover:border-primary-500 dark:hover:border-primary-500 transition-all shadow-sm"
+                        >
+                            <div class="flex items-center gap-4">
+                                <div class="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-xl font-bold text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-600">
+                                    {mechanic.nombre.charAt(0)}
+                                </div>
+                                <div class="flex-1">
+                                    <div class="flex justify-between items-start">
+                                        <div>
+                                            <h3 class="text-base font-bold text-gray-900 dark:text-white">{mechanic.nombre}</h3>
+                                            <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">{mechanic.especialidad || 'Mecánico General'}</p>
+                                        </div>
+                                        <span class={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                                            workloadPercentage > 80 ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' : 
+                                            workloadPercentage > 50 ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' : 
+                                            'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                                        }`}>
+                                            {activeOrders} Asignadas
+                                        </span>
+                                    </div>
+                                    
+                                    <div class="mt-3">
+                                        <div class="flex justify-between mb-1">
+                                            <span class="text-xs font-medium text-gray-500 dark:text-gray-400">Carga de Trabajo</span>
+                                            <span class="text-xs font-medium text-gray-700 dark:text-gray-300">{Math.round(workloadPercentage)}%</span>
+                                        </div>
+                                        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
+                                            <div 
+                                                class={`h-1.5 rounded-full transition-all duration-500 ${
+                                                    workloadPercentage > 80 ? 'bg-red-500' : 
+                                                    workloadPercentage > 50 ? 'bg-yellow-500' : 
+                                                    'bg-green-500'
+                                                }`} 
+                                                style={`width: ${workloadPercentage}%`}
+                                            ></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    </div>
+
+    <form id="assignForm" method="POST" class="hidden">
+        <input type="hidden" name="orderId" id="orderIdInput" />
+        <input type="hidden" name="mechanicId" id="mechanicIdInput" />
+    </form>
+
+    <script is:inline>
+        function handleDrop(event, mechanicId) {
+            event.preventDefault();
+            const orderId = event.dataTransfer.getData('text/plain');
+            if (orderId && mechanicId) {
+                document.getElementById('orderIdInput').value = orderId;
+                document.getElementById('mechanicIdInput').value = mechanicId;
+                document.getElementById('assignForm').submit();
+            }
         }
     </script>
-<style>
-        .material-symbols-outlined {
-            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-        }
-    </style>
-</head>
-<body class="bg-background-light dark:bg-background-dark font-display">
-<div class="flex h-screen w-full">
-<!-- SideNavBar -->
-<aside class="flex w-64 flex-col border-r border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900/50 p-4">
-<div class="flex items-center gap-3 mb-8">
-<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://cdn.usegalileo.ai/stability/a4b1f6ac-1498-420f-bb19-91ee46e9ce70.png");'></div>
-<div class="flex flex-col">
-<h1 class="text-gray-900 dark:text-white text-base font-bold leading-normal">Taller Veloz</h1>
-<p class="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">Gestión de Taller</p>
-</div>
-</div>
-<nav class="flex flex-col gap-2 flex-1">
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800" href="/encargado/dash_enc">
-<span class="material-symbols-outlined text-gray-800 dark:text-gray-200">dashboard</span>
-<p class="text-sm font-medium leading-normal">Dashboard</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800" href="/encargado/alert_stock">
-<span class="material-symbols-outlined">inventory_2</span>
-<p class="text-sm font-medium leading-normal">Alertas Stock</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/10 text-primary" href="/encargado/asig_orden">
-<span class="material-symbols-outlined">assignment_ind</span>
-<p class="text-sm font-medium leading-normal">Asignar Orden</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800" href="/encargado/disp_mec">
-<span class="material-symbols-outlined">calendar_view_week</span>
-<p class="text-sm font-medium leading-normal">Disponibilidad</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/trabajos_en_curso">
-<span class="material-symbols-outlined">construction</span>
-<p class="text-sm font-medium leading-normal">Trabajos en Curso</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800" href="/encargado/gen_factura">
-<span class="material-symbols-outlined text-gray-800 dark:text-gray-200">receipt_long</span>
-<p class="text-sm font-medium leading-normal">Generar Factura</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800" href="/encargado/marc_orden">
-<span class="material-symbols-outlined text-gray-800 dark:text-gray-200">flag</span>
-<p class="text-sm font-medium leading-normal">Marcar Orden</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/disp_mec_zonas">
-<span class="material-symbols-outlined">view_quilt</span>
-<p class="text-sm font-medium leading-normal">Disp. Mec. Zonas</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/asignar_orden_zona">
-<span class="material-symbols-outlined">add_road</span>
-<p class="text-sm font-medium leading-normal">Asignar Orden Zona</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/encargado/detalles_de_orden">
-<span class="material-symbols-outlined">info</span>
-<p class="text-sm font-medium leading-normal">Detalles de Orden</p>
-</a>
-</nav>
-<div class="flex flex-col gap-2 mt-8">
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800" href="#">
-<span class="material-symbols-outlined text-gray-800 dark:text-gray-200">settings</span>
-<p class="text-sm font-medium leading-normal">Configuración</p>
-</a>
-<a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800" href="#">
-<span class="material-symbols-outlined text-gray-800 dark:text-gray-200">logout</span>
-<p class="text-sm font-medium leading-normal">Cerrar Sesión</p>
-</a>
-</div>
-</aside>
-<!-- Main Content -->
-<main class="flex-1 flex flex-col overflow-hidden">
-<!-- Page Heading -->
-<header class="p-6 border-b border-gray-200 dark:border-gray-800">
-<div class="flex flex-wrap justify-between items-center gap-3">
-<div class="flex flex-col gap-1">
-<h1 class="text-gray-900 dark:text-white text-3xl font-bold leading-tight tracking-tight">Asignación de Órdenes de Trabajo</h1>
-<p class="text-gray-500 dark:text-gray-400 text-base font-normal leading-normal">Arrastra una orden pendiente y suéltala sobre un mecánico para asignarla.</p>
-{successMessage && <p class="text-green-600 font-bold">{successMessage}</p>}
-{error && <p class="text-red-600 font-bold">{error}</p>}
-</div>
-</div>
-</header>
-<!-- Main grid layout -->
-<div class="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6 p-6 overflow-auto">
-<!-- Left Panel: Pending Orders -->
-<div class="flex flex-col bg-white dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-800 h-full">
-<!-- Section Header -->
-<div class="p-4 border-b border-gray-200 dark:border-gray-800">
-<h2 class="text-gray-900 dark:text-white text-lg font-bold leading-tight">Órdenes Pendientes ({pendingOrders.length})</h2>
-</div>
-<!-- Search and Filters -->
-<div class="p-4 border-b border-gray-200 dark:border-gray-800">
-<label class="flex flex-col w-full">
-<div class="flex w-full flex-1 items-stretch rounded-lg h-11">
-<div class="text-gray-500 dark:text-gray-400 flex bg-gray-100 dark:bg-gray-800 items-center justify-center pl-3 rounded-l-lg border-r-0">
-<span class="material-symbols-outlined">search</span>
-</div>
-<input class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg text-gray-900 dark:text-white focus:outline-0 focus:ring-2 focus:ring-primary/50 border-none bg-gray-100 dark:bg-gray-800 h-full placeholder:text-gray-500 dark:placeholder:text-gray-400 px-4 rounded-l-none border-l-0 pl-2 text-sm font-normal leading-normal" placeholder="Buscar por ID, vehículo o servicio..." value=""/>
-</div>
-</label>
-</div>
-<!-- Work Order List -->
-<div class="flex-1 p-4 overflow-y-auto space-y-3" id="pending-orders-list">
-{pendingOrders.map((order: any) => (
-  <div 
-    draggable="true" 
-    ondragstart={`event.dataTransfer.setData('text/plain', '${order.documentId}')`}
-    class="cursor-grab active:cursor-grabbing p-4 bg-background-light dark:bg-background-dark border border-gray-200 dark:border-gray-800 rounded-lg shadow-sm hover:shadow-md hover:border-primary/50 transition-all"
-  >
-    <div class="flex justify-between items-start">
-      <div class="flex flex-col gap-1">
-        <p class="text-gray-500 dark:text-gray-400 text-xs font-semibold uppercase">ID: {order.documentId.slice(0, 8)}</p>
-        <h3 class="text-gray-900 dark:text-white font-bold">{order.vehiculo ? `${order.vehiculo.marca} ${order.vehiculo.modelo}` : 'Vehículo Desconocido'}</h3>
-        <p class="text-gray-600 dark:text-gray-300 text-sm">{order.descripcion || 'Sin descripción'}</p>
-      </div>
-      <span class="inline-flex items-center rounded-full bg-yellow-100 dark:bg-yellow-900/50 px-2.5 py-0.5 text-xs font-semibold text-yellow-800 dark:text-yellow-200 ring-1 ring-inset ring-yellow-600/20">Pendiente</span>
-    </div>
-  </div>
-))}
-{pendingOrders.length === 0 && <p class="text-center text-gray-500">No hay órdenes pendientes.</p>}
-</div>
-</div>
-<!-- Right Panel: Mechanics -->
-<div class="flex flex-col bg-white dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-800 h-full">
-<!-- Section Header -->
-<div class="p-4 border-b border-gray-200 dark:border-gray-800">
-<h2 class="text-gray-900 dark:text-white text-lg font-bold leading-tight">Mecánicos Disponibles</h2>
-</div>
-<!-- Mechanics List -->
-<div class="flex-1 p-4 overflow-y-auto space-y-4">
-{mechanics.map((mechanic: any) => {
-  const activeOrders = mechanic.orden_de_trabajos ? mechanic.orden_de_trabajos.filter((o: any) => o.estado !== 'Entregado').length : 0;
-  const workloadPercentage = Math.min((activeOrders / 5) * 100, 100); // Assuming max 5 orders
-  
-  return (
-    <div 
-      ondragover="event.preventDefault()" 
-      ondrop={`handleDrop(event, '${mechanic.documentId}')`}
-      class="p-4 border border-gray-200 dark:border-gray-800 rounded-lg hover:bg-primary/5 dark:hover:bg-primary/10 hover:border-primary/50 transition-all"
-    >
-      <div class="flex items-center gap-4">
-        <div class="w-16 h-16 rounded-full bg-gray-200 flex items-center justify-center text-2xl font-bold text-gray-500">
-          {mechanic.nombre.charAt(0)}
-        </div>
-        <div class="flex-1">
-          <h3 class="text-lg font-bold text-gray-900 dark:text-white">{mechanic.nombre}</h3>
-          <p class="text-sm text-gray-500 dark:text-gray-400">{mechanic.especialidad || 'Mecánico General'}</p>
-          <div class="mt-2">
-            <div class="flex justify-between mb-1">
-              <span class="text-xs font-medium text-gray-700 dark:text-gray-300">Carga de Trabajo: {activeOrders}/5 Órdenes</span>
-              <span class="text-xs font-medium text-gray-700 dark:text-gray-300">{workloadPercentage}%</span>
-            </div>
-            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
-              <div class={`h-1.5 rounded-full ${workloadPercentage > 80 ? 'bg-red-500' : workloadPercentage > 50 ? 'bg-yellow-500' : 'bg-green-500'}`} style={`width: ${workloadPercentage}%`}></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-})}
-</div>
-</div>
-</div>
-
-<form id="assignForm" method="POST" class="hidden">
-  <input type="hidden" name="orderId" id="orderIdInput" />
-  <input type="hidden" name="mechanicId" id="mechanicIdInput" />
-</form>
-
-<script is:inline>
-  function handleDrop(event, mechanicId) {
-    event.preventDefault();
-    const orderId = event.dataTransfer.getData('text/plain');
-    if (orderId && mechanicId) {
-      document.getElementById('orderIdInput').value = orderId;
-      document.getElementById('mechanicIdInput').value = mechanicId;
-      document.getElementById('assignForm').submit();
-    }
-  }
-</script>
-</main>
-</div>
-</body></html>
+</DashboardLayout>

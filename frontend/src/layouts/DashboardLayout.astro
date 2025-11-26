@@ -1,0 +1,23 @@
+---
+import Layout from './Layout.astro';
+import Sidebar from '../components/Sidebar.astro';
+
+interface Props {
+  title: string;
+  role: 'recepcionista' | 'encargado' | 'mecanico';
+  currentPath: string;
+}
+
+const { title, role, currentPath } = Astro.props;
+---
+
+<Layout title={title}>
+  <div class="flex min-h-screen bg-gray-50 dark:bg-gray-900">
+    <Sidebar role={role} currentPath={currentPath} />
+    <main class="flex-1 p-8 overflow-y-auto h-screen">
+      <div class="max-w-7xl mx-auto space-y-8">
+        <slot />
+      </div>
+    </main>
+  </div>
+</Layout>

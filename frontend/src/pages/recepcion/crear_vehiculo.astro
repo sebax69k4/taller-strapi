@@ -1,7 +1,11 @@
 ---
 export const prerender = false;
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import Card from '../../components/ui/Card.astro';
+import Button from '../../components/ui/Button.astro';
+import Input from '../../components/ui/Input.astro';
 import { fetchStrapi, strapiGet, strapiPost, strapiPut } from '../../lib/strapi';
-import '../../styles/global.css';
+
 
 // TypeScript Interfaces for Strapi Data
 interface ClienteAttributes {
@@ -73,140 +77,110 @@ if (Astro.request.method === 'POST') {
   }
 }
 ---
-<!DOCTYPE html>
-<html class="light" lang="es">
-<head>
-    <meta charset="utf-8"/>
-    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-    <title>Añadir Nuevo Vehículo</title>
-    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
-    <style>
-        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
-        [x-cloak] { display: none !important; }
-    </style>
-    <script src="//unpkg.com/alpinejs" defer></script>
-</head>
-<body class="font-display bg-background-light dark:bg-background-dark">
-<div class="relative flex min-h-screen w-full">
-<!-- SideNavBar -->
-<aside class="flex w-64 flex-col gap-4 p-4 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800">
-    <div class="flex gap-3 items-center">
-        <div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" style='background-image: url("https://cdn.usegalileo.ai/stability/a4b1f6ac-1498-420f-bb19-91ee46e9ce70.png");'></div>
-        <div class="flex flex-col">
-            <h1 class="text-gray-900 dark:text-white text-base font-medium">Taller Veloz</h1>
-            <p class="text-gray-500 dark:text-gray-400 text-sm">Panel Recepción</p>
-        </div>
-    </div>
-    <nav class="flex flex-col gap-2 mt-4">
-        <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/recepcion/dash_recep">
-            <span class="material-symbols-outlined">dashboard</span>
-            <p class="text-sm font-medium">Dashboard</p>
-        </a>
-        <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/recepcion/crear_cliente">
-            <span class="material-symbols-outlined">person_add</span>
-            <p class="text-sm font-medium">Crear Cliente</p>
-        </a>
-        <a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/10 text-primary" href="/recepcion/crear_vehiculo">
-            <span class="material-symbols-outlined text-primary">directions_car</span>
-            <p class="text-sm font-medium">Crear Vehículo</p>
-        </a>
-        <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/recepcion/crear_orden">
-            <span class="material-symbols-outlined">post_add</span>
-            <p class="text-sm font-medium">Crear Orden</p>
-        </a>
-        <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/recepcion/list_c_y_v">
-            <span class="material-symbols-outlined">group</span>
-            <p class="text-sm font-medium">Listar C y V</p>
-        </a>
-    </nav>
-    <div class="mt-auto flex flex-col gap-2">
-        <a class="flex items-center gap-3 px-3 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg" href="/logout">
-            <span class="material-symbols-outlined">logout</span>
-            <p class="text-sm font-medium">Cerrar Sesión</p>
-        </a>
-    </div>
-</aside>
 
-<!-- Main Content -->
-<main class="flex-1 p-8">
-    <div class="w-full max-w-3xl mx-auto">
-        <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm" x-data="{ message: '{{ message }}', messageType: '{{ messageType }}' }">
-            <div class="p-6 sm:p-8">
-                <div class="flex flex-col gap-2 mb-8">
-                    <h1 class="text-2xl sm:text-3xl font-black tracking-tight text-slate-900 dark:text-slate-50">Añadir Nuevo Vehículo</h1>
-                    <p class="text-sm text-slate-500 dark:text-slate-400">Seleccione un cliente y complete los detalles para registrar un nuevo vehículo.</p>
+<DashboardLayout title="Añadir Nuevo Vehículo" role="recepcionista" currentPath={Astro.url.pathname}>
+    <div class="w-full max-w-3xl mx-auto" x-data={`{ message: ${JSON.stringify(message || '')}, messageType: ${JSON.stringify(messageType || '')} }`}>
+        <div class="flex flex-col gap-2 mb-8">
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Añadir Nuevo Vehículo</h1>
+            <p class="text-gray-500 dark:text-gray-400">Seleccione un cliente y complete los detalles para registrar un nuevo vehículo.</p>
+        </div>
+
+        <template x-if="message">
+            <div x-show="message" x-transition class="p-4 mb-6 rounded-lg text-sm flex items-center gap-2" :class="{ 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300': messageType === 'success', 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300': messageType === 'error' }" role="alert">
+                <span class="material-symbols-outlined text-lg" x-text="messageType === 'success' ? 'check_circle' : 'error'"></span>
+                <span x-text="message"></span>
+            </div>
+        </template>
+
+        <Card>
+            <form method="POST" class="space-y-8">
+                <!-- Client Selection -->
+                <div>
+                    <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                        <span class="flex items-center justify-center w-6 h-6 rounded-full bg-primary-100 dark:bg-primary-900/30 text-primary-600 text-xs">1</span>
+                        Selección de Cliente
+                    </h2>
+                    <div class="flex flex-col gap-2">
+                        <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Cliente Existente</label>
+                        <select name="cliente" class="form-select w-full rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 focus:border-primary-500 focus:ring-primary-500 dark:text-gray-200" required>
+                            <option value="" disabled selected>Seleccione un cliente...</option>
+                            {clientes.map((cliente: any) => (
+                                <option value={cliente.id}>{cliente.nombre} {cliente.apellido} ({cliente.rut})</option>
+                            ))}
+                        </select>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">El vehículo se asociará a este cliente. Si el cliente no existe, <a href="/recepcion/crear_cliente" class="text-primary-600 hover:underline">créelo aquí</a>.</p>
+                    </div>
                 </div>
 
-                <template x-if="message">
-                    <div x-show="message" x-transition class="p-4 my-6 rounded-lg text-sm" :class="{ 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300': messageType === 'success', 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300': messageType === 'error' }" role="alert">
-                        <span x-text="message"></span>
+                <div class="border-t border-gray-100 dark:border-gray-800"></div>
+
+                <!-- Vehicle Details -->
+                <div>
+                    <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+                        <span class="flex items-center justify-center w-6 h-6 rounded-full bg-primary-100 dark:bg-primary-900/30 text-primary-600 text-xs">2</span>
+                        Detalles del Vehículo
+                    </h2>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        <Input 
+                            name="patente" 
+                            id="patente" 
+                            label="Patente" 
+                            placeholder="ABCD12" 
+                            required 
+                        />
+                        
+                        <Input 
+                            name="marca" 
+                            id="marca" 
+                            label="Marca" 
+                            placeholder="Ej: Toyota" 
+                            required 
+                        />
+                        
+                        <Input 
+                            name="modelo" 
+                            id="modelo" 
+                            label="Modelo" 
+                            placeholder="Ej: Yaris" 
+                            required 
+                        />
+                        
+                        <Input 
+                            name="anio" 
+                            id="anio" 
+                            label="Año" 
+                            type="number"
+                            placeholder="Ej: 2022" 
+                            min="1900" 
+                            max={new Date().getFullYear() + 1}
+                            required 
+                        />
+                        
+                        <Input 
+                            name="vin" 
+                            id="vin" 
+                            label="Nº de Chasis (VIN)" 
+                            placeholder="Opcional" 
+                            class="sm:col-span-2"
+                        />
                     </div>
-                </template>
+                </div>
 
-                <form method="POST" class="space-y-8">
-                    <!-- Client Selection -->
-                    <div>
-                        <h2 class="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-4">1. Selección de Cliente</h2>
-                        <label class="flex flex-col">
-                            <p class="text-sm font-medium text-slate-700 dark:text-slate-300 pb-2">Cliente Existente</p>
-                            <select name="cliente" class="form-select w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark focus:border-primary focus:ring-primary dark:text-slate-200" required>
-                                <option value="" disabled selected>Seleccione un cliente...</option>
-                                {clientes.map((cliente: any) => (
-                                    <option value={cliente.id}>{cliente.nombre} {cliente.apellido} ({cliente.rut})</option>
-                                ))}
-                            </select>
-                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-2">El vehículo se asociará a este cliente. Si el cliente no existe, <a href="/recepcion/crear_cliente" class="text-primary hover:underline">créelo aquí</a>.</p>
-                        </label>
-                    </div>
+                <div class="border-t border-gray-100 dark:border-gray-800"></div>
 
-                    <div class="border-t border-slate-200 dark:border-slate-700"></div>
-
-                    <!-- Vehicle Details -->
-                    <div>
-                        <h2 class="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-6">2. Detalles del Vehículo</h2>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                            <div class="flex flex-col">
-                                <label class="text-sm font-medium text-slate-700 dark:text-slate-300 pb-2" for="patente">Patente</label>
-                                <input name="patente" id="patente" class="form-input w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-primary dark:text-slate-200" placeholder="ABCD12" type="text" required/>
-                            </div>
-                            <div class="flex flex-col">
-                                <label class="text-sm font-medium text-slate-700 dark:text-slate-300 pb-2" for="marca">Marca</label>
-                                <input name="marca" id="marca" class="form-input w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-primary dark:text-slate-200" placeholder="Ej: Toyota" type="text" required/>
-                            </div>
-                            <div class="flex flex-col">
-                                <label class="text-sm font-medium text-slate-700 dark:text-slate-300 pb-2" for="modelo">Modelo</label>
-                                <input name="modelo" id="modelo" class="form-input w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-primary dark:text-slate-200" placeholder="Ej: Yaris" type="text" required/>
-                            </div>
-                            <div class="flex flex-col">
-                                <label class="text-sm font-medium text-slate-700 dark:text-slate-300 pb-2" for="anio">Año</label>
-                                <input name="anio" id="anio" class="form-input w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-primary dark:text-slate-200" placeholder="Ej: 2022" type="number" min="1900" max={new Date().getFullYear() + 1} required/>
-                            </div>
-                            <div class="flex flex-col sm:col-span-2">
-                                <label class="text-sm font-medium text-slate-700 dark:text-slate-300 pb-2" for="vin">Nº de Chasis (VIN)</label>
-                                <input name="vin" id="vin" class="form-input w-full rounded-lg border-slate-300 dark:border-slate-700 bg-background-light dark:bg-background-dark placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-primary dark:text-slate-200" placeholder="Opcional" type="text"/>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="border-t border-slate-200 dark:border-slate-700"></div>
-
-                    <!-- Action Area -->
-                    <div class="flex justify-end gap-4 pt-2">
-                        <a href="/recepcion/dash_recep" class="inline-flex items-center justify-center rounded-lg bg-white dark:bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 ring-1 ring-inset ring-slate-300 dark:ring-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                <!-- Action Area -->
+                <div class="flex justify-end gap-3 pt-2">
+                    <a href="/recepcion/dash_recep">
+                        <Button type="button" variant="secondary">
                             Cancelar
-                        </a>
-                        <button class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90" type="submit">
-                            <span class="material-symbols-outlined mr-2 text-base">add_circle</span>
-                            Guardar Vehículo
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
+                        </Button>
+                    </a>
+                    <Button type="submit" icon="add_circle">
+                        Guardar Vehículo
+                    </Button>
+                </div>
+            </form>
+        </Card>
     </div>
-</main>
-</div>
-</body>
-</html>
+    <script src="//unpkg.com/alpinejs" defer></script>
+</DashboardLayout>

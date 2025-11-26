@@ -1,0 +1,40 @@
+---
+interface Props extends astroHTML.JSX.InputHTMLAttributes {
+  label?: string;
+  error?: string;
+  icon?: string;
+}
+
+const { label, error, icon, id, class: className, ...rest } = Astro.props;
+const inputId = id || rest.name || Math.random().toString(36).substring(7);
+---
+
+<div class={className}>
+  {label && (
+    <label for={inputId} class="block text-sm font-medium text-text-light dark:text-text-dark mb-1">
+      {label}
+    </label>
+  )}
+  <div class="relative rounded-md shadow-sm">
+    {icon && (
+      <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+        <span class="material-symbols-outlined text-text-muted-light dark:text-text-muted-dark text-lg">{icon}</span>
+      </div>
+    )}
+    <input
+      id={inputId}
+      class:list={[
+        "block w-full rounded-lg border-border-light dark:border-border-dark bg-surface-light dark:bg-surface-dark text-text-light dark:text-text-dark shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm transition-colors duration-200",
+        icon ? "pl-10" : "pl-4",
+        error ? "border-status-error focus:border-status-error focus:ring-status-error" : ""
+      ]}
+      {...rest}
+    />
+  </div>
+  {error && (
+    <p class="mt-1 text-sm text-status-error flex items-center gap-1">
+      <span class="material-symbols-outlined text-sm">error</span>
+      {error}
+    </p>
+  )}
+</div>

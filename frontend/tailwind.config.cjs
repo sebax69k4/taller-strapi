@@ -5,31 +5,49 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        "primary": "#135bec",
-        "background-light": "#F4F7FA",
-        "background-dark": "#101622",
-        "neutral-gray-light": "#7D879C",
-        "neutral-gray-dark": "#A0AEC0",
-        "status-green": "#2ECC71",
-        "status-yellow": "#F39C12",
-        "status-red": "#E74C3C",
-        "border-light": "#E2E8F0",
-        "border-dark": "#2D3748",
-        "surface-light": "#FFFFFF",
-        "surface-dark": "#1A202C",
-        "text-light": "#1A202C",
-        "text-dark": "#E2E8F0",
-        "text-secondary-light": "#718096",
-        "text-secondary-dark": "#A0AEC0",
+        primary: {
+          DEFAULT: '#2563EB', // Blue 600
+          50: '#EFF6FF',
+          100: '#DBEAFE',
+          200: '#BFDBFE',
+          300: '#93C5FD',
+          400: '#60A5FA',
+          500: '#3B82F6',
+          600: '#2563EB',
+          700: '#1D4ED8',
+          800: '#1E40AF',
+          900: '#1E3A8A',
+        },
+        surface: {
+          light: '#FFFFFF',
+          dark: '#1F2937', // Gray 800
+        },
+        background: {
+          light: '#F3F4F6', // Gray 100
+          dark: '#111827', // Gray 900
+        },
+        text: {
+          light: '#111827', // Gray 900
+          dark: '#F9FAFB', // Gray 50
+          muted: {
+            light: '#6B7280', // Gray 500
+            dark: '#9CA3AF', // Gray 400
+          }
+        },
+        border: {
+          light: '#E5E7EB', // Gray 200
+          dark: '#374151', // Gray 700
+        },
+        status: {
+          success: '#10B981', // Emerald 500
+          warning: '#F59E0B', // Amber 500
+          error: '#EF4444', // Red 500
+          info: '#3B82F6', // Blue 500
+        }
       },
       fontFamily: {
-        "display": ["Inter", "sans-serif"]
-      },
-      borderRadius: {
-        "DEFAULT": "0.25rem",
-        "lg": "0.5rem",
-        "xl": "0.75rem",
-        "full": "9999px"
+        sans: ['Inter', 'sans-serif'],
+        display: ['Outfit', 'sans-serif'],
       },
     },
   },

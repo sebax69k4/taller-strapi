@@ -16,16 +16,16 @@ try {
 <Layout title="Crear Mecánico">
   <div class="container mx-auto px-4 py-8 max-w-2xl">
     <div class="flex items-center mb-6">
-      <a href="/admin/mecanicos" class="text-blue-500 hover:text-blue-700 mr-4">
+      <a href="/admin/mecanicos" class="text-gray-600 hover:text-blue-600 mr-4 transition-colors">
         ← Volver
       </a>
-      <h1 class="text-3xl font-bold">Crear Nuevo Mecánico</h1>
+      <h1 class="text-3xl font-bold text-gray-800">Crear Nuevo Mecánico</h1>
     </div>
 
     <div id="errorMessage" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4"></div>
     <div id="successMessage" class="hidden bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4"></div>
 
-    <form id="mecanicoForm" class="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
+    <form id="mecanicoForm" class="card p-8 mb-4">
       <div class="mb-4">
         <label class="block text-gray-700 text-sm font-bold mb-2" for="nombre">
           Nombre *
@@ -35,7 +35,7 @@ try {
           id="nombre"
           name="nombre"
           required
-          class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
           placeholder="Pedro"
         />
       </div>
@@ -49,7 +49,7 @@ try {
           id="apellido"
           name="apellido"
           required
-          class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
           placeholder="González"
         />
       </div>
@@ -63,7 +63,7 @@ try {
           id="email"
           name="email"
           required
-          class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
           placeholder="mecanico@taller.com"
         />
       </div>
@@ -76,7 +76,7 @@ try {
           type="text"
           id="especialidad"
           name="especialidad"
-          class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
           placeholder="Motor, Transmisión, Eléctrica, etc."
         />
       </div>
@@ -88,7 +88,7 @@ try {
         <select
           id="zona"
           name="zona"
-          class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
         >
           <option value="">Sin zona asignada</option>
           {zonasList.map((zona: any) => (
@@ -105,7 +105,7 @@ try {
           id="estado"
           name="estado"
           required
-          class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
         >
           <option value="disponible">Disponible</option>
           <option value="ocupado">Ocupado</option>
@@ -124,20 +124,20 @@ try {
           name="ordenes_activas"
           min="0"
           value="0"
-          class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
         />
       </div>
 
-      <div class="flex items-center justify-between">
+      <div class="flex items-center justify-between pt-4">
         <button
           type="submit"
-          class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+          class="btn-primary"
         >
           Crear Mecánico
         </button>
         <a
           href="/admin/mecanicos"
-          class="inline-block align-baseline font-bold text-sm text-gray-500 hover:text-gray-800"
+          class="text-gray-600 hover:text-gray-800 font-medium"
         >
           Cancelar
         </a>
