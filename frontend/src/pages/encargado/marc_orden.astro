@@ -1,29 +1,36 @@
 ---
 export const prerender = false;
 import { strapiGet } from '../../lib/strapi';
-import '../../styles/global.css';
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
 
-const userRole = Astro.cookies.get('user_role')?.value;
+const userRole = Astro.cookies.get('user_role')?.value as 'recepcionista' | 'encargado' | 'mecanico' | undefined;
 if (!userRole) {
   return Astro.redirect('/login');
 }
 
-let activeOrders = [];
+interface Order {
+  id: number;
+  documentId: string;
+  estado: string;
+  cliente: { nombre: string; apellido: string };
+  vehiculo: { marca: string; modelo: string };
+}
+
+let activeOrders: Order[] = [];
 try {
-  const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$ne]=Entregado&populate[0]=cliente&populate[1]=vehiculo&sort[0]=updatedAt:desc');
+  const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$ne]=entregado&populate[0]=cliente&populate[1]=vehiculo&sort[0]=updatedAt:desc');
   activeOrders = data.data || [];
 } catch (e) {
   console.error('Error fetching orders:', e);
 }
 ---
 
-<DashboardLayout title="Marcar Orden como Entregada" role="encargado" currentPath="/encargado/marc_orden">
+<DashboardLayout title="Marcar Orden como Entregada" role={userRole} currentPath="/encargado/marc_orden">
     <div class="max-w-4xl mx-auto">
         <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-6">Marcar Orden como Entregada</h1>
         
         <div class="grid gap-6">
-            {activeOrders.map(order => (
+            {activeOrders.map((order: Order) => (
                 <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row justify-between items-center gap-4">
                     <div>
                         <div class="flex items-center gap-3 mb-1">

@@ -1,14 +1,31 @@
 ---
-import Layout from '../../../layouts/Layout.astro';
-import { clientes } from '../../../lib/crud';
+import Layout from '../../../../layouts/Layout.astro';
+import { getById } from '../../../../lib/crud';
+
+interface Vehiculo {
+  patente: string;
+  marca: string;
+  modelo: string;
+}
+
+interface Cliente {
+  id: number;
+  documentId: string;
+  nombre: string;
+  apellido: string;
+  rut: string;
+  email: string;
+  telefono?: string;
+  vehiculos?: Vehiculo[];
+}
 
 const id = Astro.params.id;
-let cliente = null;
+let cliente: Cliente | null = null;
 let error = '';
 
 if (id) {
   try {
-    const response = await clientes.getById(id, ['vehiculos']);
+    const response = await getById<Cliente>('clientes', id, { populate: ['vehiculos'] });
     cliente = response.data;
   } catch (e: any) {
     error = e.message;

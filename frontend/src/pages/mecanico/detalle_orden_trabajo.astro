@@ -5,7 +5,7 @@ import Card from '../../components/ui/Card.astro';
 import Button from '../../components/ui/Button.astro';
 import { strapiGet, strapiPost, strapiPut } from '../../lib/strapi';
 
-const userRole = Astro.cookies.get('user_role')?.value;
+const userRole = Astro.cookies.get('user_role')?.value as 'recepcionista' | 'encargado' | 'mecanico' | undefined;
 if (!userRole) {
   return Astro.redirect('/login');
 }
@@ -65,14 +65,84 @@ let error = '';
 let success = '';
 
 const url = new URL(Astro.request.url);
+const orderId = url.searchParams.get('id');
+
+if (!orderId) {
+  error = "No se ha especificado un ID de orden.";
+} else {
+  try {
+    // Handle POST requests for status updates or new log entries
+    if (Astro.request.method === 'POST') {
+      const formData = await Astro.request.formData();
+      const action = formData.get('action');
+
+      if (action === 'updateStatus') {
+        const newStatus = formData.get('status');
+        await strapiPut(`/api/orden-de-trabajos/${orderId}`, {
+          estado: newStatus
+        });
+        success = 'Estado actualizado correctamente.';
+      }
+
+      if (action === 'addLog') {
+        const logNote = formData.get('comment');
+        const mechanicId = null; 
+
+        if (logNote) {
+          const orderResponse = await strapiGet(`/api/orden-de-trabajos/${orderId}`);
+          const orderNumericId = orderResponse.data?.id;
+          
+          await strapiPost('/api/bitacoras', {
+            procedimientos: logNote,
+            fecha: new Date().toISOString().split('T')[0],
+            orden_de_trabajo: orderNumericId,
+            mecanico: mechanicId,
+          });
+          success = 'Nota agregada a la bitácora.';
+        }
+      }
+      return Astro.redirect(Astro.request.url);
+    }
+
+    // Fetch all order data
+    const response = await strapiGet(`/api/orden-de-trabajos/${orderId}?populate[vehiculo][populate][0]=cliente&populate[mecanico]=true&populate[repuestos]=true&populate[bitacoras][populate][0]=mecanico`);
+
+    if (!response.data) {
+      throw new Error('No se pudo cargar la orden de trabajo.');
+    }
+
+    const fetchedOrder: Orden = response.data;
+    
+    if (fetchedOrder.vehiculo?.cliente) {
+        fetchedOrder.cliente = fetchedOrder.vehiculo.cliente;
+    }
+    order = fetchedOrder;
+
+  } catch (e: any) {
+    console.error(e);
+    error = e.message;
+  }
+}
+
+// Cost calculation
+const partsSubtotal = order?.repuestos?.reduce((sum: number, item: Repuesto) => sum + (item.precio || 0), 0) || 0;
+const laborCost = 75000;
+const taxRate = 0.19;
+const tax = (partsSubtotal + laborCost) * taxRate;
+const totalEstimated = partsSubtotal + laborCost + tax;
+
+const formatCurrency = (amount: number) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(amount);
+---
+
+<DashboardLayout title="Detalle de Orden" role={userRole} currentPath={Astro.url.pathname}>
+    {error && <div class="p-4 text-sm text-red-700 bg-red-50 rounded-lg border border-red-100 flex items-center gap-2" role="alert"><span class="material-symbols-outlined text-lg">error</span><span>{error}</span></div>}
     {success && <div class="p-4 text-sm text-green-700 bg-green-50 rounded-lg border border-green-100 flex items-center gap-2" role="alert"><span class="material-symbols-outlined text-lg">check_circle</span><span>{success}</span></div>}
 
     {order ? (
         <>
-            <!-- PageHeading & Status Chips -->
             <div class="flex flex-wrap items-start justify-between gap-4">
                 <div class="flex min-w-72 flex-col gap-1">
-                    <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Orden: OT-{order.id} ({order.documentId.substring(0, 8)})</h1>
+                    <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Orden: OT-{order.id}</h1>
                     <p class="text-gray-500 dark:text-gray-400 text-base">
                         Asignado a: <span class="font-medium text-gray-900 dark:text-white">{order.mecanico?.nombre || 'No asignado'}</span>
                     </p>
@@ -96,9 +166,7 @@ const url = new URL(Astro.request.url);
             </div>
             
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-6">
-                <!-- Left Column -->
                 <div class="lg:col-span-1 flex flex-col gap-6">
-                    <!-- Customer & Vehicle Info -->
                     <Card noPadding>
                         <h3 class="text-gray-900 dark:text-white text-lg font-bold px-5 py-4 border-b border-gray-100 dark:border-gray-800">Información General</h3>
                         <div class="p-5 grid grid-cols-1 gap-y-4">
@@ -147,16 +215,13 @@ const url = new URL(Astro.request.url);
                         </div>
                     </Card>
                     
-                    <!-- Problem Description -->
                     <Card noPadding>
                         <h3 class="text-gray-900 dark:text-white text-lg font-bold px-5 py-4 border-b border-gray-100 dark:border-gray-800">Descripción del Problema</h3>
                         <p class="p-5 text-gray-600 dark:text-gray-300 text-sm leading-relaxed">{order.descripcion || 'No hay descripción.'}</p>
                     </Card>
                 </div>
                 
-                <!-- Right Column -->
                 <div class="lg:col-span-2 flex flex-col gap-6">
-                    <!-- Tabs for Log and Parts -->
                     <Card noPadding>
                         <div class="border-b border-gray-200 dark:border-gray-700">
                             <nav aria-label="Tabs" class="-mb-px flex gap-6 px-5">
@@ -164,15 +229,14 @@ const url = new URL(Astro.request.url);
                                 <a class="shrink-0 border-b-2 border-transparent px-1 py-4 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:border-gray-500 dark:hover:text-gray-200" href={`/mecanico/bitacora_repuestos?id=${orderId}`}>Repuestos</a>
                             </nav>
                         </div>
-                        <!-- Bitacora Content -->
                         <div class="p-5">
                             <div class="flow-root">
                                 <ul class="-mb-8" role="list">
-                                    {order && order.bitacoras && order.bitacoras.length > 0 ? (
-                                        order.bitacoras.map((log, index) => (
+                                    {order.bitacoras && order.bitacoras.length > 0 ? (
+                                        order.bitacoras.map((log: Bitacora, index: number) => (
                                             <li>
                                                 <div class="relative pb-8">
-                                                    {order && order.bitacoras && index !== order.bitacoras.length - 1 && <span aria-hidden="true" class="absolute left-4 top-4 -ml-px h-full w-0.5 bg-gray-200 dark:bg-gray-700"></span>}
+                                                    {order.bitacoras && index !== order.bitacoras.length - 1 && <span aria-hidden="true" class="absolute left-4 top-4 -ml-px h-full w-0.5 bg-gray-200 dark:bg-gray-700"></span>}
                                                     <div class="relative flex space-x-3">
                                                         <div>
                                                             <span class="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center ring-8 ring-white dark:ring-gray-800">
@@ -184,7 +248,7 @@ const url = new URL(Astro.request.url);
                                                                 <p class="text-sm text-gray-600 dark:text-gray-300">{log.procedimientos} <span class="font-medium text-gray-900 dark:text-white"> - {log.mecanico?.nombre || 'Sistema'}</span></p>
                                                             </div>
                                                             <div class="whitespace-nowrap text-right text-sm text-gray-500 dark:text-gray-400">
-                                                                <time datetime={log.createdAt || ''}>{log.createdAt ? new Date(log.createdAt as string).toLocaleString() : 'N/A'}</time>
+                                                                <time datetime={log.createdAt || ''}>{log.createdAt ? new Date(log.createdAt).toLocaleString() : 'N/A'}</time>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -211,7 +275,6 @@ const url = new URL(Astro.request.url);
                         </div>
                     </Card>
                     
-                    <!-- Cost Summary -->
                     <Card noPadding>
                         <h3 class="text-gray-900 dark:text-white text-lg font-bold px-5 py-4 border-b border-gray-100 dark:border-gray-800">Resumen de Costos</h3>
                         <div class="p-5 space-y-3">
@@ -224,7 +287,7 @@ const url = new URL(Astro.request.url);
                                 <span>{formatCurrency(laborCost)}</span>
                             </div>
                             <div class="flex justify-between text-sm text-gray-600 dark:text-gray-300">
-                                <span>IVA (21%)</span>
+                                <span>IVA (19%)</span>
                                 <span>{formatCurrency(tax)}</span>
                             </div>
                             <div class="border-t border-gray-200 dark:border-gray-700 my-2"></div>
