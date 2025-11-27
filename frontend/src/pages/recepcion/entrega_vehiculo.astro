@@ -15,7 +15,7 @@ interface Order {
   estado: string;
   cliente: { nombre: string; apellido: string };
   vehiculo: { marca: string; modelo: string; patente: string };
-  presupuesto?: { monto_total: number };
+  factura?: { total: number; numero_factura: string };
 }
 
 let readyOrders: Order[] = [];
@@ -42,9 +42,15 @@ try {
     }
   }
 
-  // Fetch orders with status 'facturado' (case insensitive check ideally, but using lowercase for now)
-  const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=facturado&populate[0]=cliente&populate[1]=vehiculo&populate[2]=presupuesto&sort[0]=updatedAt:desc');
-  readyOrders = data.data || [];
+  // Fetch orders with status 'facturado' - cliente viene anidado en vehiculo
+  const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=facturado&populate[vehiculo][populate][cliente][fields][0]=nombre&populate[vehiculo][populate][cliente][fields][1]=apellido&populate[factura][fields][0]=total&populate[factura][fields][1]=numero_factura&sort[0]=updatedAt:desc');
+  // Mapear para tener cliente accesible directamente
+  readyOrders = (data.data || []).map((order: any) => ({
+    ...order,
+    cliente: order.vehiculo?.cliente || { nombre: 'N/A', apellido: '' },
+    vehiculo: order.vehiculo || { marca: 'N/A', modelo: '', patente: '' },
+    factura: order.factura
+  }));
 } catch (e) {
   console.error('Error fetching orders:', e);
   errorMessage = 'Error al cargar las órdenes.';
@@ -87,10 +93,13 @@ try {
                         <div class="text-right mr-4 hidden md:block">
                             <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total a Pagar</p>
                             <p class="text-2xl font-bold text-gray-900 dark:text-white">
-                                {order.presupuesto?.monto_total 
-                                    ? new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(order.presupuesto.monto_total)
+                                {order.factura?.total 
+                                    ? new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(order.factura.total)
                                     : 'Por calcular'}
                             </p>
+                            {order.factura?.numero_factura && (
+                                <p class="text-xs text-gray-500 dark:text-gray-400">{order.factura.numero_factura}</p>
+                            )}
                         </div>
 
                         <form method="POST" onsubmit="return confirm('¿Confirmar que el cliente ha pagado y se entrega el vehículo?');">

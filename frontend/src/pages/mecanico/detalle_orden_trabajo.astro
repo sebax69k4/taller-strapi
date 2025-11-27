@@ -78,10 +78,53 @@ if (!orderId) {
 
       if (action === 'updateStatus') {
         const newStatus = formData.get('status');
-        await strapiPut(`/api/orden-de-trabajos/${orderId}`, {
-          estado: newStatus
-        });
-        success = 'Estado actualizado correctamente.';
+        
+        try {
+            // If finalizing, create invoice and update status
+            if (newStatus === 'finalizado') {
+                // 1. Get order details for invoice calculation
+                const orderDetails = await strapiGet(`/api/orden-de-trabajos/${orderId}?populate=repuestos&populate=presupuesto`);
+                const orderData = orderDetails.data;
+                
+                // 2. Calculate totals
+                const partsTotal = orderData.repuestos?.reduce((sum: number, r: any) => sum + (r.precio || 0), 0) || 0;
+                const laborCost = 75000; // Base labor cost
+                const subtotal = partsTotal + laborCost;
+                const iva = Math.round(subtotal * 0.19);
+                const total = subtotal + iva;
+                
+                // 3. Check if invoice already exists
+                const existingInvoice = await strapiGet(`/api/facturas?filters[orden_de_trabajo][documentId][$eq]=${orderId}`);
+                
+                if (!existingInvoice.data || existingInvoice.data.length === 0) {
+                    // 4. Create invoice
+                    const invoiceNumber = `FACT-${Date.now()}-${orderData.id}`;
+                    await strapiPost('/api/facturas', {
+                        numero_factura: invoiceNumber,
+                        fecha_emision: new Date().toISOString().split('T')[0],
+                        subtotal: subtotal,
+                        iva: iva,
+                        total: total,
+                        orden_de_trabajo: orderId
+                    });
+                }
+                
+                // 5. Update order status to finalizado
+                await strapiPut(`/api/orden-de-trabajos/${orderId}`, {
+                    estado: 'finalizado'
+                });
+                
+                return Astro.redirect(`${Astro.url.pathname}?id=${orderId}&message=${encodeURIComponent('Orden finalizada y factura generada exitosamente.')}&type=success`);
+            } else {
+                await strapiPut(`/api/orden-de-trabajos/${orderId}`, {
+                    estado: newStatus
+                });
+                return Astro.redirect(`${Astro.url.pathname}?id=${orderId}&message=${encodeURIComponent('Estado actualizado correctamente.')}&type=success`);
+            }
+        } catch (err: any) {
+            console.error('Error updating status:', err);
+            return Astro.redirect(`${Astro.url.pathname}?id=${orderId}&message=${encodeURIComponent('Error al actualizar: ' + err.message)}&type=error`);
+        }
       }
 
       if (action === 'addLog') {
@@ -132,6 +175,14 @@ const tax = (partsSubtotal + laborCost) * taxRate;
 const totalEstimated = partsSubtotal + laborCost + tax;
 
 const formatCurrency = (amount: number) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(amount);
+
+const urlMessage = url.searchParams.get('message');
+const urlMessageType = url.searchParams.get('type');
+
+if (urlMessage) {
+    if (urlMessageType === 'error') error = urlMessage;
+    else success = urlMessage;
+}
 ---
 
 <DashboardLayout title="Detalle de Orden" role={userRole} currentPath={Astro.url.pathname}>

@@ -16,6 +16,7 @@ interface Repuesto {
   nombre: string;
   sku: string;
   stock: number;
+  stock_minimo?: number;
   precio: number;
   descripcion?: string;
 }
@@ -63,6 +64,14 @@ try {
   console.error('Error managing inventory:', e);
   error = e.message || 'Error al gestionar el inventario.';
 }
+
+// Helper function for stock color
+function getStockColor(part: Repuesto): string {
+  const minStock = part.stock_minimo || 5;
+  if (part.stock === 0) return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300';
+  if (part.stock <= minStock) return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
+  return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
+}
 ---
 
 <DashboardLayout title="Gestión de Inventario" role={userRole} currentPath="/encargado/inventario">
@@ -87,6 +96,7 @@ try {
                             <th class="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">SKU</th>
                             <th class="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nombre</th>
                             <th class="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Stock</th>
+                            <th class="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Mínimo</th>
                             <th class="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Precio Unit.</th>
                             <th class="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right">Acciones</th>
                         </tr>
@@ -97,14 +107,15 @@ try {
                                 <td class="px-6 py-4 text-sm font-mono text-gray-500 dark:text-gray-400">{part.sku}</td>
                                 <td class="px-6 py-4">
                                     <div class="text-sm font-medium text-gray-900 dark:text-white">{part.nombre}</div>
-                                    <div class="text-xs text-gray-500 dark:text-gray-400 truncate max-w-xs">{part.descripcion}</div>
+                                    {part.descripcion && <div class="text-xs text-gray-500 dark:text-gray-400 truncate max-w-xs">{part.descripcion}</div>}
                                 </td>
                                 <td class="px-6 py-4">
-                                    <span class={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                        part.stock <= 5 ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                                    }`}>
+                                    <span class={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStockColor(part)}`}>
                                         {part.stock}
                                     </span>
+                                </td>
+                                <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
+                                    {part.stock_minimo || 5}
                                 </td>
                                 <td class="px-6 py-4 text-sm text-gray-900 dark:text-white">
                                     {new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(part.precio)}
@@ -122,7 +133,7 @@ try {
                         ))}
                          {parts.length === 0 && (
                             <tr>
-                                <td colspan="5" class="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                                <td colspan="6" class="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
                                     No hay repuestos registrados.
                                 </td>
                             </tr>
@@ -172,35 +183,37 @@ try {
                 </div>
                 <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
                 <div class="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg w-full">
-                    <form method="POST" class="p-6" x-bind:if="editPart">
-                        <input type="hidden" name="action" value="update" />
-                        <input type="hidden" name="id" x-bind:value="editPart?.documentId" />
-                        
-                        <h3 class="text-lg font-medium leading-6 text-gray-900 dark:text-white mb-4">
-                            Editar: <span x-text="editPart?.nombre"></span>
-                        </h3>
-                        
-                        <div class="space-y-4">
-                            <div class="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Stock Actual</label>
-                                    <input type="number" name="stock" x-bind:value="editPart?.stock" min="0" class="form-input w-full rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white" required />
+                    <template x-if="editPart">
+                        <form method="POST" class="p-6">
+                            <input type="hidden" name="action" value="update" />
+                            <input type="hidden" name="id" x-model="editPart.documentId" />
+                            
+                            <h3 class="text-lg font-medium leading-6 text-gray-900 dark:text-white mb-4">
+                                Editar: <span x-text="editPart.nombre"></span>
+                            </h3>
+                            
+                            <div class="space-y-4">
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Stock Actual</label>
+                                        <input type="number" name="stock" x-model="editPart.stock" min="0" class="form-input w-full rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white" required />
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Precio</label>
+                                        <input type="number" name="precio" x-model="editPart.precio" min="0" class="form-input w-full rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white" required />
+                                    </div>
                                 </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Precio</label>
-                                    <input type="number" name="precio" x-bind:value="editPart?.precio" min="0" class="form-input w-full rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white" required />
-                                </div>
+                                <p class="text-sm text-gray-500 dark:text-gray-400 italic">
+                                    Nota: Para cambiar nombre o SKU, contacte al administrador.
+                                </p>
                             </div>
-                            <p class="text-sm text-gray-500 dark:text-gray-400 italic">
-                                Nota: Para cambiar nombre o SKU, contacte al administrador.
-                            </p>
-                        </div>
 
-                        <div class="mt-6 flex justify-end gap-3">
-                            <Button type="button" variant="secondary" @click="editPart = null">Cancelar</Button>
-                            <Button type="submit">Actualizar</Button>
-                        </div>
-                    </form>
+                            <div class="mt-6 flex justify-end gap-3">
+                                <Button type="button" variant="secondary" @click="editPart = null">Cancelar</Button>
+                                <Button type="submit">Actualizar</Button>
+                            </div>
+                        </form>
+                    </template>
                 </div>
             </div>
         </div>

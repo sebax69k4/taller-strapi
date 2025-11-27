@@ -25,6 +25,7 @@ interface Order {
   vehiculo: { marca: string; modelo: string };
   repuestos?: Repuesto[];
   presupuesto?: Presupuesto;
+  factura?: any;
 }
 
 let completedOrders: Order[] = [];
@@ -60,17 +61,22 @@ try {
             }
             const iva = total - subtotal;
 
-            // 2. Create Factura entity
-            const invoiceNumber = `FACT-${Date.now()}-${orderId}`;
+            // 2. Check if Factura already exists
+            const existingInvoiceRes = await strapiGet(`/api/facturas?filters[orden_de_trabajo][documentId][$eq]=${orderId}`);
             
-            await strapiPost('/api/facturas', {
-                numero_factura: invoiceNumber,
-                fecha_emision: new Date().toISOString().split('T')[0],
-                subtotal: subtotal,
-                iva: iva,
-                total: total,
-                orden_de_trabajo: orderId
-            });
+            if (existingInvoiceRes.data && existingInvoiceRes.data.length === 0) {
+                // Create only if it doesn't exist
+                const invoiceNumber = `FACT-${Date.now()}-${orderId}`;
+                
+                await strapiPost('/api/facturas', {
+                    numero_factura: invoiceNumber,
+                    fecha_emision: new Date().toISOString().split('T')[0],
+                    subtotal: subtotal,
+                    iva: iva,
+                    total: total,
+                    orden_de_trabajo: orderId
+                });
+            }
 
             // 3. Update Order Status
             await strapiPut(`/api/orden-de-trabajos/${orderId}`, {
@@ -84,16 +90,23 @@ try {
     }
   }
 
-  const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$in][0]=finalizado&filters[estado][$in][1]=Finalizado&populate[0]=cliente&populate[1]=vehiculo&populate[2]=repuestos&populate[3]=presupuesto&sort[0]=updatedAt:desc');
-  completedOrders = data.data || [];
+  // Obtener órdenes finalizadas (pendientes de aprobación)
+  const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=finalizado&populate[vehiculo][populate][cliente][fields][0]=nombre&populate[vehiculo][populate][cliente][fields][1]=apellido&populate[repuestos][fields][0]=nombre&populate[repuestos][fields][1]=precio&populate[presupuesto][fields][0]=monto_total&populate[factura][fields][0]=numero_factura&populate[factura][fields][1]=total&sort[0]=updatedAt:desc');
+  // Mapear las órdenes para tener cliente accesible directamente
+  completedOrders = (data.data || []).map((order: any) => ({
+    ...order,
+    cliente: order.vehiculo?.cliente || { nombre: 'N/A', apellido: '' },
+    vehiculo: order.vehiculo || { marca: 'N/A', modelo: '' }
+  }));
 } catch (e) {
   console.error('Error fetching orders:', e);
 }
 ---
 
-<DashboardLayout title="Generar Factura" role={userRole} currentPath="/encargado/gen_factura">
+<DashboardLayout title="Aprobar Facturas" role={userRole} currentPath="/encargado/gen_factura">
     <div class="max-w-4xl mx-auto">
-        <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-6 print:hidden">Generar Factura</h1>
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-6 print:hidden">Aprobar Facturas</h1>
+        <p class="text-gray-600 dark:text-gray-400 mb-6 print:hidden">Órdenes finalizadas por mecánicos con factura generada, pendientes de aprobación para enviar a recepción.</p>
         
         {successMessage && <div class="p-4 mb-4 text-sm text-green-700 bg-green-100 rounded-lg dark:bg-green-200 dark:text-green-800 print:hidden" role="alert">{successMessage}</div>}
         {errorMessage && <div class="p-4 mb-4 text-sm text-red-700 bg-red-100 rounded-lg dark:bg-red-200 dark:text-red-800 print:hidden" role="alert">{errorMessage}</div>}
@@ -106,23 +119,35 @@ try {
                         <p class="text-gray-600 dark:text-gray-400">{order.cliente.nombre} {order.cliente.apellido} - {order.vehiculo.marca}</p>
                     </div>
                     <div class="flex items-center gap-3">
+                        <div class="flex flex-col text-right text-sm text-gray-500 dark:text-gray-400">
+                            {order.factura ? (
+                                <span class="text-green-600 dark:text-green-400 font-medium">Factura: {order.factura.numero_factura}</span>
+                            ) : (
+                                <span class="text-yellow-600 dark:text-yellow-400">Sin factura generada</span>
+                            )}
+                            {order.factura && <span>Total: ${order.factura.total?.toLocaleString('es-CL')}</span>}
+                        </div>
                         <button onclick={`window.printInvoice('${order.documentId}')`} class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2">
                             <span class="material-symbols-outlined text-sm">print</span>
-                            Generar PDF
+                            Imprimir
                         </button>
                         <form method="POST" onsubmit="return confirm('¿Aprobar factura y enviar a recepción para entrega?');">
                             <input type="hidden" name="orderId" value={order.documentId} />
                             <input type="hidden" name="action" value="approveInvoice" />
                             <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2">
                                 <span class="material-symbols-outlined text-sm">verified</span>
-                                Aprobar Factura
+                                Aprobar y Enviar
                             </button>
                         </form>
                     </div>
                 </div>
             ))}
             {completedOrders.length === 0 && (
-                <p class="text-gray-500 dark:text-gray-400 text-center py-12">No hay órdenes finalizadas pendientes de facturación.</p>
+                <div class="text-center py-12">
+                    <span class="material-symbols-outlined text-5xl text-gray-300 dark:text-gray-600 mb-4">task_alt</span>
+                    <p class="text-gray-500 dark:text-gray-400">No hay facturas pendientes de aprobación.</p>
+                    <p class="text-gray-400 dark:text-gray-500 text-sm mt-2">Las facturas aparecen aquí cuando los mecánicos finalizan sus órdenes.</p>
+                </div>
             )}
         </div>
 

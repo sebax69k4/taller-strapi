@@ -18,18 +18,23 @@ const today = new Date().toISOString().split('T')[0];
 
 if (userRole) {
   try {
-    // Active Orders
-    const activeRes = await strapiGet('/api/orden-de-trabajos?filters[estado][$ne]=Entregado');
+    // Active Orders (excluding 'entregado' and 'facturado')
+    const activeRes = await strapiGet('/api/orden-de-trabajos?filters[estado][$notIn][0]=entregado&filters[estado][$notIn][1]=facturado');
     activeOrdersCount = activeRes.meta?.pagination?.total || 0;
 
     // Completed Today
-    const completedRes = await strapiGet(`/api/orden-de-trabajos?filters[estado][$eq]=Entregado&filters[updatedAt][$gte]=${today}`);
+    const completedRes = await strapiGet(`/api/orden-de-trabajos?filters[estado][$eq]=entregado&filters[updatedAt][$gte]=${today}`);
     completedTodayCount = completedRes.meta?.pagination?.total || 0;
 
-    // Low Stock (threshold 5)
-    const lowStockRes = await strapiGet('/api/repuestos?filters[stock][$lte]=5');
-    lowStockCount = lowStockRes.meta?.pagination?.total || 0;
-    lowStockItems = lowStockRes.data || [];
+    // Low Stock - fetch all and filter where stock <= stock_minimo
+    const allRepuestosRes = await strapiGet('/api/repuestos');
+    const allRepuestos = allRepuestosRes.data || [];
+    lowStockItems = allRepuestos.filter((item: any) => {
+      const stock = item.stock || 0;
+      const min = item.stock_minimo || 5;
+      return stock <= min;
+    });
+    lowStockCount = lowStockItems.length;
 
     // Recent Activity
     const recentRes = await strapiGet('/api/orden-de-trabajos?sort[0]=updatedAt:desc&pagination[limit]=5&populate[0]=cliente&populate[1]=vehiculo&populate[2]=mecanico');
@@ -169,11 +174,18 @@ if (userRole) {
                       </td>
                       <td class="px-6 py-4">
                         <span class={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          order.estado === 'Entregado' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' :
-                          order.estado === 'Pendiente' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' :
+                          order.estado === 'entregado' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' :
+                          order.estado === 'facturado' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' :
+                          order.estado === 'finalizado' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' :
+                          order.estado === 'ingresado' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' :
                           'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
                         }`}>
-                          {order.estado}
+                          {order.estado === 'ingresado' ? 'Ingresado' :
+                           order.estado === 'en_diagnostico' ? 'En Diagnóstico' :
+                           order.estado === 'en_reparacion' ? 'En Reparación' :
+                           order.estado === 'finalizado' ? 'Finalizado' :
+                           order.estado === 'facturado' ? 'Facturado' :
+                           order.estado === 'entregado' ? 'Entregado' : order.estado}
                         </span>
                       </td>
                     </tr>

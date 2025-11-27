@@ -12,7 +12,8 @@ if (!userRole) {
 let activeOrders = [];
 
 try {
-  const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$ne]=Entregado&populate[0]=cliente&populate[1]=vehiculo&populate[2]=mecanico&sort[0]=updatedAt:desc');
+  // Obtener órdenes en curso (excluir entregado y facturado) con cliente anidado en vehiculo
+  const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$notIn][0]=entregado&filters[estado][$notIn][1]=facturado&populate[vehiculo][populate][cliente][fields][0]=nombre&populate[vehiculo][populate][cliente][fields][1]=apellido&populate[mecanico][fields][0]=nombre&populate[mecanico][fields][1]=apellido&sort[0]=updatedAt:desc');
   activeOrders = data.data || [];
 } catch (e) {
   console.error('Error fetching active orders:', e);
@@ -31,33 +32,55 @@ try {
             
             getProgress(status) {
                 switch(status) {
-                    case 'Pendiente': return 10;
-                    case 'En Proceso': return 50;
-                    case 'Esperando Repuestos': return 30;
-                    case 'Finalizado': return 90;
-                    case 'Entregado': return 100;
+                    case 'ingresado': return 10;
+                    case 'en_diagnostico': return 30;
+                    case 'en_reparacion': return 60;
+                    case 'finalizado': return 90;
+                    case 'facturado': return 95;
+                    case 'entregado': return 100;
                     default: return 0;
                 }
             },
 
             getStatusColor(status) {
                 switch(status) {
-                    case 'Pendiente': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
-                    case 'En Proceso': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
-                    case 'Finalizado': return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
+                    case 'ingresado': return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300';
+                    case 'en_diagnostico': return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300';
+                    case 'en_reparacion': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
+                    case 'finalizado': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
+                    case 'facturado': return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
+                    case 'entregado': return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
                     default: return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
                 }
+            },
+
+            getStatusLabel(status) {
+                switch(status) {
+                    case 'ingresado': return 'Ingresado';
+                    case 'en_diagnostico': return 'En Diagnóstico';
+                    case 'en_reparacion': return 'En Reparación';
+                    case 'finalizado': return 'Finalizado';
+                    case 'facturado': return 'Facturado';
+                    case 'entregado': return 'Entregado';
+                    default: return status;
+                }
+            },
+
+            getCliente(order) {
+                // El cliente viene anidado en vehiculo.cliente
+                return order.vehiculo?.cliente || null;
             },
 
             get filteredOrders() {
                 if (!this.searchQuery) return this.orders;
                 const query = this.searchQuery.toLowerCase();
-                return this.orders.filter(order =>
-                    (order.cliente && (order.cliente.nombre.toLowerCase().includes(query) || order.cliente.apellido.toLowerCase().includes(query))) ||
-                    (order.vehiculo && (order.vehiculo.marca.toLowerCase().includes(query) || order.vehiculo.modelo.toLowerCase().includes(query))) ||
-                    (order.mecanico && order.mecanico.nombre.toLowerCase().includes(query)) ||
-                    (order.documentId && order.documentId.toLowerCase().includes(query))
-                );
+                return this.orders.filter(order => {
+                    const cliente = this.getCliente(order);
+                    return (cliente && (cliente.nombre?.toLowerCase().includes(query) || cliente.apellido?.toLowerCase().includes(query))) ||
+                        (order.vehiculo && (order.vehiculo.marca?.toLowerCase().includes(query) || order.vehiculo.modelo?.toLowerCase().includes(query))) ||
+                        (order.mecanico && order.mecanico.nombre?.toLowerCase().includes(query)) ||
+                        (order.documentId && order.documentId.toLowerCase().includes(query));
+                });
             },
             get paginatedOrders() {
                 const start = (this.currentPage - 1) * this.itemsPerPage;
@@ -120,16 +143,16 @@ try {
                             <template x-for="order in paginatedOrders" :key="order.documentId">
                                 <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                                     <td class="px-6 py-4 whitespace-nowrap font-medium text-gray-900 dark:text-white">#<span x-text="order.documentId.slice(0, 6)"></span></td>
-                                    <td class="px-6 py-4 whitespace-nowrap font-semibold text-gray-900 dark:text-white" x-text="order.cliente ? `${order.cliente.nombre} ${order.cliente.apellido}` : 'N/A'"></td>
+                                    <td class="px-6 py-4 whitespace-nowrap font-semibold text-gray-900 dark:text-white" x-text="getCliente(order) ? `${getCliente(order).nombre} ${getCliente(order).apellido}` : 'N/A'"></td>
                                     <td class="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-400" x-text="order.vehiculo ? `${order.vehiculo.marca} ${order.vehiculo.modelo}` : 'N/A'"></td>
                                     <td class="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-400" x-text="order.mecanico ? order.mecanico.nombre : 'Sin asignar'"></td>
                                     <td class="px-6 py-4 whitespace-nowrap">
-                                        <span :class="`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(order.estado)}`" x-text="order.estado"></span>
+                                        <span :class="`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(order.estado)}`" x-text="getStatusLabel(order.estado)"></span>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <div class="flex items-center gap-3">
                                             <div class="w-24 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
-                                                <div :class="`h-1.5 rounded-full ${order.estado === 'Pendiente' ? 'bg-yellow-500' : 'bg-blue-500'}`" :style="`width: ${getProgress(order.estado)}%`"></div>
+                                                <div :class="`h-1.5 rounded-full ${order.estado === 'ingresado' ? 'bg-red-500' : order.estado === 'en_diagnostico' ? 'bg-purple-500' : order.estado === 'en_reparacion' ? 'bg-yellow-500' : 'bg-blue-500'}`" :style="`width: ${getProgress(order.estado)}%`"></div>
                                             </div>
                                             <span class="font-medium text-xs text-gray-600 dark:text-gray-400" x-text="`${getProgress(order.estado)}%`"></span>
                                         </div>

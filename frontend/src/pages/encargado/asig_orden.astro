@@ -44,7 +44,7 @@ try {
   pendingOrders = ordersData.data || [];
 
   // Fetch Mechanics with their orders to calculate workload
-  const mechanicsData = await strapiGet('/api/mecenicos?populate=orden_de_trabajos');
+  const mechanicsData = await strapiGet('/api/mecenicos?populate[orden_de_trabajos][fields][0]=estado&populate[orden_de_trabajos][fields][1]=id');
   mechanics = mechanicsData.data || [];
 
   // Handle Assignment (POST request)
@@ -155,7 +155,10 @@ if (urlSuccess === 'true') {
             <div class="p-4 space-y-3 overflow-y-auto max-h-[500px]">
                 {mechanics.length > 0 ? (
                     mechanics.map((mechanic: Mechanic) => {
-                        const activeOrders = mechanic.orden_de_trabajos?.length || 0;
+                        // Solo contar órdenes activas (no finalizadas, facturadas o entregadas)
+                        const activeOrders = mechanic.orden_de_trabajos?.filter((o: any) => 
+                            !['finalizado', 'facturado', 'entregado'].includes(o.estado)
+                        ).length || 0;
                         const maxOrders = 5;
                         const workloadPercentage = Math.min((activeOrders / maxOrders) * 100, 100);
                         

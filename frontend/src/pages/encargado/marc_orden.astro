@@ -28,13 +28,14 @@ try {
     
     if (orderId) {
         await strapiPut(`/api/orden-de-trabajos/${orderId}`, {
-            estado: 'Entregado'
+            estado: 'entregado'
         });
         successMessage = 'Orden marcada como entregada correctamente.';
     }
   }
 
-  const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$ne]=Entregado&populate[0]=cliente&populate[1]=vehiculo&sort[0]=updatedAt:desc');
+  // Get orders that are finalized or invoiced but not delivered yet
+  const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$in][0]=finalizado&filters[estado][$in][1]=facturado&populate[0]=cliente&populate[1]=vehiculo&sort[0]=updatedAt:desc');
   activeOrders = data.data || [];
 } catch (e: any) {
   console.error('Error:', e);
@@ -56,10 +57,15 @@ try {
                         <div class="flex items-center gap-3 mb-1">
                             <h3 class="font-bold text-lg text-gray-900 dark:text-white">Orden #{order.documentId.slice(0, 6)}</h3>
                             <span class={`px-2 py-1 rounded-full text-xs font-medium ${
-                                order.estado === 'Finalizado' ? 'bg-green-100 text-green-800' : 
-                                order.estado === 'En Proceso' ? 'bg-blue-100 text-blue-800' : 'bg-yellow-100 text-yellow-800'
+                                order.estado === 'finalizado' ? 'bg-green-100 text-green-800' : 
+                                order.estado === 'facturado' ? 'bg-purple-100 text-purple-800' :
+                                order.estado === 'en_reparacion' ? 'bg-blue-100 text-blue-800' : 'bg-yellow-100 text-yellow-800'
                             }`}>
-                                {order.estado}
+                                {order.estado === 'finalizado' ? 'Finalizado' :
+                                 order.estado === 'facturado' ? 'Facturado' :
+                                 order.estado === 'en_reparacion' ? 'En Reparación' :
+                                 order.estado === 'en_diagnostico' ? 'En Diagnóstico' :
+                                 order.estado === 'ingresado' ? 'Ingresado' : order.estado}
                             </span>
                         </div>
                         <p class="text-gray-600 dark:text-gray-400">{order.cliente.nombre} {order.cliente.apellido} - {order.vehiculo.marca} {order.vehiculo.modelo}</p>

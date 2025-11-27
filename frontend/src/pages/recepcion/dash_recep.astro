@@ -23,9 +23,9 @@ let error = '';
 
 try {
     const [activeOrdersData, vehiclesData, pendingOrdersData, recentOrdersData] = await Promise.all([
-        strapiGet('/api/orden-de-trabajos?filters[estado][$ne]=Entregado&pagination[pageSize]=1'),
+        strapiGet('/api/orden-de-trabajos?filters[estado][$notIn][0]=entregado&filters[estado][$notIn][1]=facturado&pagination[pageSize]=1'),
         strapiGet('/api/vehiculos?pagination[pageSize]=1'),
-        strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=Pendiente&pagination[pageSize]=1'),
+        strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=ingresado&pagination[pageSize]=1'),
         strapiGet('/api/orden-de-trabajos?sort[0]=createdAt:desc&pagination[limit]=5&populate=vehiculo')
     ]);
 
