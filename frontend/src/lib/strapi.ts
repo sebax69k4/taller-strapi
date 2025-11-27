@@ -32,14 +32,8 @@ export async function fetchStrapi(endpoint: string, options: RequestInit = {}) {
 export async function strapiGet(endpoint: string) {
   const response = await fetchStrapi(endpoint, { method: 'GET' });
   
-  // Si tiene data, devolver la estructura completa con data aplanado
-  if (response.data) {
-    return {
-      data: flattenAttributes(response.data),
-      meta: response.meta
-    };
-  }
-  
+  // En Strapi v5, los datos ya vienen planos (sin attributes wrapper)
+  // Solo necesitamos devolver la respuesta tal cual
   return response;
 }
 
