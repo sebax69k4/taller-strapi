@@ -1,0 +1,367 @@
+---
+export const prerender = false;
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import { strapiGet } from '../../lib/strapi';
+import '../../styles/global.css';
+
+const userRole = Astro.cookies.get('user_role')?.value;
+if (!userRole) {
+  return Astro.redirect('/login');
+}
+
+interface Order {
+  id: number;
+  documentId: string;
+  estado: string;
+  descripcion: string;
+  fecha_ingreso: string;
+  fecha_entrega: string | null;
+  diagnostico: string | null;
+  mecanico: {
+    nombre: string;
+    apellido: string;
+  } | null;
+  factura: {
+    numero_factura: string;
+    total: number;
+  } | null;
+}
+
+interface Vehiculo {
+  id: number;
+  documentId: string;
+  patente: string;
+  marca: string;
+  modelo: string;
+  ano: number;
+  numero_de_chasis: string;
+  cliente: {
+    nombre: string;
+    apellido: string;
+    telefono: string;
+    email: string;
+  } | null;
+}
+
+let vehiculo: Vehiculo | null = null;
+let ordenes: Order[] = [];
+let error = '';
+let searchPerformed = false;
+
+const searchQuery = Astro.url.searchParams.get('patente') || '';
+const vehiculoId = Astro.url.searchParams.get('id') || '';
+
+if (vehiculoId) {
+  searchPerformed = true;
+  try {
+    // Obtener vehículo
+    const vehData = await strapiGet(`/api/vehiculos/${vehiculoId}?populate[cliente][fields][0]=nombre&populate[cliente][fields][1]=apellido&populate[cliente][fields][2]=telefono&populate[cliente][fields][3]=email`);
+    vehiculo = vehData.data;
+    
+    if (vehiculo) {
+      // Obtener órdenes del vehículo
+      const ordenesData = await strapiGet(`/api/orden-de-trabajos?filters[vehiculo][documentId][$eq]=${vehiculoId}&populate[mecanico][fields][0]=nombre&populate[mecanico][fields][1]=apellido&populate[factura][fields][0]=numero_factura&populate[factura][fields][1]=total&sort[0]=fecha_ingreso:desc`);
+      ordenes = ordenesData.data || [];
+    }
+  } catch (e: any) {
+    console.error('Error fetching vehicle:', e);
+    error = 'Error al obtener el vehículo';
+  }
+} else if (searchQuery) {
+  searchPerformed = true;
+  try {
+    // Buscar vehículo por patente
+    const vehData = await strapiGet(`/api/vehiculos?filters[patente][$containsi]=${searchQuery}&populate[cliente][fields][0]=nombre&populate[cliente][fields][1]=apellido&populate[cliente][fields][2]=telefono&populate[cliente][fields][3]=email&pagination[limit]=1`);
+    
+    if (vehData.data && vehData.data.length > 0) {
+      vehiculo = vehData.data[0];
+      
+      // Obtener órdenes del vehículo
+      const ordenesData = await strapiGet(`/api/orden-de-trabajos?filters[vehiculo][documentId][$eq]=${vehiculo!.documentId}&populate[mecanico][fields][0]=nombre&populate[mecanico][fields][1]=apellido&populate[factura][fields][0]=numero_factura&populate[factura][fields][1]=total&sort[0]=fecha_ingreso:desc`);
+      ordenes = ordenesData.data || [];
+    }
+  } catch (e: any) {
+    console.error('Error searching vehicle:', e);
+    error = 'Error al buscar el vehículo';
+  }
+}
+
+const getEstadoColor = (estado: string) => {
+  const colors: Record<string, string> = {
+    ingresado: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
+    en_diagnostico: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
+    en_reparacion: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+    finalizado: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+    facturado: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
+    entregado: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300'
+  };
+  return colors[estado] || 'bg-gray-100 text-gray-800';
+};
+
+const formatEstado = (estado: string) => {
+  const labels: Record<string, string> = {
+    ingresado: 'Ingresado',
+    en_diagnostico: 'En Diagnóstico',
+    en_reparacion: 'En Reparación',
+    finalizado: 'Finalizado',
+    facturado: 'Facturado',
+    entregado: 'Entregado'
+  };
+  return labels[estado] || estado;
+};
+
+const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleDateString('es-CL', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+};
+
+// Calcular estadísticas
+const totalOrdenes = ordenes.length;
+const ordenesCompletadas = ordenes.filter(o => o.estado === 'entregado').length;
+const totalGastado = ordenes.reduce((sum, o) => sum + (o.factura?.total || 0), 0);
+---
+
+<DashboardLayout title="Historial del Vehículo" role="recepcionista" currentPath="/recepcion/historial_vehiculo">
+  <div class="max-w-5xl mx-auto">
+    <!-- Header -->
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Historial del Vehículo</h1>
+      <p class="text-gray-500 dark:text-gray-400 mt-2">Consulta todos los trabajos realizados a un vehículo.</p>
+    </div>
+
+    <!-- Search Form -->
+    <form method="GET" class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 mb-8">
+      <div class="flex flex-col md:flex-row gap-4">
+        <div class="flex-1">
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Buscar por patente</label>
+          <div class="relative">
+            <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">directions_car</span>
+            <input 
+              type="text" 
+              name="patente" 
+              value={searchQuery}
+              placeholder="Ej: ABC123"
+              class="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono text-lg uppercase"
+              autofocus
+            />
+          </div>
+        </div>
+        
+        <div class="flex items-end">
+          <button 
+            type="submit"
+            class="w-full md:w-auto px-6 py-3 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 transition-colors flex items-center justify-center gap-2"
+          >
+            <span class="material-symbols-outlined">search</span>
+            Buscar
+          </button>
+        </div>
+      </div>
+    </form>
+
+    {error && (
+      <div class="p-4 mb-6 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg text-red-800 dark:text-red-200 flex items-center gap-2">
+        <span class="material-symbols-outlined">error</span>
+        <p>{error}</p>
+      </div>
+    )}
+
+    {searchPerformed && !vehiculo && !error && (
+      <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-12 text-center">
+        <span class="material-symbols-outlined text-5xl text-gray-300 dark:text-gray-600 mb-4">no_crash</span>
+        <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">Vehículo no encontrado</h3>
+        <p class="text-gray-500 dark:text-gray-400">No se encontró ningún vehículo con la patente "{searchQuery}"</p>
+      </div>
+    )}
+
+    {vehiculo && (
+      <div class="space-y-6">
+        <!-- Vehicle Info Card -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div class="p-6 bg-gradient-to-r from-primary-500 to-primary-600 text-white">
+            <div class="flex items-center gap-6">
+              <div class="w-20 h-20 rounded-xl bg-white/20 flex items-center justify-center">
+                <span class="material-symbols-outlined text-4xl">directions_car</span>
+              </div>
+              <div class="flex-1">
+                <p class="text-sm opacity-75 mb-1">Patente</p>
+                <h2 class="text-3xl font-bold font-mono">{vehiculo.patente}</h2>
+                <p class="text-lg mt-1">{vehiculo.marca} {vehiculo.modelo} ({vehiculo.ano})</p>
+              </div>
+              <a 
+                href={`/recepcion/crear_orden?vehiculoId=${vehiculo.documentId}`}
+                class="px-4 py-2 bg-white text-primary-600 font-medium rounded-lg hover:bg-white/90 transition-colors flex items-center gap-2"
+              >
+                <span class="material-symbols-outlined">add_circle</span>
+                Nueva Orden
+              </a>
+            </div>
+          </div>
+          
+          <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Propietario</h3>
+              <p class="font-bold text-gray-900 dark:text-white text-lg">
+                {vehiculo.cliente?.nombre} {vehiculo.cliente?.apellido}
+              </p>
+              <div class="mt-2 space-y-1 text-sm text-gray-600 dark:text-gray-400">
+                {vehiculo.cliente?.telefono && <p>📞 {vehiculo.cliente.telefono}</p>}
+                {vehiculo.cliente?.email && <p>✉️ {vehiculo.cliente.email}</p>}
+              </div>
+            </div>
+            <div>
+              <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Datos del Vehículo</h3>
+              <dl class="space-y-1 text-sm">
+                <div class="flex justify-between">
+                  <dt class="text-gray-500 dark:text-gray-400">Chasis:</dt>
+                  <dd class="font-mono text-gray-900 dark:text-white">{vehiculo.numero_de_chasis || 'N/A'}</dd>
+                </div>
+                <div class="flex justify-between">
+                  <dt class="text-gray-500 dark:text-gray-400">Año:</dt>
+                  <dd class="text-gray-900 dark:text-white">{vehiculo.ano}</dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+            <div class="flex items-center gap-4">
+              <div class="w-12 h-12 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                <span class="material-symbols-outlined text-blue-600 dark:text-blue-400">receipt_long</span>
+              </div>
+              <div>
+                <p class="text-2xl font-bold text-gray-900 dark:text-white">{totalOrdenes}</p>
+                <p class="text-sm text-gray-500 dark:text-gray-400">Órdenes Totales</p>
+              </div>
+            </div>
+          </div>
+          
+          <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+            <div class="flex items-center gap-4">
+              <div class="w-12 h-12 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                <span class="material-symbols-outlined text-green-600 dark:text-green-400">task_alt</span>
+              </div>
+              <div>
+                <p class="text-2xl font-bold text-gray-900 dark:text-white">{ordenesCompletadas}</p>
+                <p class="text-sm text-gray-500 dark:text-gray-400">Completadas</p>
+              </div>
+            </div>
+          </div>
+          
+          <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+            <div class="flex items-center gap-4">
+              <div class="w-12 h-12 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                <span class="material-symbols-outlined text-purple-600 dark:text-purple-400">payments</span>
+              </div>
+              <div>
+                <p class="text-2xl font-bold text-gray-900 dark:text-white">${totalGastado.toLocaleString('es-CL')}</p>
+                <p class="text-sm text-gray-500 dark:text-gray-400">Total Histórico</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Orders History -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              <span class="material-symbols-outlined">history</span>
+              Historial de Órdenes de Trabajo
+            </h3>
+          </div>
+          
+          {ordenes.length > 0 ? (
+            <div class="divide-y divide-gray-200 dark:divide-gray-700">
+              {ordenes.map((orden) => (
+                <div class="p-6 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                  <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div class="flex-1">
+                      <div class="flex items-center gap-3 mb-2">
+                        <span class="font-bold text-gray-900 dark:text-white">OT-{orden.id}</span>
+                        <span class={`px-2 py-0.5 rounded-full text-xs font-medium ${getEstadoColor(orden.estado)}`}>
+                          {formatEstado(orden.estado)}
+                        </span>
+                      </div>
+                      <p class="text-gray-600 dark:text-gray-300 text-sm mb-2">{orden.descripcion}</p>
+                      <div class="flex flex-wrap gap-4 text-xs text-gray-500 dark:text-gray-400">
+                        <span class="flex items-center gap-1">
+                          <span class="material-symbols-outlined text-sm">calendar_today</span>
+                          Ingreso: {formatDate(orden.fecha_ingreso)}
+                        </span>
+                        {orden.fecha_entrega && (
+                          <span class="flex items-center gap-1">
+                            <span class="material-symbols-outlined text-sm">event_available</span>
+                            Entrega: {formatDate(orden.fecha_entrega)}
+                          </span>
+                        )}
+                        {orden.mecanico && (
+                          <span class="flex items-center gap-1">
+                            <span class="material-symbols-outlined text-sm">engineering</span>
+                            {orden.mecanico.nombre} {orden.mecanico.apellido}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div class="flex items-center gap-4">
+                      {orden.factura && (
+                        <div class="text-right">
+                          <p class="text-xs text-gray-500 dark:text-gray-400">{orden.factura.numero_factura}</p>
+                          <p class="font-bold text-gray-900 dark:text-white">${orden.factura.total?.toLocaleString('es-CL')}</p>
+                        </div>
+                      )}
+                      <a 
+                        href={`/recepcion/ver_estado_orden?type=orden&q=${orden.id}`}
+                        class="p-2 text-gray-500 hover:text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors"
+                        title="Ver detalles"
+                      >
+                        <span class="material-symbols-outlined">visibility</span>
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div class="p-12 text-center">
+              <span class="material-symbols-outlined text-4xl text-gray-300 dark:text-gray-600 mb-4">folder_open</span>
+              <h4 class="text-lg font-bold text-gray-900 dark:text-white mb-2">Sin historial</h4>
+              <p class="text-gray-500 dark:text-gray-400 mb-4">Este vehículo no tiene órdenes de trabajo registradas.</p>
+              <a 
+                href={`/recepcion/crear_orden?vehiculoId=${vehiculo.documentId}`}
+                class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+              >
+                <span class="material-symbols-outlined">add_circle</span>
+                Crear Primera Orden
+              </a>
+            </div>
+          )}
+        </div>
+      </div>
+    )}
+
+    <!-- Help Text -->
+    {!searchPerformed && (
+      <div class="bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800 p-6">
+        <div class="flex gap-4">
+          <span class="material-symbols-outlined text-blue-600 dark:text-blue-400 text-2xl">info</span>
+          <div>
+            <h3 class="font-bold text-blue-800 dark:text-blue-200 mb-2">¿Qué puedes ver aquí?</h3>
+            <ul class="text-blue-700 dark:text-blue-300 text-sm space-y-1">
+              <li>• Información completa del vehículo y su propietario</li>
+              <li>• Historial de todas las órdenes de trabajo</li>
+              <li>• Diagnósticos y trabajos realizados anteriormente</li>
+              <li>• Total histórico de gastos en el taller</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
+</DashboardLayout>

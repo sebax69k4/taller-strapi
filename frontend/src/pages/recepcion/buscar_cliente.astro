@@ -1,0 +1,258 @@
+---
+export const prerender = false;
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import { strapiGet } from '../../lib/strapi';
+import '../../styles/global.css';
+
+const userRole = Astro.cookies.get('user_role')?.value;
+if (!userRole) {
+  return Astro.redirect('/login');
+}
+
+interface Cliente {
+  id: number;
+  documentId: string;
+  nombre: string;
+  apellido: string;
+  rut: string;
+  email: string;
+  telefono: string;
+  vehiculos: {
+    id: number;
+    documentId: string;
+    patente: string;
+    marca: string;
+    modelo: string;
+    ano: number;
+  }[];
+}
+
+let clientes: Cliente[] = [];
+let error = '';
+let searchPerformed = false;
+
+const searchQuery = Astro.url.searchParams.get('q') || '';
+
+if (searchQuery && searchQuery.length >= 2) {
+  searchPerformed = true;
+  try {
+    // Buscar por nombre, apellido, RUT o email
+    const queryUrl = `/api/clientes?filters[$or][0][nombre][$containsi]=${searchQuery}&filters[$or][1][apellido][$containsi]=${searchQuery}&filters[$or][2][rut][$containsi]=${searchQuery}&filters[$or][3][email][$containsi]=${searchQuery}&populate[vehiculos][fields][0]=patente&populate[vehiculos][fields][1]=marca&populate[vehiculos][fields][2]=modelo&populate[vehiculos][fields][3]=ano&populate[vehiculos][fields][4]=documentId&sort[0]=apellido:asc&pagination[limit]=20`;
+    
+    const data = await strapiGet(queryUrl);
+    clientes = data.data || [];
+  } catch (e: any) {
+    console.error('Error searching clients:', e);
+    error = 'Error al buscar clientes';
+  }
+}
+---
+
+<DashboardLayout title="Buscar Cliente" role="recepcionista" currentPath="/recepcion/buscar_cliente">
+  <div class="max-w-5xl mx-auto">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+      <div>
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Buscar Cliente</h1>
+        <p class="text-gray-500 dark:text-gray-400 mt-2">Busca un cliente existente para crear una orden de trabajo.</p>
+      </div>
+      <a 
+        href="/recepcion/crear_cliente"
+        class="px-4 py-2 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2"
+      >
+        <span class="material-symbols-outlined">person_add</span>
+        Nuevo Cliente
+      </a>
+    </div>
+
+    <!-- Search Form -->
+    <form method="GET" class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 mb-8">
+      <div class="flex flex-col md:flex-row gap-4">
+        <div class="flex-1">
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Buscar cliente</label>
+          <div class="relative">
+            <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">person_search</span>
+            <input 
+              type="text" 
+              name="q" 
+              value={searchQuery}
+              placeholder="Nombre, apellido, RUT o email..."
+              minlength="2"
+              class="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-lg"
+              autofocus
+            />
+          </div>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Ingresa al menos 2 caracteres para buscar</p>
+        </div>
+        
+        <div class="flex items-end">
+          <button 
+            type="submit"
+            class="w-full md:w-auto px-6 py-3 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 transition-colors flex items-center justify-center gap-2"
+          >
+            <span class="material-symbols-outlined">search</span>
+            Buscar
+          </button>
+        </div>
+      </div>
+    </form>
+
+    {error && (
+      <div class="p-4 mb-6 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg text-red-800 dark:text-red-200 flex items-center gap-2">
+        <span class="material-symbols-outlined">error</span>
+        <p>{error}</p>
+      </div>
+    )}
+
+    {searchPerformed && clientes.length === 0 && !error && (
+      <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-12 text-center">
+        <span class="material-symbols-outlined text-5xl text-gray-300 dark:text-gray-600 mb-4">person_off</span>
+        <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">No se encontraron clientes</h3>
+        <p class="text-gray-500 dark:text-gray-400 mb-6">No hay clientes que coincidan con "{searchQuery}"</p>
+        <a 
+          href="/recepcion/crear_cliente"
+          class="inline-flex items-center gap-2 px-6 py-3 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 transition-colors"
+        >
+          <span class="material-symbols-outlined">person_add</span>
+          Crear Nuevo Cliente
+        </a>
+      </div>
+    )}
+
+    {clientes.length > 0 && (
+      <div class="space-y-4">
+        <p class="text-sm text-gray-500 dark:text-gray-400">
+          Se encontraron <strong class="text-gray-900 dark:text-white">{clientes.length}</strong> clientes
+        </p>
+        
+        <div class="grid gap-4">
+          {clientes.map((cliente) => (
+            <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden hover:border-primary-500 transition-colors">
+              <div class="p-6">
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                  <!-- Client Info -->
+                  <div class="flex items-start gap-4">
+                    <div class="w-14 h-14 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center flex-shrink-0">
+                      <span class="text-xl font-bold text-primary-600 dark:text-primary-400">
+                        {cliente.nombre.charAt(0)}{cliente.apellido.charAt(0)}
+                      </span>
+                    </div>
+                    <div>
+                      <h3 class="text-lg font-bold text-gray-900 dark:text-white">
+                        {cliente.nombre} {cliente.apellido}
+                      </h3>
+                      <div class="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-sm text-gray-500 dark:text-gray-400">
+                        {cliente.rut && (
+                          <span class="flex items-center gap-1">
+                            <span class="material-symbols-outlined text-sm">badge</span>
+                            {cliente.rut}
+                          </span>
+                        )}
+                        {cliente.telefono && (
+                          <span class="flex items-center gap-1">
+                            <span class="material-symbols-outlined text-sm">phone</span>
+                            {cliente.telefono}
+                          </span>
+                        )}
+                        {cliente.email && (
+                          <span class="flex items-center gap-1">
+                            <span class="material-symbols-outlined text-sm">email</span>
+                            {cliente.email}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <!-- Actions -->
+                  <div class="flex items-center gap-2 ml-auto">
+                    <a 
+                      href={`/recepcion/crear_orden?clienteId=${cliente.documentId}`}
+                      class="px-4 py-2 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2"
+                    >
+                      <span class="material-symbols-outlined">add_circle</span>
+                      Nueva Orden
+                    </a>
+                  </div>
+                </div>
+                
+                <!-- Vehicles -->
+                {cliente.vehiculos && cliente.vehiculos.length > 0 && (
+                  <div class="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+                    <p class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Vehículos registrados:</p>
+                    <div class="flex flex-wrap gap-2">
+                      {cliente.vehiculos.map((vehiculo) => (
+                        <a 
+                          href={`/recepcion/crear_orden?clienteId=${cliente.documentId}&vehiculoId=${vehiculo.documentId}`}
+                          class="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 rounded-lg text-sm hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors group"
+                        >
+                          <span class="material-symbols-outlined text-gray-500 group-hover:text-primary-600 text-lg">directions_car</span>
+                          <span class="font-mono font-bold text-gray-900 dark:text-white">{vehiculo.patente}</span>
+                          <span class="text-gray-500 dark:text-gray-400">
+                            {vehiculo.marca} {vehiculo.modelo} ({vehiculo.ano})
+                          </span>
+                          <span class="material-symbols-outlined text-primary-600 dark:text-primary-400 text-sm opacity-0 group-hover:opacity-100 transition-opacity">arrow_forward</span>
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {(!cliente.vehiculos || cliente.vehiculos.length === 0) && (
+                  <div class="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+                    <div class="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
+                      <span class="material-symbols-outlined text-lg">warning</span>
+                      <span>Este cliente no tiene vehículos registrados.</span>
+                      <a 
+                        href={`/recepcion/crear_vehiculo?clienteId=${cliente.documentId}`}
+                        class="text-primary-600 dark:text-primary-400 hover:underline font-medium"
+                      >
+                        Agregar vehículo
+                      </a>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+
+    <!-- Help Text -->
+    {!searchPerformed && (
+      <div class="grid md:grid-cols-2 gap-6">
+        <div class="bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800 p-6">
+          <div class="flex gap-4">
+            <span class="material-symbols-outlined text-blue-600 dark:text-blue-400 text-2xl">search</span>
+            <div>
+              <h3 class="font-bold text-blue-800 dark:text-blue-200 mb-2">Buscar Cliente Existente</h3>
+              <p class="text-blue-700 dark:text-blue-300 text-sm">
+                Busca por nombre, apellido, RUT o email. Al encontrar el cliente, podrás seleccionar uno de sus vehículos registrados para crear una nueva orden.
+              </p>
+            </div>
+          </div>
+        </div>
+        
+        <div class="bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800 p-6">
+          <div class="flex gap-4">
+            <span class="material-symbols-outlined text-green-600 dark:text-green-400 text-2xl">person_add</span>
+            <div>
+              <h3 class="font-bold text-green-800 dark:text-green-200 mb-2">¿Cliente Nuevo?</h3>
+              <p class="text-green-700 dark:text-green-300 text-sm mb-3">
+                Si el cliente no está registrado, puedes crear uno nuevo junto con su vehículo.
+              </p>
+              <a 
+                href="/recepcion/crear_cliente"
+                class="inline-flex items-center gap-2 text-green-700 dark:text-green-300 font-medium hover:underline"
+              >
+                Registrar nuevo cliente
+                <span class="material-symbols-outlined text-sm">arrow_forward</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
+</DashboardLayout>

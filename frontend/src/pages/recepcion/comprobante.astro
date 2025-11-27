@@ -1,0 +1,277 @@
+---
+export const prerender = false;
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import { strapiGet } from '../../lib/strapi';
+import '../../styles/global.css';
+
+const userRole = Astro.cookies.get('user_role')?.value;
+if (!userRole) {
+  return Astro.redirect('/login');
+}
+
+interface Order {
+  id: number;
+  documentId: string;
+  estado: string;
+  descripcion: string;
+  fecha_ingreso: string;
+  fecha_entrega: string | null;
+  vehiculo: {
+    marca: string;
+    modelo: string;
+    patente: string;
+    cliente: {
+      nombre: string;
+      apellido: string;
+      telefono: string;
+      email: string;
+    } | null;
+  } | null;
+  factura: {
+    numero_factura: string;
+    total: number;
+    fecha_emision: string;
+  } | null;
+}
+
+const orderId = Astro.url.searchParams.get('id');
+let order: Order | null = null;
+let error = '';
+
+if (orderId) {
+  try {
+    const data = await strapiGet(`/api/orden-de-trabajos/${orderId}?populate[vehiculo][populate][cliente][fields][0]=nombre&populate[vehiculo][populate][cliente][fields][1]=apellido&populate[vehiculo][populate][cliente][fields][2]=telefono&populate[vehiculo][populate][cliente][fields][3]=email&populate[factura][fields][0]=numero_factura&populate[factura][fields][1]=total&populate[factura][fields][2]=fecha_emision`);
+    order = data.data;
+    if (order && order.vehiculo?.cliente) {
+      // Cliente ya viene mapeado correctamente
+    }
+  } catch (e: any) {
+    console.error('Error fetching order:', e);
+    error = 'Error al obtener la orden';
+  }
+}
+
+const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleDateString('es-CL', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+};
+
+const getComprobanteType = () => {
+  if (!order) return 'recepcion';
+  if (order.estado === 'entregado' || order.estado === 'facturado') return 'entrega';
+  return 'recepcion';
+};
+
+const comprobanteType = getComprobanteType();
+---
+
+<DashboardLayout title="Imprimir Comprobante" role="recepcionista" currentPath="/recepcion/comprobante">
+  <div class="max-w-4xl mx-auto">
+    <!-- Header - Hidden on print -->
+    <div class="mb-8 print:hidden">
+      <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Imprimir Comprobante</h1>
+      <p class="text-gray-500 dark:text-gray-400 mt-2">Genera comprobantes de recepción o entrega de vehículos.</p>
+    </div>
+
+    {!orderId && (
+      <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 print:hidden">
+        <form method="GET" class="space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">N° de Orden</label>
+            <div class="flex gap-4">
+              <input 
+                type="text" 
+                name="id" 
+                placeholder="Ingresa el documentId de la orden"
+                class="flex-1 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+                required
+              />
+              <button 
+                type="submit"
+                class="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2"
+              >
+                <span class="material-symbols-outlined">search</span>
+                Buscar
+              </button>
+            </div>
+          </div>
+        </form>
+        
+        <div class="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+          <p class="text-sm text-blue-700 dark:text-blue-300">
+            <strong>Tip:</strong> Puedes acceder a esta página desde "Ver Estado de Orden" o desde "Entrega de Vehículo" para reimprimir comprobantes.
+          </p>
+        </div>
+      </div>
+    )}
+
+    {error && (
+      <div class="p-4 mb-6 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg text-red-800 dark:text-red-200 flex items-center gap-2 print:hidden">
+        <span class="material-symbols-outlined">error</span>
+        <p>{error}</p>
+      </div>
+    )}
+
+    {order && (
+      <>
+        <!-- Print Actions - Hidden on print -->
+        <div class="flex gap-4 mb-6 print:hidden">
+          <button 
+            onclick="window.print()"
+            class="px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2"
+          >
+            <span class="material-symbols-outlined">print</span>
+            Imprimir Comprobante
+          </button>
+          <a 
+            href="/recepcion/ver_estado_orden"
+            class="px-6 py-3 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
+          >
+            <span class="material-symbols-outlined">arrow_back</span>
+            Volver
+          </a>
+        </div>
+
+        <!-- Comprobante - Printable -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 print:border-none print:shadow-none print:p-0">
+          <!-- Header -->
+          <div class="flex justify-between items-start border-b-2 border-gray-900 dark:border-white pb-6 mb-6">
+            <div>
+              <h1 class="text-3xl font-bold text-gray-900 dark:text-white">TALLER VELOZ</h1>
+              <p class="text-gray-600 dark:text-gray-400 mt-1">Servicio Automotriz Profesional</p>
+              <div class="mt-4 text-sm text-gray-600 dark:text-gray-400 space-y-1">
+                <p>Av. Principal 123, Santiago</p>
+                <p>Teléfono: +56 2 1234 5678</p>
+                <p>Email: contacto@tallerveloz.cl</p>
+              </div>
+            </div>
+            <div class="text-right">
+              <h2 class="text-xl font-bold text-gray-900 dark:text-white uppercase">
+                Comprobante de {comprobanteType === 'recepcion' ? 'Recepción' : 'Entrega'}
+              </h2>
+              <p class="text-2xl font-mono font-bold text-primary-600 dark:text-primary-400 mt-2">
+                OT-{order.id}
+              </p>
+              <p class="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                Fecha: {formatDate(comprobanteType === 'entrega' && order.fecha_entrega ? order.fecha_entrega : order.fecha_ingreso)}
+              </p>
+            </div>
+          </div>
+
+          <!-- Client & Vehicle Info -->
+          <div class="grid grid-cols-2 gap-8 mb-8">
+            <div>
+              <h3 class="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Datos del Cliente</h3>
+              <div class="space-y-2">
+                <p class="font-bold text-lg text-gray-900 dark:text-white">
+                  {order.vehiculo?.cliente?.nombre} {order.vehiculo?.cliente?.apellido}
+                </p>
+                {order.vehiculo?.cliente?.telefono && (
+                  <p class="text-gray-600 dark:text-gray-400">Tel: {order.vehiculo.cliente.telefono}</p>
+                )}
+                {order.vehiculo?.cliente?.email && (
+                  <p class="text-gray-600 dark:text-gray-400">Email: {order.vehiculo.cliente.email}</p>
+                )}
+              </div>
+            </div>
+            <div>
+              <h3 class="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Datos del Vehículo</h3>
+              <div class="space-y-2">
+                <p class="font-bold text-lg text-gray-900 dark:text-white">
+                  {order.vehiculo?.marca} {order.vehiculo?.modelo}
+                </p>
+                <p class="text-gray-600 dark:text-gray-400">
+                  Patente: <span class="font-mono font-bold">{order.vehiculo?.patente}</span>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Work Description -->
+          <div class="mb-8">
+            <h3 class="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">
+              {comprobanteType === 'recepcion' ? 'Motivo de Ingreso' : 'Trabajo Realizado'}
+            </h3>
+            <div class="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700">
+              <p class="text-gray-900 dark:text-white">{order.descripcion}</p>
+            </div>
+          </div>
+
+          <!-- Invoice Info (only for delivery) -->
+          {comprobanteType === 'entrega' && order.factura && (
+            <div class="mb-8 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+              <h3 class="text-sm font-bold text-green-800 dark:text-green-200 uppercase tracking-wide mb-3">Información de Factura</h3>
+              <div class="grid grid-cols-3 gap-4">
+                <div>
+                  <p class="text-sm text-green-600 dark:text-green-400">N° Factura</p>
+                  <p class="font-bold text-green-900 dark:text-green-100">{order.factura.numero_factura}</p>
+                </div>
+                <div>
+                  <p class="text-sm text-green-600 dark:text-green-400">Fecha Emisión</p>
+                  <p class="font-bold text-green-900 dark:text-green-100">{formatDate(order.factura.fecha_emision)}</p>
+                </div>
+                <div>
+                  <p class="text-sm text-green-600 dark:text-green-400">Total</p>
+                  <p class="font-bold text-2xl text-green-900 dark:text-green-100">${order.factura.total?.toLocaleString('es-CL')}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <!-- Terms -->
+          <div class="mb-8 text-xs text-gray-500 dark:text-gray-400 space-y-1">
+            {comprobanteType === 'recepcion' ? (
+              <>
+                <p>• El vehículo queda bajo custodia del taller hasta su retiro.</p>
+                <p>• Los trabajos adicionales serán comunicados y aprobados antes de realizarse.</p>
+                <p>• El presupuesto final puede variar según hallazgos durante el diagnóstico.</p>
+                <p>• El retiro del vehículo debe realizarse con este comprobante.</p>
+              </>
+            ) : (
+              <>
+                <p>• El cliente declara recibir el vehículo en conformidad.</p>
+                <p>• Los trabajos realizados tienen garantía de 3 meses o 5.000 km.</p>
+                <p>• Conserve este comprobante para futuras referencias.</p>
+              </>
+            )}
+          </div>
+
+          <!-- Signatures -->
+          <div class="grid grid-cols-2 gap-8 pt-8 border-t border-gray-200 dark:border-gray-700">
+            <div class="text-center">
+              <div class="h-16 border-b border-gray-400 dark:border-gray-500 mb-2"></div>
+              <p class="text-sm text-gray-600 dark:text-gray-400">Firma del Cliente</p>
+            </div>
+            <div class="text-center">
+              <div class="h-16 border-b border-gray-400 dark:border-gray-500 mb-2"></div>
+              <p class="text-sm text-gray-600 dark:text-gray-400">Firma Recepcionista</p>
+            </div>
+          </div>
+
+          <!-- Footer -->
+          <div class="mt-8 pt-4 border-t border-gray-200 dark:border-gray-700 text-center text-xs text-gray-400">
+            <p>Documento generado el {new Date().toLocaleString('es-CL')}</p>
+            <p class="mt-1">Taller Veloz - Sistema de Gestión v1.0</p>
+          </div>
+        </div>
+      </>
+    )}
+  </div>
+</DashboardLayout>
+
+<style>
+  @media print {
+    @page {
+      size: A4;
+      margin: 1.5cm;
+    }
+    
+    body {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+  }
+</style>

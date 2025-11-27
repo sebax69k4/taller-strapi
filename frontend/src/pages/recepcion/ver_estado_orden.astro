@@ -1,0 +1,373 @@
+---
+export const prerender = false;
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import { strapiGet } from '../../lib/strapi';
+import '../../styles/global.css';
+
+const userRole = Astro.cookies.get('user_role')?.value;
+if (!userRole) {
+  return Astro.redirect('/login');
+}
+
+interface Order {
+  id: number;
+  documentId: string;
+  estado: string;
+  descripcion: string;
+  fecha_ingreso: string;
+  fecha_estimada: string | null;
+  diagnostico: string | null;
+  vehiculo: {
+    marca: string;
+    modelo: string;
+    patente: string;
+    cliente: {
+      nombre: string;
+      apellido: string;
+      telefono: string;
+    } | null;
+  } | null;
+  mecanico: {
+    nombre: string;
+    apellido: string;
+  } | null;
+}
+
+let order: Order | null = null;
+let error = '';
+let searchPerformed = false;
+
+const searchQuery = Astro.url.searchParams.get('q') || '';
+const searchType = Astro.url.searchParams.get('type') || 'patente';
+
+if (searchQuery) {
+  searchPerformed = true;
+  try {
+    let queryUrl = '/api/orden-de-trabajos?';
+    
+    if (searchType === 'patente') {
+      // Buscar por patente del vehículo
+      queryUrl += `filters[vehiculo][patente][$containsi]=${searchQuery}`;
+    } else if (searchType === 'orden') {
+      // Buscar por ID de orden
+      queryUrl += `filters[id][$eq]=${searchQuery}`;
+    } else if (searchType === 'cliente') {
+      // Buscar por nombre de cliente
+      queryUrl += `filters[$or][0][vehiculo][cliente][nombre][$containsi]=${searchQuery}`;
+      queryUrl += `&filters[$or][1][vehiculo][cliente][apellido][$containsi]=${searchQuery}`;
+    }
+    
+    queryUrl += '&populate[vehiculo][populate][cliente][fields][0]=nombre';
+    queryUrl += '&populate[vehiculo][populate][cliente][fields][1]=apellido';
+    queryUrl += '&populate[vehiculo][populate][cliente][fields][2]=telefono';
+    queryUrl += '&populate[mecanico][fields][0]=nombre';
+    queryUrl += '&populate[mecanico][fields][1]=apellido';
+    queryUrl += '&sort[0]=updatedAt:desc';
+    queryUrl += '&pagination[limit]=1';
+    
+    const data = await strapiGet(queryUrl);
+    
+    if (data.data && data.data.length > 0) {
+      const orderData = data.data[0];
+      order = {
+        ...orderData,
+        vehiculo: orderData.vehiculo ? {
+          ...orderData.vehiculo,
+          cliente: orderData.vehiculo.cliente || null
+        } : null
+      };
+    }
+  } catch (e: any) {
+    console.error('Error searching order:', e);
+    error = 'Error al buscar la orden';
+  }
+}
+
+const getEstadoInfo = (estado: string) => {
+  const estados: Record<string, { label: string; color: string; icon: string; description: string }> = {
+    ingresado: { 
+      label: 'Ingresado', 
+      color: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
+      icon: 'login',
+      description: 'El vehículo ha sido recibido y está esperando asignación.'
+    },
+    en_diagnostico: { 
+      label: 'En Diagnóstico', 
+      color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
+      icon: 'search',
+      description: 'Un mecánico está evaluando el vehículo para determinar los trabajos necesarios.'
+    },
+    en_reparacion: { 
+      label: 'En Reparación', 
+      color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+      icon: 'build',
+      description: 'El vehículo está siendo reparado activamente.'
+    },
+    finalizado: { 
+      label: 'Trabajo Finalizado', 
+      color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+      icon: 'check_circle',
+      description: 'Las reparaciones han sido completadas. Pendiente de facturación.'
+    },
+    facturado: { 
+      label: 'Listo para Entrega', 
+      color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
+      icon: 'receipt',
+      description: '¡El vehículo está listo! El cliente puede pasar a recogerlo.'
+    },
+    entregado: { 
+      label: 'Entregado', 
+      color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300',
+      icon: 'task_alt',
+      description: 'El vehículo fue entregado al cliente.'
+    }
+  };
+  return estados[estado] || { label: estado, color: 'bg-gray-100 text-gray-800', icon: 'help', description: 'Estado desconocido' };
+};
+
+const getProgressPercentage = (estado: string) => {
+  const progress: Record<string, number> = {
+    ingresado: 10,
+    en_diagnostico: 30,
+    en_reparacion: 60,
+    finalizado: 80,
+    facturado: 95,
+    entregado: 100
+  };
+  return progress[estado] || 0;
+};
+
+const estadoInfo = order ? getEstadoInfo(order.estado) : null;
+const progress = order ? getProgressPercentage(order.estado) : 0;
+---
+
+<DashboardLayout title="Consultar Estado de Orden" role="recepcionista" currentPath="/recepcion/ver_estado_orden">
+  <div class="max-w-4xl mx-auto">
+    <!-- Header -->
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Consultar Estado de Orden</h1>
+      <p class="text-gray-500 dark:text-gray-400 mt-2">Busca una orden por patente, número de orden o nombre del cliente.</p>
+    </div>
+
+    <!-- Search Form -->
+    <form method="GET" class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 mb-8">
+      <div class="flex flex-col md:flex-row gap-4">
+        <!-- Search Type -->
+        <div class="md:w-48">
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Buscar por</label>
+          <select 
+            name="type"
+            class="w-full px-3 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+          >
+            <option value="patente" selected={searchType === 'patente'}>Patente</option>
+            <option value="orden" selected={searchType === 'orden'}>N° Orden</option>
+            <option value="cliente" selected={searchType === 'cliente'}>Cliente</option>
+          </select>
+        </div>
+        
+        <!-- Search Input -->
+        <div class="flex-1">
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Valor a buscar</label>
+          <div class="relative">
+            <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">search</span>
+            <input 
+              type="text" 
+              name="q" 
+              value={searchQuery}
+              placeholder="Ej: ABC123, 45, Juan..."
+              class="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              autofocus
+            />
+          </div>
+        </div>
+        
+        <!-- Search Button -->
+        <div class="flex items-end">
+          <button 
+            type="submit"
+            class="w-full md:w-auto px-6 py-2.5 bg-primary-600 text-white font-medium rounded-lg hover:bg-primary-700 transition-colors flex items-center justify-center gap-2"
+          >
+            <span class="material-symbols-outlined">search</span>
+            Buscar
+          </button>
+        </div>
+      </div>
+    </form>
+
+    {error && (
+      <div class="p-4 mb-6 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg text-red-800 dark:text-red-200 flex items-center gap-2">
+        <span class="material-symbols-outlined">error</span>
+        <p>{error}</p>
+      </div>
+    )}
+
+    {searchPerformed && !order && !error && (
+      <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-12 text-center">
+        <span class="material-symbols-outlined text-5xl text-gray-300 dark:text-gray-600 mb-4">search_off</span>
+        <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">No se encontró ninguna orden</h3>
+        <p class="text-gray-500 dark:text-gray-400">Verifica los datos ingresados e intenta nuevamente.</p>
+      </div>
+    )}
+
+    {order && estadoInfo && (
+      <div class="space-y-6">
+        <!-- Status Card - Main -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <!-- Status Header -->
+          <div class={`p-6 ${estadoInfo.color.replace('text-', 'bg-').split(' ')[0]} border-b border-gray-200 dark:border-gray-700`}>
+            <div class="flex items-center gap-4">
+              <div class="w-16 h-16 rounded-full bg-white/80 dark:bg-gray-900/50 flex items-center justify-center">
+                <span class="material-symbols-outlined text-3xl">{estadoInfo.icon}</span>
+              </div>
+              <div>
+                <p class="text-sm font-medium opacity-75">Estado Actual</p>
+                <h2 class="text-2xl font-bold">{estadoInfo.label}</h2>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Progress Bar -->
+          <div class="p-6 border-b border-gray-200 dark:border-gray-700">
+            <div class="flex justify-between text-sm text-gray-500 dark:text-gray-400 mb-2">
+              <span>Progreso</span>
+              <span>{progress}%</span>
+            </div>
+            <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
+              <div 
+                class="h-3 rounded-full bg-gradient-to-r from-primary-500 to-primary-600 transition-all duration-500"
+                style={`width: ${progress}%`}
+              ></div>
+            </div>
+            <p class="mt-3 text-gray-600 dark:text-gray-300">{estadoInfo.description}</p>
+          </div>
+
+          <!-- Order Details -->
+          <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Order Info -->
+            <div>
+              <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Información de la Orden</h3>
+              <dl class="space-y-3">
+                <div class="flex justify-between">
+                  <dt class="text-gray-600 dark:text-gray-400">N° Orden:</dt>
+                  <dd class="font-bold text-gray-900 dark:text-white">OT-{order.id}</dd>
+                </div>
+                <div class="flex justify-between">
+                  <dt class="text-gray-600 dark:text-gray-400">Fecha Ingreso:</dt>
+                  <dd class="font-medium text-gray-900 dark:text-white">
+                    {new Date(order.fecha_ingreso).toLocaleDateString('es-CL')}
+                  </dd>
+                </div>
+                {order.fecha_estimada && (
+                  <div class="flex justify-between">
+                    <dt class="text-gray-600 dark:text-gray-400">Fecha Estimada:</dt>
+                    <dd class="font-medium text-gray-900 dark:text-white">
+                      {new Date(order.fecha_estimada).toLocaleDateString('es-CL')}
+                    </dd>
+                  </div>
+                )}
+                <div class="flex justify-between">
+                  <dt class="text-gray-600 dark:text-gray-400">Mecánico:</dt>
+                  <dd class="font-medium text-gray-900 dark:text-white">
+                    {order.mecanico ? `${order.mecanico.nombre} ${order.mecanico.apellido}` : 'Por asignar'}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+
+            <!-- Vehicle & Client Info -->
+            <div>
+              <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Vehículo y Cliente</h3>
+              <dl class="space-y-3">
+                <div class="flex justify-between">
+                  <dt class="text-gray-600 dark:text-gray-400">Vehículo:</dt>
+                  <dd class="font-bold text-gray-900 dark:text-white">
+                    {order.vehiculo?.marca} {order.vehiculo?.modelo}
+                  </dd>
+                </div>
+                <div class="flex justify-between">
+                  <dt class="text-gray-600 dark:text-gray-400">Patente:</dt>
+                  <dd class="font-mono font-bold text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded">
+                    {order.vehiculo?.patente}
+                  </dd>
+                </div>
+                <div class="flex justify-between">
+                  <dt class="text-gray-600 dark:text-gray-400">Cliente:</dt>
+                  <dd class="font-medium text-gray-900 dark:text-white">
+                    {order.vehiculo?.cliente?.nombre} {order.vehiculo?.cliente?.apellido}
+                  </dd>
+                </div>
+                {order.vehiculo?.cliente?.telefono && (
+                  <div class="flex justify-between">
+                    <dt class="text-gray-600 dark:text-gray-400">Teléfono:</dt>
+                    <dd class="font-medium text-gray-900 dark:text-white">
+                      {order.vehiculo.cliente.telefono}
+                    </dd>
+                  </div>
+                )}
+              </dl>
+            </div>
+          </div>
+
+          <!-- Work Description -->
+          {order.descripcion && (
+            <div class="p-6 border-t border-gray-200 dark:border-gray-700">
+              <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Descripción del Trabajo</h3>
+              <p class="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-100 dark:border-gray-700">
+                {order.descripcion}
+              </p>
+            </div>
+          )}
+
+          <!-- Diagnostic -->
+          {order.diagnostico && (
+            <div class="p-6 border-t border-gray-200 dark:border-gray-700">
+              <h3 class="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Diagnóstico</h3>
+              <p class="text-gray-900 dark:text-white bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-100 dark:border-yellow-800">
+                {order.diagnostico}
+              </p>
+            </div>
+          )}
+        </div>
+
+        <!-- Quick Actions -->
+        {order.estado === 'facturado' && (
+          <div class="bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800 p-6">
+            <div class="flex items-center gap-4">
+              <div class="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/50 flex items-center justify-center">
+                <span class="material-symbols-outlined text-green-600 dark:text-green-400 text-2xl">celebration</span>
+              </div>
+              <div class="flex-1">
+                <h3 class="font-bold text-green-800 dark:text-green-200">¡Vehículo Listo para Entrega!</h3>
+                <p class="text-green-700 dark:text-green-300 text-sm">El cliente puede pasar a recoger su vehículo y realizar el pago.</p>
+              </div>
+              <a 
+                href={`/recepcion/entrega_vehiculo`}
+                class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+              >
+                <span class="material-symbols-outlined">key</span>
+                Ir a Entregas
+              </a>
+            </div>
+          </div>
+        )}
+      </div>
+    )}
+
+    <!-- Help Text -->
+    {!searchPerformed && (
+      <div class="bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800 p-6">
+        <div class="flex gap-4">
+          <span class="material-symbols-outlined text-blue-600 dark:text-blue-400 text-2xl">info</span>
+          <div>
+            <h3 class="font-bold text-blue-800 dark:text-blue-200 mb-2">¿Cómo buscar una orden?</h3>
+            <ul class="text-blue-700 dark:text-blue-300 text-sm space-y-1">
+              <li>• <strong>Por Patente:</strong> Ingresa la patente del vehículo (ej: ABC123)</li>
+              <li>• <strong>Por N° Orden:</strong> Ingresa el número de la orden de trabajo (ej: 45)</li>
+              <li>• <strong>Por Cliente:</strong> Ingresa el nombre o apellido del cliente</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
+</DashboardLayout>

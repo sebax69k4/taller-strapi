@@ -1,0 +1,275 @@
+---
+export const prerender = false;
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import Card from '../../components/ui/Card.astro';
+import { strapiGet, strapiPost, strapiPut } from '../../lib/strapi';
+import '../../styles/global.css';
+
+const userRole = Astro.cookies.get('user_role')?.value;
+const mecanicoId = Astro.cookies.get('mecanico_id')?.value;
+
+if (!userRole) {
+  return Astro.redirect('/login');
+}
+
+interface Order {
+  id: number;
+  documentId: string;
+  estado: string;
+  descripcion: string;
+  vehiculo: {
+    marca: string;
+    modelo: string;
+    patente: string;
+  } | null;
+}
+
+let ordenes: Order[] = [];
+let message = '';
+let messageType = '';
+let error = '';
+
+// Obtener mensaje de URL
+const urlMessage = Astro.url.searchParams.get('message');
+const urlType = Astro.url.searchParams.get('type');
+if (urlMessage) {
+  message = urlMessage;
+  messageType = urlType || 'success';
+}
+
+const preselectedOrderId = Astro.url.searchParams.get('ordenId') || '';
+
+try {
+  // Obtener órdenes activas del mecánico (en diagnóstico o reparación)
+  let ordenesEndpoint = '/api/orden-de-trabajos?filters[$or][0][estado][$eq]=en_diagnostico&filters[$or][1][estado][$eq]=en_reparacion&populate[vehiculo][fields][0]=marca&populate[vehiculo][fields][1]=modelo&populate[vehiculo][fields][2]=patente&sort=updatedAt:desc';
+  
+  if (mecanicoId) {
+    ordenesEndpoint = `/api/orden-de-trabajos?filters[mecanico][id][$eq]=${mecanicoId}&filters[$or][0][estado][$eq]=en_diagnostico&filters[$or][1][estado][$eq]=en_reparacion&populate[vehiculo][fields][0]=marca&populate[vehiculo][fields][1]=modelo&populate[vehiculo][fields][2]=patente&sort=updatedAt:desc`;
+  }
+  
+  const ordenesData = await strapiGet(ordenesEndpoint);
+  ordenes = ordenesData.data || [];
+
+  // Manejar POST para pausar trabajo
+  if (Astro.request.method === 'POST') {
+    const formData = await Astro.request.formData();
+    const ordenId = formData.get('orden');
+    const motivo = formData.get('motivo');
+    const detalles = formData.get('detalles') || '';
+    const tiempoEstimado = formData.get('tiempo_estimado') || '';
+
+    if (!ordenId || !motivo) {
+      return Astro.redirect(`/mecanico/pausar_trabajo?message=${encodeURIComponent('Debe seleccionar una orden y un motivo.')}&type=error`);
+    }
+
+    try {
+      // Obtener ID numérico de la orden
+      const orderResponse = await strapiGet(`/api/orden-de-trabajos/${ordenId}`);
+      const orderNumericId = orderResponse.data?.id;
+      
+      // Crear entrada en bitácora indicando la pausa
+      const motivoTextos: Record<string, string> = {
+        'esperando_repuesto': 'Esperando repuesto',
+        'esperando_cliente': 'Esperando respuesta del cliente',
+        'esperando_aprobacion': 'Esperando aprobación de presupuesto',
+        'falta_herramienta': 'Falta herramienta especializada',
+        'fin_jornada': 'Fin de jornada laboral',
+        'otro': 'Otro motivo'
+      };
+
+      await strapiPost('/api/bitacoras', {
+        procedimientos: `[TRABAJO PAUSADO] ${motivoTextos[motivo as string] || motivo}`,
+        fecha: new Date().toISOString().split('T')[0],
+        orden_de_trabajo: orderNumericId,
+        observaciones: `${detalles}${tiempoEstimado ? ` | Tiempo estimado de espera: ${tiempoEstimado}` : ''}`,
+      });
+
+      // Si es por repuesto, sugerir ir a solicitar
+      if (motivo === 'esperando_repuesto') {
+        return Astro.redirect(`/mecanico/solicitar_repuesto?ordenId=${ordenId}&message=${encodeURIComponent('Pausa registrada. ¿Necesitas solicitar un repuesto?')}&type=success`);
+      }
+
+      return Astro.redirect(`/mecanico/pausar_trabajo?message=${encodeURIComponent('Pausa registrada correctamente en la bitácora.')}&type=success`);
+    } catch (err: any) {
+      console.error('Error:', err);
+      return Astro.redirect(`/mecanico/pausar_trabajo?message=${encodeURIComponent('Error al registrar pausa: ' + err.message)}&type=error`);
+    }
+  }
+
+} catch (e: any) {
+  console.error('Error:', e);
+  error = 'Error al cargar datos';
+}
+
+const motivosPausa = [
+  { value: 'esperando_repuesto', label: 'Esperando repuesto', icon: 'inventory_2', color: 'text-orange-600' },
+  { value: 'esperando_cliente', label: 'Esperando respuesta del cliente', icon: 'person', color: 'text-blue-600' },
+  { value: 'esperando_aprobacion', label: 'Esperando aprobación de presupuesto', icon: 'approval', color: 'text-purple-600' },
+  { value: 'falta_herramienta', label: 'Falta herramienta especializada', icon: 'handyman', color: 'text-red-600' },
+  { value: 'fin_jornada', label: 'Fin de jornada laboral', icon: 'schedule', color: 'text-gray-600' },
+  { value: 'otro', label: 'Otro motivo', icon: 'more_horiz', color: 'text-gray-500' },
+];
+---
+
+<DashboardLayout title="Pausar Trabajo" role="mecanico" currentPath="/mecanico/pausar_trabajo">
+  <div class="max-w-3xl mx-auto">
+    <!-- Header -->
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Pausar Trabajo</h1>
+      <p class="text-gray-500 dark:text-gray-400 mt-2">Registra una pausa en tu trabajo actual para mantener informado al equipo.</p>
+    </div>
+
+    {message && (
+      <div class={`p-4 mb-6 rounded-lg border flex items-center gap-3 ${messageType === 'success' ? 'bg-green-50 border-green-200 text-green-800 dark:bg-green-900/30 dark:border-green-800 dark:text-green-300' : 'bg-red-50 border-red-200 text-red-800 dark:bg-red-900/30 dark:border-red-800 dark:text-red-300'}`}>
+        <span class="material-symbols-outlined">{messageType === 'success' ? 'check_circle' : 'error'}</span>
+        <p>{message}</p>
+      </div>
+    )}
+
+    {error && (
+      <div class="p-4 mb-6 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg text-red-800 dark:text-red-200 flex items-center gap-2">
+        <span class="material-symbols-outlined">error</span>
+        <p>{error}</p>
+      </div>
+    )}
+
+    {ordenes.length === 0 ? (
+      <Card>
+        <div class="text-center py-12">
+          <span class="material-symbols-outlined text-5xl text-gray-300 dark:text-gray-600 mb-4">assignment_late</span>
+          <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">No tienes trabajos activos</h3>
+          <p class="text-gray-500 dark:text-gray-400 mb-6">Solo puedes pausar órdenes que estén en diagnóstico o reparación.</p>
+          <a 
+            href="/mecanico/dash_mec"
+            class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+          >
+            <span class="material-symbols-outlined">arrow_back</span>
+            Ver mis órdenes
+          </a>
+        </div>
+      </Card>
+    ) : (
+      <Card>
+        <form method="POST" class="space-y-6" x-data="{ selectedMotivo: '', selectedOrden: '' }">
+          <!-- Selección de Orden -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Orden de Trabajo *
+            </label>
+            <select 
+              name="orden" 
+              required
+              x-model="selectedOrden"
+              class="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            >
+              <option value="">Seleccione la orden a pausar...</option>
+              {ordenes.map((orden) => (
+                <option value={orden.documentId} selected={preselectedOrderId === orden.documentId}>
+                  OT-{orden.id} - {orden.vehiculo?.marca} {orden.vehiculo?.modelo} ({orden.vehiculo?.patente}) - {orden.estado.replace('_', ' ')}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <!-- Motivo de Pausa -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+              Motivo de la pausa *
+            </label>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {motivosPausa.map((motivo) => (
+                <label 
+                  class="relative flex items-center gap-3 p-4 rounded-lg border-2 cursor-pointer transition-all"
+                  :class={`selectedMotivo === '${motivo.value}' ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'`}
+                >
+                  <input 
+                    type="radio" 
+                    name="motivo" 
+                    value={motivo.value}
+                    x-model="selectedMotivo"
+                    class="sr-only"
+                    required
+                  />
+                  <span class={`material-symbols-outlined ${motivo.color}`}>{motivo.icon}</span>
+                  <span class="text-gray-900 dark:text-white font-medium">{motivo.label}</span>
+                  <span 
+                    class="absolute top-2 right-2 w-5 h-5 rounded-full border-2 flex items-center justify-center"
+                    :class={`selectedMotivo === '${motivo.value}' ? 'border-primary-500 bg-primary-500' : 'border-gray-300 dark:border-gray-600'`}
+                  >
+                    <span 
+                      class="material-symbols-outlined text-white text-sm"
+                      x-show={`selectedMotivo === '${motivo.value}'`}
+                    >check</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <!-- Detalles -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Detalles adicionales
+            </label>
+            <textarea 
+              name="detalles"
+              rows="3"
+              placeholder="Describe brevemente la situación..."
+              class="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            ></textarea>
+          </div>
+
+          <!-- Tiempo Estimado -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Tiempo estimado de espera
+            </label>
+            <select 
+              name="tiempo_estimado"
+              class="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            >
+              <option value="">No especificado</option>
+              <option value="1 hora">1 hora</option>
+              <option value="2-4 horas">2-4 horas</option>
+              <option value="1 día">1 día</option>
+              <option value="2-3 días">2-3 días</option>
+              <option value="1 semana">1 semana</option>
+              <option value="Indefinido">Indefinido</option>
+            </select>
+          </div>
+
+          <!-- Aviso -->
+          <div class="bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800 p-4">
+            <div class="flex gap-3">
+              <span class="material-symbols-outlined text-amber-600 dark:text-amber-400">warning</span>
+              <div>
+                <p class="font-medium text-amber-800 dark:text-amber-200">Nota importante</p>
+                <p class="text-sm text-amber-700 dark:text-amber-300 mt-1">
+                  Esta acción registrará la pausa en la bitácora de la orden. El encargado será notificado si la pausa es por falta de repuestos o herramientas.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Botones -->
+          <div class="flex justify-end gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <a 
+              href="/mecanico/dash_mec"
+              class="px-6 py-3 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+            >
+              Cancelar
+            </a>
+            <button 
+              type="submit"
+              class="px-6 py-3 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors flex items-center gap-2"
+              :disabled="!selectedOrden || !selectedMotivo"
+            >
+              <span class="material-symbols-outlined">pause_circle</span>
+              Registrar Pausa
+            </button>
+          </div>
+        </form>
+      </Card>
+    )}
+  </div>
+</DashboardLayout>

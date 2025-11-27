@@ -9,11 +9,14 @@ const { role, currentPath } = Astro.props;
 const links = {
   recepcionista: [
     { href: '/recepcion/dash_recep', icon: 'dashboard', label: 'Dashboard' },
-    { href: '/recepcion/crear_cliente', icon: 'person_add', label: 'Crear Cliente' },
-    { href: '/recepcion/crear_vehiculo', icon: 'directions_car', label: 'Crear Vehículo' },
+    { href: '/recepcion/buscar_cliente', icon: 'person_search', label: 'Buscar Cliente' },
+    { href: '/recepcion/crear_cliente', icon: 'person_add', label: 'Nuevo Cliente' },
+    { href: '/recepcion/crear_vehiculo', icon: 'directions_car', label: 'Nuevo Vehículo' },
     { href: '/recepcion/crear_orden', icon: 'post_add', label: 'Crear Orden' },
+    { href: '/recepcion/ver_estado_orden', icon: 'search', label: 'Consultar Estado' },
+    { href: '/recepcion/historial_vehiculo', icon: 'history', label: 'Historial Vehículo' },
     { href: '/recepcion/entrega_vehiculo', icon: 'key', label: 'Entrega Vehículo' },
-    { href: '/recepcion/list_c_y_v', icon: 'group', label: 'Listar C y V' },
+    { href: '/recepcion/list_c_y_v', icon: 'group', label: 'Listar Clientes' },
   ],
   encargado: [
     { href: '/encargado/dash_enc', icon: 'dashboard', label: 'Dashboard' },
@@ -24,6 +27,7 @@ const links = {
     { href: '/encargado/disp_mec_zonas', icon: 'view_quilt', label: 'Disponibilidad Zonas' },
     { href: '/encargado/asignar_orden_zona', icon: 'add_road', label: 'Asignar Zona' },
     { href: '/encargado/gen_factura', icon: 'receipt_long', label: 'Aprobar Facturas' },
+    { href: '/encargado/aprobar_solicitudes', icon: 'approval', label: 'Solicitudes Repuesto' },
     { href: '/encargado/inventario', icon: 'inventory', label: 'Inventario' },
     { href: '/encargado/alert_stock', icon: 'inventory_2', label: 'Alertas Stock' },
   ],
@@ -31,7 +35,9 @@ const links = {
     { href: '/mecanico/dash_mec', icon: 'dashboard', label: 'Mis Órdenes' },
     { href: '/mecanico/detalle_orden_trabajo', icon: 'build', label: 'Detalle Orden' },
     { href: '/mecanico/bitacora_repuestos', icon: 'inventory', label: 'Bitácora' },
-    { href: '/mecanico/desc_stock', icon: 'check_circle', label: 'Descontar Stock' },
+    { href: '/mecanico/solicitar_repuesto', icon: 'shopping_cart', label: 'Solicitar Repuesto' },
+    { href: '/mecanico/pausar_trabajo', icon: 'pause_circle', label: 'Pausar Trabajo' },
+    { href: '/mecanico/historial_vehiculo', icon: 'history', label: 'Historial Vehículo' },
   ]
 };
 

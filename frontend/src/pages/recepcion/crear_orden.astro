@@ -32,8 +32,15 @@ if (!userRole) {
 
 let message = Astro.url.searchParams.get('message');
 let messageType = Astro.url.searchParams.get('type');
+
+// Parámetros preseleccionados desde buscar_cliente o historial_vehiculo
+const preselectedClienteId = Astro.url.searchParams.get('clienteId') || '';
+const preselectedVehiculoId = Astro.url.searchParams.get('vehiculoId') || '';
+
 let clientes: Cliente[] = [];
 let vehiculos: Vehiculo[] = [];
+let preselectedCliente: Cliente | null = null;
+let preselectedVehiculo: Vehiculo | null = null;
 
 try {
   const [clientesResponse, vehiculosResponse] = await Promise.all([
@@ -43,6 +50,16 @@ try {
 
   clientes = clientesResponse.data || [];
   vehiculos = vehiculosResponse.data || [];
+
+  // Buscar cliente y vehículo preseleccionados
+  if (preselectedVehiculoId) {
+    preselectedVehiculo = vehiculos.find((v: Vehiculo) => v.documentId === preselectedVehiculoId) || null;
+    if (preselectedVehiculo?.cliente) {
+      preselectedCliente = preselectedVehiculo.cliente;
+    }
+  } else if (preselectedClienteId) {
+    preselectedCliente = clientes.find((c: Cliente) => c.documentId === preselectedClienteId) || null;
+  }
 
 } catch (error: any) {
   console.error('Error fetching data:', error);
@@ -97,7 +114,20 @@ if (Astro.request.method === 'POST') {
         )}
 
         <Card>
-            <form method="POST" class="space-y-8" x-data="formController()">
+            <form method="POST" class="space-y-8" x-data="formController()" x-init="init()">
+                
+                <!-- Preselection Alert -->
+                {(preselectedCliente || preselectedVehiculo) && (
+                    <div class="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 flex items-center gap-3">
+                        <span class="material-symbols-outlined text-blue-600 dark:text-blue-400">info</span>
+                        <p class="text-sm text-blue-700 dark:text-blue-300">
+                            {preselectedVehiculo 
+                                ? `Creando orden para: ${preselectedVehiculo.marca} ${preselectedVehiculo.modelo} (${preselectedVehiculo.patente})`
+                                : `Creando orden para: ${preselectedCliente?.nombre} ${preselectedCliente?.apellido}`
+                            }
+                        </p>
+                    </div>
+                )}
                 
                 <!-- Client and Vehicle Selection -->
                 <div>
@@ -168,14 +198,31 @@ if (Astro.request.method === 'POST') {
         </Card>
     </div>
 
-    <script define:vars={{ vehiculos }}>
+    <script define:vars={{ vehiculos, preselectedCliente, preselectedVehiculo }}>
         document.addEventListener('alpine:init', () => {
             Alpine.data('formController', () => ({
                 message: new URLSearchParams(window.location.search).get('message'),
                 messageType: new URLSearchParams(window.location.search).get('type'),
-                selectedClientId: null,
+                selectedClientId: preselectedCliente ? preselectedCliente.id : null,
                 allVehiculos: vehiculos,
                 filteredVehiculos: [],
+                preselectedVehiculoId: preselectedVehiculo ? preselectedVehiculo.documentId : null,
+                init() {
+                    // Si hay cliente preseleccionado, filtrar vehículos
+                    if (this.selectedClientId) {
+                        this.filterVehiculos(this.selectedClientId);
+                        // Seleccionar el cliente en el dropdown
+                        const clienteSelect = document.getElementById('cliente');
+                        if (clienteSelect) clienteSelect.value = this.selectedClientId;
+                    }
+                    // Si hay vehículo preseleccionado, seleccionarlo después de un tick
+                    if (this.preselectedVehiculoId) {
+                        this.$nextTick(() => {
+                            const vehiculoSelect = document.getElementById('vehiculo');
+                            if (vehiculoSelect) vehiculoSelect.value = this.preselectedVehiculoId;
+                        });
+                    }
+                },
                 filterVehiculos(clientId) {
                     this.selectedClientId = clientId;
                     if (!clientId) {

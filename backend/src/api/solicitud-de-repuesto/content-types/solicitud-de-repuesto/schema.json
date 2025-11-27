@@ -1,0 +1,46 @@
+{
+  "kind": "collectionType",
+  "collectionName": "solicitud_de_repuestos",
+  "info": {
+    "singularName": "solicitud-de-repuesto",
+    "pluralName": "solicitud-de-repuestos",
+    "displayName": "Solicitud de Repuesto",
+    "description": "Solicitudes de repuestos de mecánicos para aprobación del encargado"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "cantidad": {
+      "type": "integer",
+      "required": true,
+      "min": 1
+    },
+    "urgencia": {
+      "type": "enumeration",
+      "enum": ["baja", "media", "alta"],
+      "default": "media",
+      "required": true
+    },
+    "estado": {
+      "type": "enumeration",
+      "enum": ["pendiente", "aprobado", "rechazado"],
+      "default": "pendiente",
+      "required": true
+    },
+    "observaciones": {
+      "type": "text"
+    },
+    "repuesto": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::repuesto.repuesto"
+    },
+    "orden_de_trabajo": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::orden-de-trabajo.orden-de-trabajo"
+    }
+  }
+}

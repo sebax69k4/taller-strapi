@@ -764,6 +764,57 @@ export interface ApiServicioServicio extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiSolicitudDeRepuestoSolicitudDeRepuesto
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'solicitud_de_repuestos';
+  info: {
+    description: 'Solicitudes de repuestos de mec\u00E1nicos para aprobaci\u00F3n del encargado';
+    displayName: 'Solicitud de Repuesto';
+    pluralName: 'solicitud-de-repuestos';
+    singularName: 'solicitud-de-repuesto';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    cantidad: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 1;
+        },
+        number
+      >;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    estado: Schema.Attribute.Enumeration<
+      ['pendiente', 'aprobado', 'rechazado']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'pendiente'>;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::solicitud-de-repuesto.solicitud-de-repuesto'
+    > &
+      Schema.Attribute.Private;
+    observaciones: Schema.Attribute.Text;
+    orden_de_trabajo: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::orden-de-trabajo.orden-de-trabajo'
+    >;
+    publishedAt: Schema.Attribute.DateTime;
+    repuesto: Schema.Attribute.Relation<'manyToOne', 'api::repuesto.repuesto'>;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    urgencia: Schema.Attribute.Enumeration<['baja', 'media', 'alta']> &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'media'>;
+  };
+}
+
 export interface ApiVehiculoVehiculo extends Struct.CollectionTypeSchema {
   collectionName: 'vehiculos';
   info: {
@@ -1353,6 +1404,7 @@ declare module '@strapi/strapi' {
       'api::presupuesto.presupuesto': ApiPresupuestoPresupuesto;
       'api::repuesto.repuesto': ApiRepuestoRepuesto;
       'api::servicio.servicio': ApiServicioServicio;
+      'api::solicitud-de-repuesto.solicitud-de-repuesto': ApiSolicitudDeRepuestoSolicitudDeRepuesto;
       'api::vehiculo.vehiculo': ApiVehiculoVehiculo;
       'api::zona.zona': ApiZonaZona;
       'plugin::content-releases.release': PluginContentReleasesRelease;
