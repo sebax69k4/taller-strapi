@@ -1,6 +1,6 @@
 ---
 export const prerender = false;
-import { strapiGet } from '../../lib/strapi';
+import { strapiGet, strapiPut } from '../../lib/strapi';
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
 
 const userRole = Astro.cookies.get('user_role')?.value as 'recepcionista' | 'encargado' | 'mecanico' | undefined;
@@ -17,11 +17,28 @@ interface Order {
 }
 
 let activeOrders: Order[] = [];
+let successMessage = '';
+let errorMessage = '';
+
 try {
-  const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$ne]=entregado&populate[0]=cliente&populate[1]=vehiculo&sort[0]=updatedAt:desc');
+  // Handle POST request to mark as delivered
+  if (Astro.request.method === 'POST') {
+    const formData = await Astro.request.formData();
+    const orderId = formData.get('orderId');
+    
+    if (orderId) {
+        await strapiPut(`/api/orden-de-trabajos/${orderId}`, {
+            estado: 'Entregado'
+        });
+        successMessage = 'Orden marcada como entregada correctamente.';
+    }
+  }
+
+  const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$ne]=Entregado&populate[0]=cliente&populate[1]=vehiculo&sort[0]=updatedAt:desc');
   activeOrders = data.data || [];
-} catch (e) {
-  console.error('Error fetching orders:', e);
+} catch (e: any) {
+  console.error('Error:', e);
+  errorMessage = 'Error al procesar la solicitud.';
 }
 ---
 
@@ -29,6 +46,9 @@ try {
     <div class="max-w-4xl mx-auto">
         <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-6">Marcar Orden como Entregada</h1>
         
+        {successMessage && <div class="p-4 mb-4 text-sm text-green-700 bg-green-100 rounded-lg dark:bg-green-200 dark:text-green-800" role="alert">{successMessage}</div>}
+        {errorMessage && <div class="p-4 mb-4 text-sm text-red-700 bg-red-100 rounded-lg dark:bg-red-200 dark:text-red-800" role="alert">{errorMessage}</div>}
+
         <div class="grid gap-6">
             {activeOrders.map((order: Order) => (
                 <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row justify-between items-center gap-4">
@@ -44,13 +64,16 @@ try {
                         </div>
                         <p class="text-gray-600 dark:text-gray-400">{order.cliente.nombre} {order.cliente.apellido} - {order.vehiculo.marca} {order.vehiculo.modelo}</p>
                     </div>
-                    <button 
-                        onclick={`markAsDelivered('${order.documentId}')`}
-                        class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
-                    >
-                        <span class="material-symbols-outlined">check_circle</span>
-                        Entregar Vehículo
-                    </button>
+                    <form method="POST" onsubmit="return confirm('¿Está seguro de marcar esta orden como Entregada?');">
+                        <input type="hidden" name="orderId" value={order.documentId} />
+                        <button 
+                            type="submit"
+                            class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
+                        >
+                            <span class="material-symbols-outlined">check_circle</span>
+                            Entregar Vehículo
+                        </button>
+                    </form>
                 </div>
             ))}
             {activeOrders.length === 0 && (
@@ -62,33 +85,3 @@ try {
         </div>
     </div>
 </DashboardLayout>
-
-<script is:inline>
-    window.markAsDelivered = async (documentId) => {
-        if (!confirm('¿Está seguro de marcar esta orden como Entregada? Esta acción no se puede deshacer.')) return;
-        
-        try {
-            const response = await fetch(`http://localhost:1337/api/orden-de-trabajos/${documentId}`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    data: {
-                        estado: 'Entregado'
-                    }
-                })
-            });
-            
-            if (response.ok) {
-                alert('Orden marcada como entregada.');
-                window.location.reload();
-            } else {
-                alert('Error al actualizar la orden.');
-            }
-        } catch (e) {
-            console.error(e);
-            alert('Error de conexión.');
-        }
-    };
-</script>

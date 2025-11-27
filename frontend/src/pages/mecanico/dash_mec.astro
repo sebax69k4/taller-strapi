@@ -51,14 +51,16 @@ try {
     endpoint = `/api/orden-de-trabajos?filters[mecanico][id][$eq]=${mecanicoId}&populate=vehiculo&sort=createdAt:desc`;
   }
   
+  console.log('🔍 Fetching orders from:', endpoint);
   const ordersRes = await strapiGet(endpoint);
+  console.log('📦 Response:', JSON.stringify(ordersRes, null, 2));
   assignedOrders = ordersRes.data || [];
   
   // Debug: mostrar la cantidad de órdenes cargadas
-  console.log(`Órdenes cargadas: ${assignedOrders.length}`);
+  console.log(`✅ Órdenes cargadas: ${assignedOrders.length}`);
 
 } catch (e: any) {
-  console.error('Error en el dashboard del mecánico:', e);
+  console.error('❌ Error en el dashboard del mecánico:', e);
   error = e.message || 'Error de conexión con el servidor.';
 }
 

@@ -22,6 +22,7 @@ interface Vehiculo {
   marca: string;
   modelo: string;
   cliente: Cliente | null;
+  clienteId?: number; // Para facilitar el filtrado en frontend
 }
 
 const userRole = Astro.cookies.get('user_role')?.value;
@@ -53,16 +54,17 @@ if (Astro.request.method === 'POST') {
   try {
     const formData = await Astro.request.formData();
     const clienteId = formData.get('cliente');
-    const vehiculoId = formData.get('vehiculo');
+    const vehiculoDocumentId = formData.get('vehiculo'); // Ahora es documentId
     const fechaEntrada = formData.get('fecha_entrada');
     const descripcion = formData.get('descripcion');
 
-    if (!clienteId || !vehiculoId || !fechaEntrada || !descripcion) {
+    if (!clienteId || !vehiculoDocumentId || !fechaEntrada || !descripcion) {
         return Astro.redirect(`/recepcion/crear_orden?message=${encodeURIComponent('Todos los campos son obligatorios.')}&type=error`);
     }
 
+    // En Strapi v5, las relaciones se conectan usando documentId
     const result = await strapiPost('/api/orden-de-trabajos', {
-      vehiculo: parseInt(vehiculoId as string, 10),
+      vehiculo: vehiculoDocumentId, // Usar documentId directamente
       fecha_ingreso: fechaEntrada,
       descripcion: descripcion,
       estado: 'ingresado'
@@ -117,8 +119,8 @@ if (Astro.request.method === 'POST') {
                             <label class="text-sm font-medium text-gray-700 dark:text-gray-300" for="vehiculo">Vehículo</label>
                             <select name="vehiculo" id="vehiculo" class="form-select w-full rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 focus:border-primary-500 focus:ring-primary-500 dark:text-gray-200" required :disabled="filteredVehiculos.length === 0">
                                 <option value="" disabled selected>Seleccione un vehículo...</option>
-                                <template x-for="vehiculo in filteredVehiculos" :key="vehiculo.id">
-                                    <option :value="vehiculo.id" x-text="`${vehiculo.marca} ${vehiculo.modelo} (${vehiculo.patente})`"></option>
+                                <template x-for="vehiculo in filteredVehiculos" :key="vehiculo.documentId">
+                                    <option :value="vehiculo.documentId" x-text="`${vehiculo.marca} ${vehiculo.modelo} (${vehiculo.patente})`"></option>
                                 </template>
                             </select>
                             <p x-show="selectedClientId && filteredVehiculos.length === 0" class="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">

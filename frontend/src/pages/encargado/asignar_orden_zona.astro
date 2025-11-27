@@ -119,35 +119,6 @@ if (!order) {
                 <div class="p-6 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
                     <h3 class="text-lg font-bold text-gray-900 dark:text-white">Asignación y Planificación</h3>
                 </div>
-                <!-- Form -->
-                <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6">
-                    <!-- Mechanic Selector -->
-                    <div class="flex flex-col gap-2">
-                        <label class="text-sm font-medium text-gray-700 dark:text-gray-300" for="mechanic">Mecánico</label>
-                        <div class="relative">
-                            <select class="block w-full pl-3 pr-10 py-2.5 text-base border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-lg" id="mechanic" name="mechanic" required>
-                                <option disabled="" selected="" value="">Seleccionar mecánico</option>
-                                {mechanics.map((mec: any) => (
-                                    <option value={mec.documentId} selected={order.mecanico?.documentId === mec.documentId}>{mec.nombre} {mec.apellido}</option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
-                    <!-- Work Area Selector -->
-                    <div class="flex flex-col gap-2">
-                        <label class="text-sm font-medium text-gray-700 dark:text-gray-300" for="work-area">Zona de Trabajo</label>
-                        <div class="relative">
-                            <select class="block w-full pl-3 pr-10 py-2.5 text-base border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-lg" id="work-area" name="work-area" required>
-                                <option disabled="" selected="" value="">Seleccionar zona</option>
-                                {zones.map((zone: any) => (
-                                    <option value={zone.documentId} selected={order.zona?.documentId === zone.documentId}>{zone.nombre}</option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
-                    <!-- Start Date/Time Picker -->
-                    <div class="flex flex-col gap-2">
-                        <label class="text-sm font-medium text-gray-700 dark:text-gray-300" for="start-date">Fecha y Hora de Inicio</label>
                         <div class="relative">
                             <input class="block w-full pl-10 pr-3 py-2.5 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-lg" id="start-date" name="start-date" type="datetime-local" value={order.fecha_inicio_planificada ? new Date(order.fecha_inicio_planificada).toISOString().slice(0, 16) : ''}/>
                             <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">

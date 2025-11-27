@@ -62,9 +62,10 @@ function flattenAttributes(data: any): any {
 
   // Handle the "attributes" wrapper
   if (data.attributes !== undefined) {
-    const { attributes, id, ...rest } = data;
+    const { attributes, id, documentId, ...rest } = data;
     return {
       id,
+      documentId,
       ...rest,
       ...flattenAttributes(attributes),
     };

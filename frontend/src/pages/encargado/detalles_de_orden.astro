@@ -1,4 +1,3 @@
-
 ---
 export const prerender = false;
 import { strapiGet } from '../../lib/strapi';
@@ -18,7 +17,7 @@ if (!orderId) {
 }
 
 try {
-  const data = await strapiGet(`/api/orden-de-trabajos/${orderId}?populate[0]=cliente&populate[1]=vehiculo&populate[2]=mecanico&populate[3]=repuestos&populate[4]=bitacoras`);
+  const data = await strapiGet(`/api/orden-de-trabajos/${orderId}?populate[0]=cliente&populate[1]=vehiculo&populate[2]=mecanico&populate[3]=repuestos&populate[4]=bitacoras&populate[5]=presupuesto`);
   order = data.data;
 } catch (e) {
   console.error('Error fetching order:', e);
@@ -54,18 +53,24 @@ const getStatusLabel = (status: string) => {
     return status ? status.replace('_', ' ').toUpperCase() : 'DESCONOCIDO';
 };
 
-// Calculate total from parts
+// Calculate total from parts and labor
 const partsTotal = order.repuestos?.reduce((acc: number, part: any) => acc + (part.precio || 0), 0) || 0;
-const total = partsTotal; 
-const iva = total * 0.21;
-const grandTotal = total + iva;
+// Use budget total if available to derive labor, or use default labor cost
+const budgetTotal = order.presupuesto?.monto_total;
+const laborCost = budgetTotal ? (budgetTotal - partsTotal) : 75000; 
+// If budget exists, we assume it's the subtotal before tax or the total. 
+// Let's assume for consistency with other pages: Total = Parts + Labor + Tax
+// If budget is present, we treat it as the "Subtotal" (Parts + Labor).
+const subtotal = partsTotal + laborCost;
+const iva = subtotal * 0.19; // 19% IVA
+const grandTotal = subtotal + iva;
 
 --- 
 
 <DashboardLayout title="Detalles de Orden" role="encargado" currentPath="/encargado/detalles_de_orden">
     <div class="mx-auto max-w-6xl">
         <!-- Header Bar -->
-        <header class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
+        <header class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6 print:hidden">
             <div>
                 <!-- Breadcrumbs -->
                 <div class="flex flex-wrap items-center gap-2">
@@ -87,12 +92,8 @@ const grandTotal = total + iva;
                 <a href={`/encargado/asignar_orden_zona?id=${order.documentId}`} class="flex items-center justify-center gap-2 p-2 h-10 w-10 rounded-lg text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-sm transition-colors">
                     <span class="material-symbols-outlined">edit</span>
                 </a>
-                <button class="flex items-center justify-center gap-2 p-2 h-10 w-10 rounded-lg text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-sm transition-colors">
+                <button onclick="window.print()" class="flex items-center justify-center gap-2 p-2 h-10 w-10 rounded-lg text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-sm transition-colors">
                     <span class="material-symbols-outlined">print</span>
-                </button>
-                <button class="flex items-center justify-center gap-2 h-10 px-4 rounded-lg bg-primary-600 text-white hover:bg-primary-700 shadow-sm transition-colors">
-                    <span class="material-symbols-outlined">picture_as_pdf</span>
-                    <span class="text-sm font-medium">Exportar a PDF</span>
                 </button>
             </div>
         </header>
@@ -154,24 +155,20 @@ const grandTotal = total + iva;
                                         <td class="py-4 text-right font-medium text-gray-900 dark:text-white">€{part.precio}</td>
                                     </tr>
                                 ))}
-                                {(!order.repuestos || order.repuestos.length === 0) && (
-                                    <tr>
-                                        <td class="py-8 text-center text-gray-500 dark:text-gray-400 italic" colspan="4">
-                                            <div class="flex flex-col items-center gap-2">
-                                                <span class="material-symbols-outlined text-3xl opacity-50">inventory_2</span>
-                                                <p>No hay repuestos asignados a esta orden</p>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                )}
+                                <tr>
+                                    <td class="py-4 text-gray-900 dark:text-white">Mano de Obra / Servicios</td>
+                                    <td class="py-4 text-center text-gray-600 dark:text-gray-300">1</td>
+                                    <td class="py-4 text-right text-gray-600 dark:text-gray-300">€{laborCost}</td>
+                                    <td class="py-4 text-right font-medium text-gray-900 dark:text-white">€{laborCost}</td>
+                                </tr>
                             </tbody>
                             <tfoot>
                                 <tr>
                                     <td class="pt-6 text-right font-medium text-gray-600 dark:text-gray-300" colspan="3">Subtotal</td>
-                                    <td class="pt-6 text-right font-medium text-gray-900 dark:text-white">€{total.toFixed(2)}</td>
+                                    <td class="pt-6 text-right font-medium text-gray-900 dark:text-white">€{subtotal.toFixed(2)}</td>
                                 </tr>
                                 <tr>
-                                    <td class="py-2 text-right font-medium text-gray-600 dark:text-gray-300" colspan="3">IVA (21%)</td>
+                                    <td class="py-2 text-right font-medium text-gray-600 dark:text-gray-300" colspan="3">IVA (19%)</td>
                                     <td class="py-2 text-right font-medium text-gray-900 dark:text-white">€{iva.toFixed(2)}</td>
                                 </tr>
                                 <tr>
@@ -257,4 +254,3 @@ const grandTotal = total + iva;
         </div>
     </div>
 </DashboardLayout>
-```
