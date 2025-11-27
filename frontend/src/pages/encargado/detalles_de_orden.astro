@@ -17,8 +17,12 @@ if (!orderId) {
 }
 
 try {
-  const data = await strapiGet(`/api/orden-de-trabajos/${orderId}?populate[0]=cliente&populate[1]=vehiculo&populate[2]=mecanico&populate[3]=repuestos&populate[4]=bitacoras&populate[5]=presupuesto`);
+  const data = await strapiGet(`/api/orden-de-trabajos/${orderId}?populate[vehiculo][populate][cliente][fields][0]=nombre&populate[vehiculo][populate][cliente][fields][1]=apellido&populate[vehiculo][populate][cliente][fields][2]=email&populate[vehiculo][populate][cliente][fields][3]=telefono&populate[mecanico][fields][0]=nombre&populate[mecanico][fields][1]=apellido&populate[repuestos][fields][0]=nombre&populate[repuestos][fields][1]=precio&populate[repuestos][fields][2]=sku&populate[bitacoras][populate][mecanico][fields][0]=nombre&populate[bitacoras][fields][0]=procedimientos&populate[bitacoras][fields][1]=fecha&populate[bitacoras][fields][2]=observaciones&populate[presupuesto][fields][0]=monto_total&populate[zona][fields][0]=nombre`);
   order = data.data;
+  // Mapear cliente desde vehiculo
+  if (order && order.vehiculo?.cliente) {
+    order.cliente = order.vehiculo.cliente;
+  }
 } catch (e) {
   console.error('Error fetching order:', e);
 }

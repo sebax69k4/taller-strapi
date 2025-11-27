@@ -61,9 +61,13 @@ try {
     }
   }
 
-  // Fetch Order
-  const orderData = await strapiGet(`/api/orden-de-trabajos/${orderId}?populate[0]=cliente&populate[1]=vehiculo&populate[2]=mecanico&populate[3]=zona`);
+  // Fetch Order - cliente viene anidado en vehiculo
+  const orderData = await strapiGet(`/api/orden-de-trabajos/${orderId}?populate[vehiculo][populate][cliente][fields][0]=nombre&populate[vehiculo][populate][cliente][fields][1]=apellido&populate[mecanico][fields][0]=nombre&populate[mecanico][fields][1]=apellido&populate[mecanico][fields][2]=documentId&populate[zona][fields][0]=nombre&populate[zona][fields][1]=documentId`);
   order = orderData.data;
+  // Mapear cliente desde vehiculo
+  if (order && order.vehiculo?.cliente) {
+    order.cliente = order.vehiculo.cliente;
+  }
 
   // Fetch Mechanics
   const mecData = await strapiGet('/api/mecenicos');

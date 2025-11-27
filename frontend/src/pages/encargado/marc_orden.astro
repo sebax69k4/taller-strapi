@@ -35,8 +35,12 @@ try {
   }
 
   // Get orders that are finalized or invoiced but not delivered yet
-  const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$in][0]=finalizado&filters[estado][$in][1]=facturado&populate[0]=cliente&populate[1]=vehiculo&sort[0]=updatedAt:desc');
-  activeOrders = data.data || [];
+  const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$in][0]=finalizado&filters[estado][$in][1]=facturado&populate[vehiculo][populate][cliente][fields][0]=nombre&populate[vehiculo][populate][cliente][fields][1]=apellido&sort[0]=updatedAt:desc');
+  // Mapear cliente desde vehiculo
+  activeOrders = (data.data || []).map((order: any) => ({
+    ...order,
+    cliente: order.vehiculo?.cliente || { nombre: 'N/A', apellido: '' }
+  }));
 } catch (e: any) {
   console.error('Error:', e);
   errorMessage = 'Error al procesar la solicitud.';

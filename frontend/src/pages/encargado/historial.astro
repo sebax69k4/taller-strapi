@@ -1,0 +1,319 @@
+---
+export const prerender = false;
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import { strapiGet } from '../../lib/strapi';
+import '../../styles/global.css';
+
+const userRole = Astro.cookies.get('user_role')?.value;
+if (!userRole) {
+  return Astro.redirect('/login');
+}
+
+interface Order {
+  id: number;
+  documentId: string;
+  estado: string;
+  descripcion: string;
+  fecha_ingreso: string;
+  fecha_entrega: string | null;
+  vehiculo: {
+    marca: string;
+    modelo: string;
+    patente: string;
+    cliente: {
+      nombre: string;
+      apellido: string;
+    } | null;
+  } | null;
+  mecanico: {
+    nombre: string;
+    apellido: string;
+  } | null;
+  factura: {
+    numero_factura: string;
+    total: number;
+  } | null;
+}
+
+let orders: Order[] = [];
+let error = '';
+
+// Filtros desde URL
+const estadoFilter = Astro.url.searchParams.get('estado') || '';
+const searchQuery = Astro.url.searchParams.get('search') || '';
+const fechaDesde = Astro.url.searchParams.get('desde') || '';
+const fechaHasta = Astro.url.searchParams.get('hasta') || '';
+
+try {
+  // Construir query con filtros
+  let queryParams = 'sort[0]=updatedAt:desc&pagination[pageSize]=50';
+  queryParams += '&populate[vehiculo][populate][cliente][fields][0]=nombre&populate[vehiculo][populate][cliente][fields][1]=apellido';
+  queryParams += '&populate[mecanico][fields][0]=nombre&populate[mecanico][fields][1]=apellido';
+  queryParams += '&populate[factura][fields][0]=numero_factura&populate[factura][fields][1]=total';
+  
+  // Filtro de estado
+  if (estadoFilter) {
+    queryParams += `&filters[estado][$eq]=${estadoFilter}`;
+  }
+  
+  // Filtro de fecha desde
+  if (fechaDesde) {
+    queryParams += `&filters[fecha_ingreso][$gte]=${fechaDesde}`;
+  }
+  
+  // Filtro de fecha hasta
+  if (fechaHasta) {
+    queryParams += `&filters[fecha_ingreso][$lte]=${fechaHasta}`;
+  }
+  
+  const data = await strapiGet(`/api/orden-de-trabajos?${queryParams}`);
+  
+  // Mapear datos y filtrar por búsqueda si existe
+  orders = (data.data || []).map((order: any) => ({
+    ...order,
+    vehiculo: order.vehiculo ? {
+      ...order.vehiculo,
+      cliente: order.vehiculo.cliente || null
+    } : null
+  }));
+  
+  // Filtro de búsqueda local (cliente, vehículo, patente)
+  if (searchQuery) {
+    const query = searchQuery.toLowerCase();
+    orders = orders.filter((order: Order) => {
+      const clienteName = order.vehiculo?.cliente ? `${order.vehiculo.cliente.nombre} ${order.vehiculo.cliente.apellido}`.toLowerCase() : '';
+      const vehicleInfo = order.vehiculo ? `${order.vehiculo.marca} ${order.vehiculo.modelo} ${order.vehiculo.patente}`.toLowerCase() : '';
+      const orderInfo = `OT-${order.id} ${order.descripcion || ''}`.toLowerCase();
+      return clienteName.includes(query) || vehicleInfo.includes(query) || orderInfo.includes(query);
+    });
+  }
+  
+} catch (e: any) {
+  console.error('Error fetching orders:', e);
+  error = 'Error al cargar el historial de órdenes';
+}
+
+const estados = [
+  { value: '', label: 'Todos los estados' },
+  { value: 'ingresado', label: 'Ingresado' },
+  { value: 'en_diagnostico', label: 'En Diagnóstico' },
+  { value: 'en_reparacion', label: 'En Reparación' },
+  { value: 'finalizado', label: 'Finalizado' },
+  { value: 'facturado', label: 'Facturado' },
+  { value: 'entregado', label: 'Entregado' }
+];
+
+const getEstadoColor = (estado: string) => {
+  switch (estado) {
+    case 'ingresado': return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+    case 'en_diagnostico': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
+    case 'en_reparacion': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
+    case 'finalizado': return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
+    case 'facturado': return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300';
+    case 'entregado': return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300';
+    default: return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+  }
+};
+
+const formatEstado = (estado: string) => {
+  switch (estado) {
+    case 'ingresado': return 'Ingresado';
+    case 'en_diagnostico': return 'En Diagnóstico';
+    case 'en_reparacion': return 'En Reparación';
+    case 'finalizado': return 'Finalizado';
+    case 'facturado': return 'Facturado';
+    case 'entregado': return 'Entregado';
+    default: return estado;
+  }
+};
+---
+
+<DashboardLayout title="Historial de Órdenes" role="encargado" currentPath="/encargado/historial">
+  <div class="max-w-7xl mx-auto">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+      <div>
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Historial de Órdenes</h1>
+        <p class="text-gray-500 dark:text-gray-400 mt-1">Consulta el historial completo de órdenes de trabajo del taller.</p>
+      </div>
+      <div class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+        <span class="material-symbols-outlined text-lg">list_alt</span>
+        <span>{orders.length} órdenes encontradas</span>
+      </div>
+    </div>
+
+    {error && (
+      <div class="p-4 mb-6 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg text-red-800 dark:text-red-200 flex items-center gap-2">
+        <span class="material-symbols-outlined">error</span>
+        <p>{error}</p>
+      </div>
+    )}
+
+    <!-- Filtros -->
+    <form method="GET" class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 mb-6">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        <!-- Búsqueda -->
+        <div class="lg:col-span-2">
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Buscar</label>
+          <div class="relative">
+            <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">search</span>
+            <input 
+              type="text" 
+              name="search" 
+              value={searchQuery}
+              placeholder="Cliente, vehículo, patente o descripción..."
+              class="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            />
+          </div>
+        </div>
+        
+        <!-- Estado -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estado</label>
+          <select 
+            name="estado"
+            class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+          >
+            {estados.map(e => (
+              <option value={e.value} selected={estadoFilter === e.value}>{e.label}</option>
+            ))}
+          </select>
+        </div>
+        
+        <!-- Fecha Desde -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Desde</label>
+          <input 
+            type="date" 
+            name="desde" 
+            value={fechaDesde}
+            class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+          />
+        </div>
+        
+        <!-- Fecha Hasta -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Hasta</label>
+          <input 
+            type="date" 
+            name="hasta" 
+            value={fechaHasta}
+            class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+          />
+        </div>
+      </div>
+      
+      <div class="flex justify-end gap-2 mt-4">
+        <a 
+          href="/encargado/historial" 
+          class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+        >
+          Limpiar
+        </a>
+        <button 
+          type="submit"
+          class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2"
+        >
+          <span class="material-symbols-outlined text-lg">filter_alt</span>
+          Filtrar
+        </button>
+      </div>
+    </form>
+
+    <!-- Tabla de Órdenes -->
+    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left">
+          <thead class="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
+            <tr>
+              <th class="px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Orden</th>
+              <th class="px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Cliente</th>
+              <th class="px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Vehículo</th>
+              <th class="px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Mecánico</th>
+              <th class="px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Fecha</th>
+              <th class="px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Estado</th>
+              <th class="px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Factura</th>
+              <th class="px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Acciones</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+            {orders.length > 0 ? orders.map((order: Order) => (
+              <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                <td class="px-6 py-4">
+                  <div class="flex flex-col">
+                    <span class="font-bold text-gray-900 dark:text-white">OT-{order.id}</span>
+                    <span class="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[200px]">{order.descripcion || 'Sin descripción'}</span>
+                  </div>
+                </td>
+                <td class="px-6 py-4 text-gray-600 dark:text-gray-300">
+                  {order.vehiculo?.cliente 
+                    ? `${order.vehiculo.cliente.nombre} ${order.vehiculo.cliente.apellido}`
+                    : <span class="text-gray-400 italic">N/A</span>
+                  }
+                </td>
+                <td class="px-6 py-4">
+                  {order.vehiculo ? (
+                    <div class="flex flex-col">
+                      <span class="text-gray-900 dark:text-white">{order.vehiculo.marca} {order.vehiculo.modelo}</span>
+                      <span class="text-xs text-gray-500 dark:text-gray-400">{order.vehiculo.patente}</span>
+                    </div>
+                  ) : <span class="text-gray-400 italic">N/A</span>}
+                </td>
+                <td class="px-6 py-4 text-gray-600 dark:text-gray-300">
+                  {order.mecanico 
+                    ? `${order.mecanico.nombre} ${order.mecanico.apellido || ''}`
+                    : <span class="text-gray-400 italic">Sin asignar</span>
+                  }
+                </td>
+                <td class="px-6 py-4">
+                  <div class="flex flex-col">
+                    <span class="text-gray-900 dark:text-white text-sm">
+                      {order.fecha_ingreso ? new Date(order.fecha_ingreso).toLocaleDateString('es-ES') : 'N/A'}
+                    </span>
+                    {order.fecha_entrega && (
+                      <span class="text-xs text-green-600 dark:text-green-400">
+                        Entrega: {new Date(order.fecha_entrega).toLocaleDateString('es-ES')}
+                      </span>
+                    )}
+                  </div>
+                </td>
+                <td class="px-6 py-4">
+                  <span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getEstadoColor(order.estado)}`}>
+                    {formatEstado(order.estado)}
+                  </span>
+                </td>
+                <td class="px-6 py-4">
+                  {order.factura ? (
+                    <div class="flex flex-col">
+                      <span class="text-gray-900 dark:text-white text-sm font-medium">{order.factura.numero_factura}</span>
+                      <span class="text-xs text-green-600 dark:text-green-400">${order.factura.total?.toLocaleString('es-CL')}</span>
+                    </div>
+                  ) : <span class="text-gray-400 italic text-sm">Sin factura</span>}
+                </td>
+                <td class="px-6 py-4">
+                  <a 
+                    href={`/encargado/detalles_de_orden?id=${order.documentId}`}
+                    class="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/40 transition-colors"
+                  >
+                    <span class="material-symbols-outlined text-lg">visibility</span>
+                    Ver
+                  </a>
+                </td>
+              </tr>
+            )) : (
+              <tr>
+                <td colspan="8" class="px-6 py-12 text-center">
+                  <div class="flex flex-col items-center gap-2">
+                    <span class="material-symbols-outlined text-4xl text-gray-300 dark:text-gray-600">search_off</span>
+                    <p class="text-gray-500 dark:text-gray-400">No se encontraron órdenes con los filtros aplicados.</p>
+                    <a href="/encargado/historial" class="text-primary-600 dark:text-primary-400 hover:underline text-sm">Ver todas las órdenes</a>
+                  </div>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</DashboardLayout>

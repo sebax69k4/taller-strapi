@@ -13,12 +13,12 @@ let mechanics = [];
 let zones = [];
 
 try {
-  // Fetch Mechanics with today's orders
-  const mecData = await strapiGet('/api/mecenicos?populate[orden_de_trabajos][populate][0]=vehiculo&populate[orden_de_trabajos][filters][estado][$ne]=Entregado');
+  // Fetch Mechanics with orders (usando estados en minúscula)
+  const mecData = await strapiGet('/api/mecenicos?populate[orden_de_trabajos][populate][vehiculo][fields][0]=marca&populate[orden_de_trabajos][populate][vehiculo][fields][1]=modelo&populate[orden_de_trabajos][filters][estado][$notIn][0]=entregado&populate[orden_de_trabajos][filters][estado][$notIn][1]=facturado');
   mechanics = mecData.data || [];
 
-  // Fetch Zones with today's orders
-  const zoneData = await strapiGet('/api/zonas?populate[orden_de_trabajos][filters][estado][$ne]=Entregado&populate[orden_de_trabajos][populate][0]=vehiculo');
+  // Fetch Zones with orders
+  const zoneData = await strapiGet('/api/zonas?populate[orden_de_trabajos][filters][estado][$notIn][0]=entregado&populate[orden_de_trabajos][filters][estado][$notIn][1]=facturado&populate[orden_de_trabajos][populate][vehiculo][fields][0]=marca&populate[orden_de_trabajos][populate][vehiculo][fields][1]=modelo');
   zones = zoneData.data || [];
 
 } catch (e) {

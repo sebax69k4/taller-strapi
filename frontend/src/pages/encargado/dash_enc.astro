@@ -36,9 +36,13 @@ if (userRole) {
     });
     lowStockCount = lowStockItems.length;
 
-    // Recent Activity
-    const recentRes = await strapiGet('/api/orden-de-trabajos?sort[0]=updatedAt:desc&pagination[limit]=5&populate[0]=cliente&populate[1]=vehiculo&populate[2]=mecanico');
-    recentOrders = recentRes.data || [];
+    // Recent Activity - cliente viene anidado en vehiculo
+    const recentRes = await strapiGet('/api/orden-de-trabajos?sort[0]=updatedAt:desc&pagination[limit]=5&populate[vehiculo][populate][cliente][fields][0]=nombre&populate[vehiculo][populate][cliente][fields][1]=apellido&populate[mecanico][fields][0]=nombre&populate[mecanico][fields][1]=apellido');
+    // Mapear para tener cliente accesible
+    recentOrders = (recentRes.data || []).map((order: any) => ({
+      ...order,
+      cliente: order.vehiculo?.cliente || null
+    }));
 
   } catch (e) {
     console.error('Error fetching dashboard data:', e);
