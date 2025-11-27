@@ -49,8 +49,15 @@ try {
     }
 
     if (mechanicId && zoneId) {
-      await strapiPut(`/api/orden-de-trabajos/${orderId}`, payload);
-      return Astro.redirect('/encargado/disp_mec_zonas');
+      try {
+          await strapiPut(`/api/orden-de-trabajos/${orderId}`, payload);
+          return Astro.redirect(`/encargado/disp_mec_zonas?message=${encodeURIComponent('Orden asignada exitosamente.')}&type=success`);
+      } catch (err: any) {
+          console.error('Error assigning order:', err);
+          return Astro.redirect(`/encargado/asignar_orden_zona?id=${orderId}&message=${encodeURIComponent('Error al asignar la orden: ' + err.message)}&type=error`);
+      }
+    } else {
+        return Astro.redirect(`/encargado/asignar_orden_zona?id=${orderId}&message=${encodeURIComponent('Debe seleccionar un mecánico y una zona.')}&type=error`);
     }
   }
 
@@ -73,9 +80,20 @@ try {
 if (!order) {
   return Astro.redirect('/encargado/asig_orden');
 }
+
+const message = Astro.url.searchParams.get('message');
+const messageType = Astro.url.searchParams.get('type');
 ---
 
 <DashboardLayout title="Asignar Orden por Zona" role="encargado" currentPath="/encargado/asignar_orden_zona">
+    <script define:vars={{ message, messageType }}>
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('assignmentForm', () => ({
+                message: message || '',
+                messageType: messageType || ''
+            }));
+        });
+    </script>
   <div class="mx-auto max-w-4xl">
     <!-- Page Header -->
     <div class="flex flex-wrap justify-between gap-4 mb-8">
@@ -84,6 +102,14 @@ if (!order) {
         <p class="text-gray-500 dark:text-gray-400 text-sm">Órdenes &gt; Asignar Orden por Zona #{order.documentId?.slice(0, 6) || order.id}</p>
       </div>
     </div>
+
+    <div x-data="assignmentForm">
+        <template x-if="message">
+            <div x-show="message" x-transition class="p-4 mb-6 rounded-lg text-sm flex items-center gap-2" :class="{ 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300': messageType === 'success', 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300': messageType === 'error' }" role="alert">
+                <span class="material-symbols-outlined text-lg" x-text="messageType === 'success' ? 'check_circle' : 'error'"></span>
+                <span x-text="message"></span>
+            </div>
+        </template>
 
     <!-- Content Cards -->
     <div class="flex flex-col gap-6">

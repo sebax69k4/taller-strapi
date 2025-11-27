@@ -72,7 +72,7 @@ if (!orderId) {
           procedimientos: description,
           tiempo: timeSpent ? parseFloat(timeSpent) : null,
           fecha: new Date().toISOString().split('T')[0],
-          orden_de_trabajo: orderNumericId,
+          orden_de_trabajo: orderId, // Use documentId
         });
       }
 
@@ -80,13 +80,13 @@ if (!orderId) {
       if (usedPartsJson) {
         const usedParts = JSON.parse(usedPartsJson);
         for (const part of usedParts) {
-          // Get current stock
-          const partResponse = await strapiGet(`/api/repuestos/${part.id}`);
+          // Get current stock using documentId
+          const partResponse = await strapiGet(`/api/repuestos/${part.documentId}`);
           const currentStock = partResponse.data?.stock || 0;
           const newStock = Math.max(0, currentStock - part.quantity);
           
-          // Update stock
-          await strapiPut(`/api/repuestos/${part.id}`, {
+          // Update stock using documentId
+          await strapiPut(`/api/repuestos/${part.documentId}`, {
             stock: newStock
           });
         }
@@ -251,7 +251,7 @@ if (!orderId) {
                         </div>
 
                         <!-- Hidden input to store used parts data for form submission -->
-                        <input type="hidden" name="used_parts" :value="JSON.stringify(usedParts.map(p => ({ id: p.id, quantity: p.quantity, nombre: p.nombre })))" />
+                        <input type="hidden" name="used_parts" :value="JSON.stringify(usedParts.map(p => ({ id: p.id, documentId: p.documentId, quantity: p.quantity, nombre: p.nombre })))" />
 
                         <!-- Action Buttons -->
                         <div class="flex justify-end gap-3 pt-8">

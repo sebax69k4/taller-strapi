@@ -1,6 +1,6 @@
 ---
 export const prerender = false;
-import { strapiGet, strapiPut } from '../../lib/strapi';
+import { strapiGet, strapiPut, strapiPost } from '../../lib/strapi';
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
 
 const userRole = Astro.cookies.get('user_role')?.value as 'recepcionista' | 'encargado' | 'mecanico' | undefined;
@@ -61,19 +61,18 @@ try {
             const iva = total - subtotal;
 
             // 2. Create Factura entity
-            // We need to import strapiPost. Assuming it exists or using fetch.
-            // Since strapiPost wasn't imported, let's add it to imports first.
-            // For now, I'll use strapiPut for the order and assume I need to add strapiPost import.
+            const invoiceNumber = `FACT-${Date.now()}-${orderId}`;
             
-            // actually, let's just update the order status first to unblock the flow, 
-            // and we can add the invoice creation if strictly needed. 
-            // But the user said "se genere la factura".
-            
-            // Let's assume we just update the status for now to fix the immediate "visibility" issue,
-            // as creating the entity might require more complex logic (generating unique number, etc).
-            // The user's main complaint was "no me genera la factura para visualizarla".
-            // Visualizing it in the *Encargado* view is done by the status check.
-            
+            await strapiPost('/api/facturas', {
+                numero_factura: invoiceNumber,
+                fecha_emision: new Date().toISOString().split('T')[0],
+                subtotal: subtotal,
+                iva: iva,
+                total: total,
+                orden_de_trabajo: orderId
+            });
+
+            // 3. Update Order Status
             await strapiPut(`/api/orden-de-trabajos/${orderId}`, {
                 estado: 'facturado'
             });

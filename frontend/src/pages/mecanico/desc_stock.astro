@@ -25,7 +25,7 @@ try {
       const newStock = part.stock - part.quantity;
       if (newStock < 0) throw new Error(`Stock insuficiente para ${part.nombre}`);
       
-      await strapiPut(`/api/repuestos/${part.id}`, {
+      await strapiPut(`/api/repuestos/${part.documentId}`, {
         stock: newStock
       });
     }
