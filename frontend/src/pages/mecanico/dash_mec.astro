@@ -3,21 +3,23 @@ export const prerender = false;
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
 import Card from '../../components/ui/Card.astro';
 import Button from '../../components/ui/Button.astro';
-import '../../styles/global.css';
 import { strapiGet } from '../../lib/strapi';
 
 const userRole = Astro.cookies.get('user_role')?.value;
 const mecanicoId = Astro.cookies.get('mecanico_id')?.value;
 
-if (!userRole || (userRole === 'mecanico' && !mecanicoId)) {
+// Solo verificar que haya un rol de usuario
+if (!userRole) {
   return Astro.redirect('/login');
 }
 
 interface Order {
   id: number;
+  documentId: string;
   descripcion: string;
   estado: string;
   createdAt: string;
+  fecha_ingreso?: string;
   vehiculo?: {
     marca: string;
     modelo: string;
@@ -32,20 +34,28 @@ let error = '';
 
 // Status mapping for colors and text
 const statusConfig: { [key: string]: { color: string; label: string; bg: string } } = {
-  'Pendiente': { color: 'text-blue-700', bg: 'bg-blue-50', label: 'Pendiente' },
-  'En Progreso': { color: 'text-yellow-700', bg: 'bg-yellow-50', label: 'En Progreso' },
-  'Finalizada': { color: 'text-green-700', bg: 'bg-green-50', label: 'Finalizada' },
-  'Bloqueada': { color: 'text-red-700', bg: 'bg-red-50', label: 'Bloqueada' },
-  'Entregado': { color: 'text-gray-700', bg: 'bg-gray-50', label: 'Entregado' },
+  'ingresado': { color: 'text-blue-700', bg: 'bg-blue-50', label: 'Ingresado' },
+  'en_diagnostico': { color: 'text-purple-700', bg: 'bg-purple-50', label: 'En Diagnóstico' },
+  'en_reparacion': { color: 'text-yellow-700', bg: 'bg-yellow-50', label: 'En Reparación' },
+  'finalizado': { color: 'text-green-700', bg: 'bg-green-50', label: 'Finalizado' },
+  'entregado': { color: 'text-gray-700', bg: 'bg-gray-50', label: 'Entregado' },
 };
 
 try {
   const userName = Astro.cookies.get('user_name')?.value;
   mechanicName = userName || 'Mecánico';
 
-  // Fetch work orders assigned to the logged-in mechanic
-  const ordersRes = await strapiGet(`/api/orden-de-trabajos?filters[mecanico][id][$eq]=${mecanicoId}&populate=vehiculo&sort=createdAt:desc`);
+  // Si hay mecanico_id, filtrar por mecánico; si no, mostrar todas las órdenes (modo demo)
+  let endpoint = '/api/orden-de-trabajos?populate=vehiculo&sort=createdAt:desc';
+  if (mecanicoId) {
+    endpoint = `/api/orden-de-trabajos?filters[mecanico][id][$eq]=${mecanicoId}&populate=vehiculo&sort=createdAt:desc`;
+  }
+  
+  const ordersRes = await strapiGet(endpoint);
   assignedOrders = ordersRes.data || [];
+  
+  // Debug: mostrar la cantidad de órdenes cargadas
+  console.log(`Órdenes cargadas: ${assignedOrders.length}`);
 
 } catch (e: any) {
   console.error('Error en el dashboard del mecánico:', e);
@@ -84,7 +94,7 @@ if (statusFilter && statusFilter !== 'Todas') {
            ]}>
            Todas
         </a>
-        {Object.keys(statusConfig).filter(s => s !== 'Entregado').map(status => (
+        {Object.keys(statusConfig).filter(s => s !== 'entregado').map(status => (
             <a href={`/mecanico/dash_mec?status=${status}`} 
                class:list={[
                    "flex items-center justify-center px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap",
@@ -92,7 +102,7 @@ if (statusFilter && statusFilter !== 'Todas') {
                        ? "bg-primary-600 text-white shadow-sm" 
                        : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
                ]}>
-               {status}
+               {statusConfig[status].label}
             </a>
         ))}
     </div>
@@ -120,7 +130,7 @@ if (statusFilter && statusFilter !== 'Todas') {
                                 <h3 class="text-lg font-bold text-gray-900 dark:text-white leading-tight">OT-{order.id} - {vehicleName}</h3>
                                 <p class="text-sm text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-1">
                                     <span class="material-symbols-outlined text-sm">calendar_today</span>
-                                    {new Date(order.createdAt).toLocaleDateString()}
+                                    {order.fecha_ingreso ? new Date(order.fecha_ingreso).toLocaleDateString() : (order.createdAt ? new Date(order.createdAt).toLocaleDateString() : 'Sin fecha')}
                                 </p>
                             </div>
                             
@@ -128,7 +138,7 @@ if (statusFilter && statusFilter !== 'Todas') {
                                 {order.descripcion || 'Sin descripción.'}
                             </p>
                             
-                            <a href={`/mecanico/detalle_orden_trabajo?id=${order.id}`} class="mt-auto">
+                            <a href={`/mecanico/detalle_orden_trabajo?id=${order.documentId}`} class="mt-auto">
                                 <Button variant="primary" block>
                                     Ver Detalles
                                 </Button>

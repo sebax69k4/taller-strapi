@@ -1,4 +1,3 @@
-```astro
 ---
 export const prerender = false;
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
@@ -24,7 +23,7 @@ interface Vehiculo {
   modelo: string;
   ano: number;
   patente: string;
-  cliente?: { data?: { attributes: Cliente } };
+  cliente?: Cliente;
 }
 
 interface Repuesto {
@@ -36,9 +35,10 @@ interface Repuesto {
 
 interface OrdenDeTrabajo {
   id: number;
-  descripcion_problema: string;
-  vehiculo?: { data?: { attributes: Vehiculo } };
-  repuestos?: { data: { id: number; attributes: Repuesto }[] };
+  documentId: string;
+  descripcion: string;
+  vehiculo?: Vehiculo;
+  repuestos?: Repuesto[];
 }
 
 // --- DATA FETCHING & STATE ---
@@ -60,25 +60,31 @@ if (!orderId) {
       const description = formData.get('description') as string;
       const timeSpent = formData.get('time_spent');
       const usedPartsData = formData.get('used_parts') as string;
-      const usedParts = JSON.parse(usedPartsData); // [{ id: number, quantity: number }]
+      const usedParts = JSON.parse(usedPartsData); // [{ id: number, quantity: number, nombre: string }]
 
       // For now, we'll skip mechanic ID since we don't have user-mechanic relationship
       const mechanicId = null;
 
-      // if (!mechanicId) throw new Error("No se pudo identificar al mecánico.");
+      // Append used parts to description since bitacora doesn't have a direct relation
+      const partsSummary = usedParts.map((p: any) => `${p.quantity}x ${p.nombre}`).join(', ');
+      const finalDescription = partsSummary ? `${description} (Repuestos: ${partsSummary})` : description;
+
+      // Primero obtenemos el ID numérico de la orden para las relaciones
+      const orderResponse = await strapiGet(`/api/orden-de-trabajos/${orderId}`);
+      const orderNumericId = orderResponse.data?.id;
 
       // 1. Create Bitacora Entry
       await strapiPost('/api/bitacoras', {
-        descripcion: description,
-        tiempo_invertido: timeSpent ? parseFloat(timeSpent.toString()) : 0,
-        orden_de_trabajo: orderId,
+        procedimientos: finalDescription,
+        tiempo: timeSpent ? parseFloat(timeSpent.toString()) : 0,
+        fecha: new Date().toISOString().split('T')[0],
+        orden_de_trabajo: orderNumericId,
         mecanico: mechanicId,
-        repuestos_utilizados: usedParts,
       });
 
       // 2. Update Order with new parts
       const currentOrderData = await strapiGet(`/api/orden-de-trabajos/${orderId}?populate=repuestos`);
-      const currentOrder = currentOrderData.data[0];
+      const currentOrder = currentOrderData.data;
       const existingPartIds = currentOrder?.repuestos?.map((p: any) => p.id) || [];
       const newPartIds = usedParts.map((p: { id: number }) => p.id);
       const allPartIds = [...new Set([...existingPartIds, ...newPartIds])];
@@ -97,9 +103,9 @@ if (!orderId) {
       strapiGet('/api/repuestos')
     ]);
 
-    if (!orderData.data || orderData.data.length === 0) throw new Error('No se pudo cargar la orden de trabajo.');
+    if (!orderData.data) throw new Error('No se pudo cargar la orden de trabajo.');
 
-    order = orderData.data[0];
+    order = orderData.data;
     allParts = partsData.data || [];
 
   } catch (e: any) {
@@ -108,8 +114,8 @@ if (!orderId) {
   }
 }
 
-const vehicle = order?.vehiculo?.data?.attributes;
-const client = vehicle?.cliente?.data?.attributes;
+const vehicle = order?.vehiculo;
+const client = vehicle?.cliente;
 ---
 
 <DashboardLayout title="Bitácora de Repuestos" role="mecanico" currentPath={Astro.url.pathname}>
@@ -118,7 +124,7 @@ const client = vehicle?.cliente?.data?.attributes;
         {success && <div class="bg-green-100 border border-green-200 text-green-700 px-4 py-3 rounded-lg mb-6" role="alert">{success}</div>}
 
         {order ? (
-            <div x-data={`partsManager(${JSON.stringify(allParts)})`}>
+            <div x-data="partsManager()">
                 <form method="POST">
                     <!-- PageHeading -->
                     <div class="flex flex-col gap-2 mb-8">
@@ -140,7 +146,7 @@ const client = vehicle?.cliente?.data?.attributes;
                                 </div>
                                 <div class="flex flex-col gap-1">
                                     <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider">Servicio Solicitado</span>
-                                    <span class="text-gray-900 dark:text-white font-medium">{order.descripcion_problema}</span>
+                                    <span class="text-gray-900 dark:text-white font-medium">{order.descripcion}</span>
                                 </div>
                             </div>
                         </div>
@@ -247,7 +253,7 @@ const client = vehicle?.cliente?.data?.attributes;
                         </div>
 
                         <!-- Hidden input to store used parts data for form submission -->
-                        <input type="hidden" name="used_parts" :value="JSON.stringify(usedParts.map(p => ({ id: p.id, quantity: p.quantity })))">
+                        <input type="hidden" name="used_parts" :value="JSON.stringify(usedParts.map(p => ({ id: p.id, quantity: p.quantity, nombre: p.nombre })))">
 
                         <!-- Action Buttons -->
                         <div class="flex justify-end gap-3 pt-8">
@@ -267,7 +273,7 @@ const client = vehicle?.cliente?.data?.attributes;
         )}
     </div>
 
-    <script>
+    <script define:vars={{ allParts }}>
         /**
          * @typedef {object} Part
          * @property {number} id
@@ -278,15 +284,14 @@ const client = vehicle?.cliente?.data?.attributes;
 
         /**
          * Manages the state and logic for searching, adding, and managing parts for a work order.
-         * @param {Part[]} allParts - The initial list of all available parts.
          * @returns {import('alpinejs').AlpineComponent<{allParts: Part[], search: string, filteredParts: Part[], usedParts: (Part & {quantity: number})[]}>}
          */
-        function partsManager(allParts: any[]) {
-            return {
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('partsManager', () => ({
                 allParts: allParts,
                 search: '',
-                filteredParts: [] as any[],
-                usedParts: [] as any[], // Array of Part objects with an added 'quantity' property
+                filteredParts: [],
+                usedParts: [], // Array of Part objects with an added 'quantity' property
 
                 init() {
                     console.log('Alpine parts manager initialized.');
@@ -297,15 +302,15 @@ const client = vehicle?.cliente?.data?.attributes;
                         this.filteredParts = [];
                         return;
                     }
-                    this.filteredParts = this.allParts.filter((part: any) =>
+                    this.filteredParts = this.allParts.filter((part) =>
                         part.nombre.toLowerCase().includes(this.search.toLowerCase()) &&
-                        !this.usedParts.some((used: any) => used.id === part.id)
+                        !this.usedParts.some((used) => used.id === part.id)
                     );
                 },
 
                 /** @param {Part} part */
-                addPart(part: any) {
-                    if (!this.usedParts.some((p: any) => p.id === part.id)) {
+                addPart(part) {
+                    if (!this.usedParts.some((p) => p.id === part.id)) {
                         this.usedParts.push({ ...part, quantity: 1 });
                         this.search = '';
                         this.filteredParts = [];
@@ -313,27 +318,26 @@ const client = vehicle?.cliente?.data?.attributes;
                 },
 
                 /** @param {number} partId */
-                removePart(partId: number) {
-                    this.usedParts = this.usedParts.filter((p: any) => p.id !== partId);
+                removePart(partId) {
+                    this.usedParts = this.usedParts.filter((p) => p.id !== partId);
                 },
 
                 /** @param {number} partId */
-                incrementQuantity(partId: number) {
-                    const part = this.usedParts.find((p: any) => p.id === partId);
+                incrementQuantity(partId) {
+                    const part = this.usedParts.find((p) => p.id === partId);
                     if (part && part.quantity < part.stock) {
                         part.quantity++;
                     }
                 },
 
                 /** @param {number} partId */
-                decrementQuantity(partId: number) {
-                    const part = this.usedParts.find((p: any) => p.id === partId);
+                decrementQuantity(partId) {
+                    const part = this.usedParts.find((p) => p.id === partId);
                     if (part && part.quantity > 1) {
                         part.quantity--;
                     }
                 }
-            }
-        }
+            }));
+        });
     </script>
 </DashboardLayout>
-```

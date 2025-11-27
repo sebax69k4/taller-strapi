@@ -1,9 +1,9 @@
+---
 import DashboardLayout from '../layouts/DashboardLayout.astro';
 import Card from '../components/ui/Card.astro';
 import Button from '../components/ui/Button.astro';
-import '../styles/global.css';
 
-const userRole = Astro.cookies.get('user_role')?.value;
+const userRole = Astro.cookies.get('user_role')?.value as 'recepcionista' | 'encargado' | 'mecanico' | undefined;
 if (!userRole) {
   return Astro.redirect('/login');
 }

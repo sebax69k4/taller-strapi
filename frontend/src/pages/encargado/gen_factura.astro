@@ -11,7 +11,7 @@ if (!userRole) {
 
 let completedOrders = [];
 try {
-  const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=Finalizado&populate[0]=cliente&populate[1]=vehiculo&sort[0]=updatedAt:desc');
+  const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=Finalizado&populate[0]=cliente&populate[1]=vehiculo&populate[2]=repuestos&populate[3]=presupuesto&sort[0]=updatedAt:desc');
   completedOrders = data.data || [];
 } catch (e) {
   console.error('Error fetching orders:', e);
@@ -102,20 +102,45 @@ try {
         document.getElementById('inv-customer').textContent = `${order.cliente.nombre} ${order.cliente.apellido}`;
         document.getElementById('inv-vehicle').textContent = `${order.vehiculo.marca} ${order.vehiculo.modelo}`;
         
-        // Mock items
-        const items = [
-            { desc: 'Servicio de Mantenimiento', price: 150000 }
-        ];
+        // Generate items
+        const items = [];
+        let total = 0;
+
+        // Add parts
+        if (order.repuestos && order.repuestos.length > 0) {
+            order.repuestos.forEach(part => {
+                items.push({ desc: `Repuesto: ${part.nombre}`, price: part.precio });
+                total += part.precio;
+            });
+        }
+
+        // Add labor/budget
+        if (order.presupuesto && order.presupuesto.monto_total) {
+            // If budget exists, we can either use it as the total or calculate labor from it
+            // For simplicity, let's assume budget total includes everything, so we might need to adjust logic
+            // Or we treat budget as "Mano de Obra" + "Repuestos".
+            // Let's calculate labor as Total - Parts
+            const partsTotal = items.reduce((sum, item) => sum + item.price, 0);
+            const labor = order.presupuesto.monto_total - partsTotal;
+            if (labor > 0) {
+                items.push({ desc: 'Mano de Obra / Servicios', price: labor });
+                total += labor;
+            }
+        } else {
+            // Fallback labor cost if no budget
+             items.push({ desc: 'Mano de Obra (Estimado)', price: 75000 });
+             total += 75000;
+        }
         
         const tbody = document.getElementById('inv-items');
         tbody.innerHTML = items.map(item => `
             <tr class="border-b border-gray-200">
                 <td class="py-2">${item.desc}</td>
-                <td class="py-2 text-right">$${item.price.toLocaleString()}</td>
+                <td class="py-2 text-right">$${item.price.toLocaleString('es-CL')}</td>
             </tr>
         `).join('');
         
-        document.getElementById('inv-total').textContent = `$${items.reduce((acc, item) => acc + item.price, 0).toLocaleString()}`;
+        document.getElementById('inv-total').textContent = `$${total.toLocaleString('es-CL')}`;
 
         window.print();
     };
