@@ -11,9 +11,9 @@ if (!userRole) {
 }
 
 const orderId = Astro.url.searchParams.get('id');
-let order = null;
-let mechanics = [];
-let zones = [];
+let order: any = null;
+let mechanics: any[] = [];
+let zones: any[] = [];
 
 if (!orderId) {
   return Astro.redirect('/encargado/asig_orden');
@@ -71,82 +71,166 @@ try {
 }
 
 if (!order) {
-    return Astro.redirect('/encargado/asig_orden');
+  return Astro.redirect('/encargado/asig_orden');
 }
 ---
+
 <DashboardLayout title="Asignar Orden por Zona" role="encargado" currentPath="/encargado/asignar_orden_zona">
-    <div class="mx-auto max-w-4xl">
-        <!-- PageHeading -->
-        <div class="flex flex-wrap justify-between gap-4 mb-8">
-            <div class="flex min-w-72 flex-col gap-2">
-                <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Asignar Orden de Trabajo por Zona</h1>
-                <p class="text-gray-500 dark:text-gray-400 text-sm">Órdenes &gt; Asignar Orden por Zona #{order.documentId.slice(0, 6)}</p>
-            </div>
-        </div>
-
-        <!-- Content Cards -->
-        <div class="flex flex-col gap-6">
-            <!-- Order Summary Card -->
-            <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-                <!-- SectionHeader -->
-                <div class="p-6 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
-                    <h3 class="text-lg font-bold text-gray-900 dark:text-white">Resumen de la Orden</h3>
-                </div>
-                <!-- DescriptionList -->
-                <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6">
-                    <div class="flex flex-col gap-1">
-                        <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Vehículo</p>
-                        <p class="text-base font-semibold text-gray-900 dark:text-white">{order.vehiculo?.marca} {order.vehiculo?.modelo}</p>
-                    </div>
-                    <div class="flex flex-col gap-1">
-                        <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Cliente</p>
-                        <p class="text-base font-semibold text-gray-900 dark:text-white">{order.cliente?.nombre} {order.cliente?.apellido}</p>
-                    </div>
-                    <div class="flex flex-col gap-1">
-                        <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Matrícula</p>
-                        <p class="text-base font-semibold text-gray-900 dark:text-white">{order.vehiculo?.patente || 'N/A'}</p>
-                    </div>
-                    <div class="flex flex-col gap-1">
-                        <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Servicio Principal</p>
-                        <p class="text-base font-semibold text-gray-900 dark:text-white">{order.descripcion || 'Mantenimiento General'}</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Assignment and Planning Card -->
-            <form method="POST" class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-                <!-- SectionHeader -->
-                <div class="p-6 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
-                    <h3 class="text-lg font-bold text-gray-900 dark:text-white">Asignación y Planificación</h3>
-                </div>
-                        <div class="relative">
-                            <input class="block w-full pl-10 pr-3 py-2.5 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-lg" id="start-date" name="start-date" type="datetime-local" value={order.fecha_inicio_planificada ? new Date(order.fecha_inicio_planificada).toISOString().slice(0, 16) : ''}/>
-                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <span class="material-symbols-outlined text-gray-400">calendar_today</span>
-                            </div>
-                        </div>
-                    </div>
-                    <!-- End Date/Time Picker -->
-                    <div class="flex flex-col gap-2">
-                        <label class="text-sm font-medium text-gray-700 dark:text-gray-300" for="end-date">Fecha y Hora de Fin</label>
-                        <div class="relative">
-                            <input class="block w-full pl-10 pr-3 py-2.5 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-lg" id="end-date" name="end-date" type="datetime-local" value={order.fecha_fin_planificada ? new Date(order.fecha_fin_planificada).toISOString().slice(0, 16) : ''}/>
-                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <span class="material-symbols-outlined text-gray-400">event</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <!-- Action Buttons -->
-                <div class="flex items-center justify-end gap-4 p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
-                    <a href="/encargado/asig_orden" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500">Cancelar</a>
-                    <button class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-lg shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500" type="submit">
-                        <span class="material-symbols-outlined text-xl">assignment_turned_in</span>
-                        Asignar Orden
-                    </button>
-                </div>
-            </form>
-        </div>
+  <div class="mx-auto max-w-4xl">
+    <!-- Page Header -->
+    <div class="flex flex-wrap justify-between gap-4 mb-8">
+      <div class="flex min-w-72 flex-col gap-2">
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Asignar Orden de Trabajo por Zona</h1>
+        <p class="text-gray-500 dark:text-gray-400 text-sm">Órdenes &gt; Asignar Orden por Zona #{order.documentId?.slice(0, 6) || order.id}</p>
+      </div>
     </div>
+
+    <!-- Content Cards -->
+    <div class="flex flex-col gap-6">
+      <!-- Order Summary Card -->
+      <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+        <div class="p-6 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+          <h3 class="text-lg font-bold text-gray-900 dark:text-white">Resumen de la Orden</h3>
+        </div>
+        <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-6">
+          <div class="flex flex-col gap-1">
+            <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Vehículo</p>
+            <p class="text-base font-semibold text-gray-900 dark:text-white">
+              {order.vehiculo?.marca} {order.vehiculo?.modelo}
+            </p>
+          </div>
+          <div class="flex flex-col gap-1">
+            <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Cliente</p>
+            <p class="text-base font-semibold text-gray-900 dark:text-white">
+              {order.cliente?.nombre} {order.cliente?.apellido}
+            </p>
+          </div>
+          <div class="flex flex-col gap-1">
+            <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Matrícula</p>
+            <p class="text-base font-semibold text-gray-900 dark:text-white">
+              {order.vehiculo?.patente || 'N/A'}
+            </p>
+          </div>
+          <div class="flex flex-col gap-1">
+            <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Servicio Principal</p>
+            <p class="text-base font-semibold text-gray-900 dark:text-white">
+              {order.descripcion || 'Mantenimiento General'}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Assignment and Planning Form -->
+      <form method="POST" class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+        <div class="p-6 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+          <h3 class="text-lg font-bold text-gray-900 dark:text-white">Asignación y Planificación</h3>
+        </div>
+        
+        <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+          <!-- Mechanic Selection -->
+          <div class="flex flex-col gap-2">
+            <label class="text-sm font-medium text-gray-700 dark:text-gray-300" for="mechanic">Mecánico</label>
+            <div class="relative">
+              <select 
+                class="block w-full pl-10 pr-10 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-lg appearance-none" 
+                id="mechanic" 
+                name="mechanic"
+                required
+              >
+                <option value="">Seleccionar Mecánico</option>
+                {mechanics.map((mec: any) => (
+                  <option value={mec.documentId} selected={order.mecanico?.documentId === mec.documentId}>
+                    {mec.nombre} {mec.apellido}
+                  </option>
+                ))}
+              </select>
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <span class="material-symbols-outlined text-gray-400">engineering</span>
+              </div>
+              <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                <span class="material-symbols-outlined text-gray-400">expand_more</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Zone Selection -->
+          <div class="flex flex-col gap-2">
+            <label class="text-sm font-medium text-gray-700 dark:text-gray-300" for="work-area">Zona de Trabajo</label>
+            <div class="relative">
+              <select 
+                class="block w-full pl-10 pr-10 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-lg appearance-none" 
+                id="work-area" 
+                name="work-area"
+                required
+              >
+                <option value="">Seleccionar Zona</option>
+                {zones.map((zone: any) => (
+                  <option value={zone.documentId} selected={order.zona?.documentId === zone.documentId}>
+                    {zone.nombre}
+                  </option>
+                ))}
+              </select>
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <span class="material-symbols-outlined text-gray-400">location_on</span>
+              </div>
+              <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                <span class="material-symbols-outlined text-gray-400">expand_more</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Start Date/Time -->
+          <div class="flex flex-col gap-2">
+            <label class="text-sm font-medium text-gray-700 dark:text-gray-300" for="start-date">Fecha y Hora de Inicio</label>
+            <div class="relative">
+              <input 
+                class="block w-full pl-10 pr-3 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-lg" 
+                id="start-date" 
+                name="start-date" 
+                type="datetime-local" 
+                value={order.fecha_inicio_planificada ? new Date(order.fecha_inicio_planificada).toISOString().slice(0, 16) : ''}
+              />
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <span class="material-symbols-outlined text-gray-400">calendar_today</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- End Date/Time -->
+          <div class="flex flex-col gap-2">
+            <label class="text-sm font-medium text-gray-700 dark:text-gray-300" for="end-date">Fecha y Hora de Fin</label>
+            <div class="relative">
+              <input 
+                class="block w-full pl-10 pr-3 py-2.5 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-lg" 
+                id="end-date" 
+                name="end-date" 
+                type="datetime-local" 
+                value={order.fecha_fin_planificada ? new Date(order.fecha_fin_planificada).toISOString().slice(0, 16) : ''}
+              />
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <span class="material-symbols-outlined text-gray-400">event</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex items-center justify-end gap-4 p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+          <a 
+            href="/encargado/asig_orden" 
+            class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg shadow-sm hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+          >
+            Cancelar
+          </a>
+          <button 
+            class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-lg shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500" 
+            type="submit"
+          >
+            <span class="material-symbols-outlined text-xl">assignment_turned_in</span>
+            Asignar Orden
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
 </DashboardLayout>
-```

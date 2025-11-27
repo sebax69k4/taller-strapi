@@ -1,0 +1,209 @@
+---
+export const prerender = false;
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import Button from '../../components/ui/Button.astro';
+import Input from '../../components/ui/Input.astro';
+import { strapiGet, strapiPost, strapiPut } from '../../lib/strapi';
+
+const userRole = Astro.cookies.get('user_role')?.value as 'recepcionista' | 'encargado' | 'mecanico' | undefined;
+if (!userRole) {
+  return Astro.redirect('/login');
+}
+
+interface Repuesto {
+  id: number;
+  documentId: string;
+  nombre: string;
+  sku: string;
+  stock: number;
+  precio: number;
+  descripcion?: string;
+}
+
+let parts: Repuesto[] = [];
+let error = '';
+let success = '';
+
+try {
+  // Handle POST requests (Add/Update)
+  if (Astro.request.method === 'POST') {
+    const formData = await Astro.request.formData();
+    const action = formData.get('action');
+    
+    if (action === 'add') {
+        const nombre = formData.get('nombre');
+        const sku = formData.get('sku');
+        const stock = Number(formData.get('stock'));
+        const precio = Number(formData.get('precio'));
+        const descripcion = formData.get('descripcion');
+
+        await strapiPost('/api/repuestos', {
+            nombre, sku, stock, precio, descripcion
+        });
+        success = 'Repuesto agregado correctamente.';
+    } else if (action === 'update') {
+        const id = formData.get('id');
+        const stock = Number(formData.get('stock'));
+        const precio = Number(formData.get('precio'));
+        
+        if (id) {
+            await strapiPut(`/api/repuestos/${id}`, {
+                stock, precio
+            });
+            success = 'Repuesto actualizado correctamente.';
+        }
+    }
+  }
+
+  // Fetch all parts
+  const response = await strapiGet('/api/repuestos?sort=nombre:asc');
+  parts = response.data || [];
+
+} catch (e: any) {
+  console.error('Error managing inventory:', e);
+  error = e.message || 'Error al gestionar el inventario.';
+}
+---
+
+<DashboardLayout title="Gestión de Inventario" role={userRole} currentPath="/encargado/inventario">
+    <div class="max-w-6xl mx-auto" x-data="{ showAddModal: false, editPart: null }">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Inventario de Repuestos</h1>
+                <p class="text-gray-500 dark:text-gray-400">Administre el stock y precios de los repuestos.</p>
+            </div>
+            <Button icon="add" @click="showAddModal = true">Nuevo Repuesto</Button>
+        </div>
+
+        {success && <div class="p-4 mb-6 text-sm text-green-700 bg-green-100 rounded-lg dark:bg-green-200 dark:text-green-800 flex items-center gap-2" role="alert"><span class="material-symbols-outlined">check_circle</span>{success}</div>}
+        {error && <div class="p-4 mb-6 text-sm text-red-700 bg-red-100 rounded-lg dark:bg-red-200 dark:text-red-800 flex items-center gap-2" role="alert"><span class="material-symbols-outlined">error</span>{error}</div>}
+
+        <!-- Inventory Table -->
+        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead class="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700">
+                        <tr>
+                            <th class="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">SKU</th>
+                            <th class="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nombre</th>
+                            <th class="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Stock</th>
+                            <th class="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Precio Unit.</th>
+                            <th class="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider text-right">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
+                        {parts.map((part) => (
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                                <td class="px-6 py-4 text-sm font-mono text-gray-500 dark:text-gray-400">{part.sku}</td>
+                                <td class="px-6 py-4">
+                                    <div class="text-sm font-medium text-gray-900 dark:text-white">{part.nombre}</div>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400 truncate max-w-xs">{part.descripcion}</div>
+                                </td>
+                                <td class="px-6 py-4">
+                                    <span class={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                        part.stock <= 5 ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                                    }`}>
+                                        {part.stock}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                    {new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(part.precio)}
+                                </td>
+                                <td class="px-6 py-4 text-right">
+                                    <button 
+                                        type="button"
+                                        class="text-primary-600 hover:text-primary-900 dark:hover:text-primary-400 font-medium text-sm"
+                                        @click={`editPart = ${JSON.stringify(part)}`}
+                                    >
+                                        Editar
+                                    </button>
+                                </td>
+                            </tr>
+                        ))}
+                         {parts.length === 0 && (
+                            <tr>
+                                <td colspan="5" class="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                                    No hay repuestos registrados.
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Add Modal -->
+        <div x-show="showAddModal" class="fixed inset-0 z-50 overflow-y-auto" style="display: none;">
+            <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+                <div class="fixed inset-0 transition-opacity" aria-hidden="true" @click="showAddModal = false">
+                    <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+                </div>
+                <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+                <div class="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg w-full">
+                    <form method="POST" class="p-6">
+                        <input type="hidden" name="action" value="add" />
+                        <h3 class="text-lg font-medium leading-6 text-gray-900 dark:text-white mb-4">Agregar Nuevo Repuesto</h3>
+                        <div class="space-y-4">
+                            <Input name="nombre" label="Nombre" placeholder="Ej: Filtro de Aceite" required />
+                            <Input name="sku" label="SKU / Código" placeholder="Ej: FIL-001" required />
+                            <div class="grid grid-cols-2 gap-4">
+                                <Input name="stock" label="Stock Inicial" type="number" min="0" required />
+                                <Input name="precio" label="Precio Unitario" type="number" min="0" required />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Descripción</label>
+                                <textarea name="descripcion" rows="3" class="form-textarea w-full rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white"></textarea>
+                            </div>
+                        </div>
+                        <div class="mt-6 flex justify-end gap-3">
+                            <Button type="button" variant="secondary" @click="showAddModal = false">Cancelar</Button>
+                            <Button type="submit">Guardar</Button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Edit Modal -->
+        <div x-show="editPart" class="fixed inset-0 z-50 overflow-y-auto" style="display: none;">
+            <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+                <div class="fixed inset-0 transition-opacity" aria-hidden="true" @click="editPart = null">
+                    <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+                </div>
+                <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+                <div class="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg w-full">
+                    <form method="POST" class="p-6" x-bind:if="editPart">
+                        <input type="hidden" name="action" value="update" />
+                        <input type="hidden" name="id" x-bind:value="editPart?.documentId" />
+                        
+                        <h3 class="text-lg font-medium leading-6 text-gray-900 dark:text-white mb-4">
+                            Editar: <span x-text="editPart?.nombre"></span>
+                        </h3>
+                        
+                        <div class="space-y-4">
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Stock Actual</label>
+                                    <input type="number" name="stock" x-bind:value="editPart?.stock" min="0" class="form-input w-full rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white" required />
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Precio</label>
+                                    <input type="number" name="precio" x-bind:value="editPart?.precio" min="0" class="form-input w-full rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white" required />
+                                </div>
+                            </div>
+                            <p class="text-sm text-gray-500 dark:text-gray-400 italic">
+                                Nota: Para cambiar nombre o SKU, contacte al administrador.
+                            </p>
+                        </div>
+
+                        <div class="mt-6 flex justify-end gap-3">
+                            <Button type="button" variant="secondary" @click="editPart = null">Cancelar</Button>
+                            <Button type="submit">Actualizar</Button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</DashboardLayout>
