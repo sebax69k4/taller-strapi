@@ -28,6 +28,7 @@
         "en_diagnostico",
         "en_reparacion",
         "finalizado",
+        "facturado",
         "entregado"
       ]
     },

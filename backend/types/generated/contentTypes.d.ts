@@ -608,6 +608,7 @@ export interface ApiOrdenDeTrabajoOrdenDeTrabajo
         'en_diagnostico',
         'en_reparacion',
         'finalizado',
+        'facturado',
         'entregado',
       ]
     >;

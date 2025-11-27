@@ -18,7 +18,7 @@ try {
   mechanics = data.data || [];
 
   mechanics.forEach((m: any) => {
-    const activeOrders = m.orden_de_trabajos ? m.orden_de_trabajos.filter((o: any) => o.estado !== 'Entregado') : [];
+    const activeOrders = m.orden_de_trabajos ? m.orden_de_trabajos.filter((o: any) => !['entregado', 'finalizado', 'facturado', 'Entregado', 'Finalizado', 'Facturado'].includes(o.estado)) : [];
     m.activeOrders = activeOrders;
     m.status = activeOrders.length > 0 ? 'Ocupado' : 'Disponible';
     if (m.status === 'Disponible') availableCount++;
