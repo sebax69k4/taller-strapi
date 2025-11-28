@@ -1,0 +1,195 @@
+---
+export const prerender = false;
+import DashboardLayout from '../../../layouts/DashboardLayout.astro';
+import PageHeader from '../../../components/ui/PageHeader.astro';
+import Breadcrumbs from '../../../components/ui/Breadcrumbs.astro';
+import EmptyState from '../../../components/ui/EmptyState.astro';
+import { strapiGet, strapiDelete } from '../../../lib/strapi';
+
+let clientes: any[] = [];
+let error = '';
+const successMessage = Astro.url.searchParams.get('success');
+
+try {
+  const response = await strapiGet('/api/clientes?pagination[pageSize]=100&sort=apellido:asc');
+  clientes = response.data || [];
+} catch (e: any) {
+  error = e.message;
+}
+
+const breadcrumbs = [
+  { label: 'Admin', href: '/admin', icon: 'home' },
+  { label: 'Clientes' }
+];
+---
+
+<DashboardLayout title="Gestión de Clientes" role="admin" currentPath="/admin/clientes">
+  <div class="container mx-auto px-4 py-8">
+    <Breadcrumbs items={breadcrumbs} />
+    
+    <PageHeader title="Gestión de Clientes" subtitle={`${clientes.length} clientes registrados`}>
+      <a slot="actions" href="/admin/clientes/crear" class="btn-primary inline-flex items-center gap-2">
+        <span class="material-symbols-outlined text-lg">add</span>
+        Nuevo Cliente
+      </a>
+    </PageHeader>
+
+    {error && (
+      <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-6 flex items-center gap-2">
+        <span class="material-symbols-outlined">error</span>
+        Error: {error}
+      </div>
+    )}
+
+    <!-- Buscador -->
+    <div class="card p-4 mb-6">
+      <div class="relative">
+        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 material-symbols-outlined">search</span>
+        <input 
+          type="text" 
+          id="searchInput"
+          placeholder="Buscar por nombre, apellido, email o RUT..."
+          class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+        />
+      </div>
+    </div>
+
+    <!-- Lista de clientes -->
+    {clientes.length === 0 ? (
+      <EmptyState 
+        icon="people"
+        title="No hay clientes registrados"
+        description="Comienza agregando tu primer cliente al sistema"
+        actionLabel="Agregar Cliente"
+        actionHref="/admin/clientes/crear"
+      />
+    ) : (
+      <div class="card overflow-hidden">
+        <table class="w-full">
+          <thead class="bg-gray-50">
+            <tr>
+              <th class="text-left px-6 py-4 font-semibold text-gray-600 text-sm uppercase tracking-wider">Nombre</th>
+              <th class="text-left px-6 py-4 font-semibold text-gray-600 text-sm uppercase tracking-wider">Email</th>
+              <th class="text-left px-6 py-4 font-semibold text-gray-600 text-sm uppercase tracking-wider">Teléfono</th>
+              <th class="text-left px-6 py-4 font-semibold text-gray-600 text-sm uppercase tracking-wider">RUT</th>
+              <th class="text-center px-6 py-4 font-semibold text-gray-600 text-sm uppercase tracking-wider">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="clientesTable" class="divide-y divide-gray-100">
+            {clientes.map((cliente: any) => (
+              <tr class="hover:bg-blue-50/50 transition-colors cliente-row" 
+                  data-search={`${cliente.nombre} ${cliente.apellido} ${cliente.email || ''} ${cliente.rut || ''}`.toLowerCase()}>
+                <td class="px-6 py-4">
+                  <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                      <span class="text-blue-600 font-bold text-sm">
+                        {cliente.nombre?.charAt(0)}{cliente.apellido?.charAt(0)}
+                      </span>
+                    </div>
+                    <div class="font-medium text-gray-800">{cliente.nombre} {cliente.apellido}</div>
+                  </div>
+                </td>
+                <td class="px-6 py-4 text-gray-600">{cliente.email || '-'}</td>
+                <td class="px-6 py-4 text-gray-600">{cliente.telefono || '-'}</td>
+                <td class="px-6 py-4 text-gray-600 font-mono text-sm">{cliente.rut || '-'}</td>
+                <td class="px-6 py-4">
+                  <div class="flex items-center justify-center gap-1">
+                    <a 
+                      href={`/admin/clientes/editar/${cliente.documentId}`}
+                      class="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors"
+                      title="Editar"
+                    >
+                      <span class="material-symbols-outlined text-lg">edit</span>
+                    </a>
+                    <button 
+                      type="button"
+                      class="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors delete-btn"
+                      data-id={cliente.documentId}
+                      data-name={`${cliente.nombre} ${cliente.apellido}`}
+                      title="Eliminar"
+                    >
+                      <span class="material-symbols-outlined text-lg">delete</span>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+
+    <div class="mt-4 text-gray-500 text-sm flex items-center gap-2">
+      <span class="material-symbols-outlined text-lg">info</span>
+      Mostrando <span id="totalCount" class="font-medium">{clientes.length}</span> clientes
+    </div>
+  </div>
+</DashboardLayout>
+
+<script is:inline>
+  // Mostrar toast si hay mensaje de éxito
+  document.addEventListener('DOMContentLoaded', function() {
+    var urlParams = new URLSearchParams(window.location.search);
+    var success = urlParams.get('success');
+    if (success && window.showToast) {
+      var messages = {
+        created: 'Cliente creado exitosamente',
+        updated: 'Cliente actualizado exitosamente',
+        deleted: 'Cliente eliminado exitosamente'
+      };
+      window.showToast(messages[success] || 'Operación exitosa', 'success');
+      // Limpiar URL
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+
+    // Search functionality
+    var searchInput = document.getElementById('searchInput');
+    var rows = document.querySelectorAll('.cliente-row');
+    var totalCount = document.getElementById('totalCount');
+
+    if (searchInput) {
+      searchInput.addEventListener('input', function() {
+        var query = searchInput.value.toLowerCase();
+        var visible = 0;
+        
+        rows.forEach(function(row) {
+          var searchData = row.getAttribute('data-search') || '';
+          var matches = searchData.includes(query);
+          row.style.display = matches ? '' : 'none';
+          if (matches) visible++;
+        });
+        
+        if (totalCount) totalCount.textContent = visible.toString();
+      });
+    }
+
+    // Delete functionality con confirmación modal
+    document.querySelectorAll('.delete-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        var target = e.currentTarget;
+        var id = target.dataset.id;
+        var name = target.dataset.name;
+        
+        window.showConfirm({
+          title: '¿Eliminar cliente?',
+          message: 'Esta acción eliminará permanentemente a "' + name + '" y no se puede deshacer.',
+          type: 'danger',
+          confirmText: 'Eliminar',
+          onConfirm: function() {
+            fetch('http://localhost:1337/api/clientes/' + id, {
+              method: 'DELETE',
+            })
+            .then(function(response) {
+              if (!response.ok) throw new Error('Error al eliminar');
+              window.showToast('Cliente eliminado exitosamente', 'success');
+              setTimeout(function() { window.location.reload(); }, 1000);
+            })
+            .catch(function(error) {
+              window.showToast('Error al eliminar el cliente', 'error');
+            });
+          }
+        });
+      });
+    });
+  });
+</script>

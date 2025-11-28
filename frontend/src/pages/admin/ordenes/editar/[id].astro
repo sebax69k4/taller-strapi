@@ -1,0 +1,368 @@
+---
+export const prerender = false;
+import DashboardLayout from '../../../../layouts/DashboardLayout.astro';
+import { strapiGet, strapiPut } from '../../../../lib/strapi';
+
+const id = Astro.params.id;
+let orden: any = null;
+let vehiculosList: any[] = [];
+let mecanicosList: any[] = [];
+let zonasList: any[] = [];
+let repuestosList: any[] = [];
+let error = '';
+
+if (id) {
+  try {
+    const [ordenRes, vehiculosRes, mecanicosRes, zonasRes, repuestosRes] = await Promise.all([
+      strapiGet(`/api/orden-de-trabajos/${id}?populate[vehiculo][populate][cliente]=*&populate[mecanico]=*&populate[zona]=*&populate[repuestos]=*`),
+      strapiGet('/api/vehiculos?populate[cliente]=*&pagination[pageSize]=200'),
+      strapiGet('/api/mecenicos?pagination[pageSize]=100'),
+      strapiGet('/api/zonas?pagination[pageSize]=50'),
+      strapiGet('/api/repuestos?pagination[pageSize]=200'),
+    ]);
+    
+    orden = ordenRes.data;
+    vehiculosList = vehiculosRes.data || [];
+    mecanicosList = mecanicosRes.data || [];
+    zonasList = zonasRes.data || [];
+    repuestosList = repuestosRes.data || [];
+  } catch (e: any) {
+    error = e.message;
+  }
+}
+
+// Handle POST
+if (Astro.request.method === 'POST' && orden) {
+  try {
+    const formData = await Astro.request.formData();
+    
+    const repuestosSeleccionados = formData.getAll('repuestos');
+    
+    const data: any = {
+      fecha_ingreso: formData.get('fecha_ingreso') || null,
+      fecha_estimada: formData.get('fecha_estimada') || null,
+      fecha_entrega: formData.get('fecha_entrega') || null,
+      estado: formData.get('estado'),
+      descripcion: formData.get('descripcion') || null,
+      diagnostico: formData.get('diagnostico') || null,
+    };
+    
+    const vehiculoId = formData.get('vehiculo');
+    if (vehiculoId) {
+      data.vehiculo = parseInt(vehiculoId as string);
+    }
+    
+    const mecanicoId = formData.get('mecanico');
+    if (mecanicoId) {
+      data.mecanico = parseInt(mecanicoId as string);
+    } else {
+      data.mecanico = null;
+    }
+    
+    const zonaId = formData.get('zona');
+    if (zonaId) {
+      data.zona = parseInt(zonaId as string);
+    } else {
+      data.zona = null;
+    }
+    
+    if (repuestosSeleccionados.length > 0) {
+      data.repuestos = repuestosSeleccionados.map((r: any) => parseInt(r));
+    } else {
+      data.repuestos = [];
+    }
+
+    await strapiPut(`/api/orden-de-trabajos/${id}`, data);
+    return Astro.redirect('/admin?tab=ordenes&success=updated');
+  } catch (e: any) {
+    error = e.message;
+  }
+}
+
+// Get IDs of current repuestos
+const currentRepuestosIds = orden?.repuestos?.map((r: any) => r.id) || [];
+---
+
+<DashboardLayout title={orden ? 'Editar Orden de Trabajo' : 'Orden no encontrada'} role="admin" currentPath="/admin/ordenes">
+  <div class="container mx-auto px-4 py-8 max-w-4xl">
+    <div class="flex items-center mb-6">
+      <a href="/admin?tab=ordenes" class="text-gray-600 hover:text-blue-600 mr-4 transition-colors">
+        ← Volver
+      </a>
+      <h1 class="text-3xl font-bold text-gray-800">Editar Orden de Trabajo</h1>
+    </div>
+
+    {error && (
+      <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+        Error: {error}
+      </div>
+    )}
+
+    {!orden && !error && (
+      <div class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-4">
+        Orden de trabajo no encontrada
+      </div>
+    )}
+
+    {orden && (
+      <form method="POST" class="card p-8">
+        <!-- Información básica -->
+        <div class="mb-6">
+          <h2 class="text-xl font-bold mb-4 border-b pb-2 text-gray-800">Información Básica</h2>
+          
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label class="block text-gray-700 text-sm font-bold mb-2" for="fecha_ingreso">
+                Fecha de Ingreso *
+              </label>
+              <input
+                type="date"
+                id="fecha_ingreso"
+                name="fecha_ingreso"
+                required
+                value={orden.fecha_ingreso || ''}
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+              />
+            </div>
+
+            <div>
+              <label class="block text-gray-700 text-sm font-bold mb-2" for="fecha_estimada">
+                Fecha Estimada de Entrega
+              </label>
+              <input
+                type="date"
+                id="fecha_estimada"
+                name="fecha_estimada"
+                value={orden.fecha_estimada || ''}
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+              />
+            </div>
+
+            <div>
+              <label class="block text-gray-700 text-sm font-bold mb-2" for="fecha_entrega">
+                Fecha de Entrega
+              </label>
+              <input
+                type="date"
+                id="fecha_entrega"
+                name="fecha_entrega"
+                value={orden.fecha_entrega || ''}
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- Estado -->
+        <div class="mb-6">
+          <h2 class="text-xl font-bold mb-4 border-b pb-2 text-gray-800">Estado de la Orden</h2>
+          
+          <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+            {['ingresado', 'en_diagnostico', 'en_reparacion', 'finalizado', 'facturado', 'entregado'].map((estado) => (
+              <label class={`flex items-center justify-center p-3 rounded-lg border-2 cursor-pointer transition-all
+                ${orden.estado === estado 
+                  ? 'border-blue-500 bg-blue-50 text-blue-700' 
+                  : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'}`}>
+                <input
+                  type="radio"
+                  name="estado"
+                  value={estado}
+                  checked={orden.estado === estado}
+                  class="sr-only"
+                />
+                <span class="text-sm font-medium text-center">
+                  {estado === 'ingresado' && '📋 Ingresado'}
+                  {estado === 'en_diagnostico' && '🔍 En Diagnóstico'}
+                  {estado === 'en_reparacion' && '🔧 En Reparación'}
+                  {estado === 'finalizado' && '✅ Finalizado'}
+                  {estado === 'facturado' && '💰 Facturado'}
+                  {estado === 'entregado' && '🚗 Entregado'}
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <!-- Asignaciones -->
+        <div class="mb-6">
+          <h2 class="text-xl font-bold mb-4 border-b pb-2 text-gray-800">Asignaciones</h2>
+          
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label class="block text-gray-700 text-sm font-bold mb-2" for="vehiculo">
+                Vehículo *
+              </label>
+              <select
+                id="vehiculo"
+                name="vehiculo"
+                required
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+              >
+                <option value="">Seleccione vehículo</option>
+                {vehiculosList.map((veh: any) => (
+                  <option value={veh.id} selected={orden.vehiculo?.id === veh.id}>
+                    {veh.patente} - {veh.marca} {veh.modelo}
+                    {veh.cliente ? ` (${veh.cliente.nombre} ${veh.cliente.apellido})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-gray-700 text-sm font-bold mb-2" for="mecanico">
+                Mecánico Asignado
+              </label>
+              <select
+                id="mecanico"
+                name="mecanico"
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+              >
+                <option value="">Sin asignar</option>
+                {mecanicosList.map((mec: any) => (
+                  <option value={mec.id} selected={orden.mecanico?.id === mec.id}>
+                    {mec.nombre} {mec.apellido}
+                    {mec.especialidad ? ` - ${mec.especialidad}` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-gray-700 text-sm font-bold mb-2" for="zona">
+                Zona de Trabajo
+              </label>
+              <select
+                id="zona"
+                name="zona"
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+              >
+                <option value="">Sin asignar</option>
+                {zonasList.map((zona: any) => (
+                  <option value={zona.id} selected={orden.zona?.id === zona.id}>
+                    {zona.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Detalles del trabajo -->
+        <div class="mb-6">
+          <h2 class="text-xl font-bold mb-4 border-b pb-2 text-gray-800">Detalles del Trabajo</h2>
+
+          <div class="mb-4">
+            <label class="block text-gray-700 text-sm font-bold mb-2" for="descripcion">
+              Descripción del Trabajo
+            </label>
+            <textarea
+              id="descripcion"
+              name="descripcion"
+              rows="4"
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+              placeholder="Detalle de los trabajos a realizar..."
+            >{orden.descripcion || ''}</textarea>
+          </div>
+
+          <div class="mb-4">
+            <label class="block text-gray-700 text-sm font-bold mb-2" for="diagnostico">
+              Diagnóstico Técnico
+            </label>
+            <textarea
+              id="diagnostico"
+              name="diagnostico"
+              rows="4"
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+              placeholder="Diagnóstico técnico del vehículo..."
+            >{orden.diagnostico || ''}</textarea>
+          </div>
+        </div>
+
+        <!-- Repuestos -->
+        <div class="mb-6">
+          <h2 class="text-xl font-bold mb-4 border-b pb-2 text-gray-800">Repuestos Utilizados</h2>
+          <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+            <div class="space-y-2 max-h-64 overflow-y-auto">
+              {repuestosList.map((rep: any) => (
+                <label class="flex items-center space-x-3 cursor-pointer hover:bg-white p-2 rounded transition-colors border border-transparent hover:border-gray-200">
+                  <input
+                    type="checkbox"
+                    name="repuestos"
+                    value={rep.id}
+                    checked={currentRepuestosIds.includes(rep.id)}
+                    class="form-checkbox h-5 w-5 text-blue-600 rounded focus:ring-blue-500"
+                  />
+                  <span class="flex-1">
+                    <span class="font-medium text-gray-800">{rep.nombre}</span>
+                    <span class="text-gray-500 text-sm"> - SKU: {rep.sku}</span>
+                    <span class={`ml-2 text-xs font-semibold px-2 py-0.5 rounded-full ${rep.stock <= (rep.stock_minimo || 5) ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
+                      Stock: {rep.stock}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <!-- Información adicional -->
+        <div class="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+          <h3 class="text-sm font-bold text-gray-700 mb-2">Información del Sistema</h3>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div>
+              <span class="text-gray-500">ID:</span>
+              <span class="font-medium ml-1">{orden.id}</span>
+            </div>
+            <div>
+              <span class="text-gray-500">Document ID:</span>
+              <span class="font-mono text-xs ml-1">{orden.documentId}</span>
+            </div>
+            <div>
+              <span class="text-gray-500">Creado:</span>
+              <span class="ml-1">{new Date(orden.createdAt).toLocaleDateString('es-CL')}</span>
+            </div>
+            <div>
+              <span class="text-gray-500">Actualizado:</span>
+              <span class="ml-1">{new Date(orden.updatedAt).toLocaleDateString('es-CL')}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between pt-4 border-t">
+          <div class="flex gap-2">
+            <button type="submit" class="btn-primary">
+              Guardar Cambios
+            </button>
+            <a href={`/admin/ordenes/ver/${id}`} class="btn-secondary">
+              Ver Detalles
+            </a>
+          </div>
+          <a href="/admin?tab=ordenes" class="text-gray-600 hover:text-gray-800 font-medium">
+            Cancelar
+          </a>
+        </div>
+      </form>
+    )}
+  </div>
+</DashboardLayout>
+
+<script>
+  // Estado selection styling
+  document.querySelectorAll('input[name="estado"]').forEach(radio => {
+    radio.addEventListener('change', (e) => {
+      const target = e.target as HTMLInputElement;
+      document.querySelectorAll('input[name="estado"]').forEach(r => {
+        const label = (r as HTMLInputElement).closest('label');
+        if (label) {
+          label.classList.remove('border-blue-500', 'bg-blue-50', 'text-blue-700');
+          label.classList.add('border-gray-200');
+        }
+      });
+      const selectedLabel = target.closest('label');
+      if (selectedLabel) {
+        selectedLabel.classList.add('border-blue-500', 'bg-blue-50', 'text-blue-700');
+        selectedLabel.classList.remove('border-gray-200');
+      }
+    });
+  });
+</script>

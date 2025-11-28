@@ -1,0 +1,188 @@
+---
+export const prerender = false;
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import Card from '../../components/ui/Card.astro';
+import { strapiGet, strapiPut } from '../../lib/strapi';
+
+const userRole = Astro.cookies.get('user_role')?.value as 'recepcionista' | 'encargado' | 'mecanico' | undefined;
+if (!userRole) {
+  return Astro.redirect('/login');
+}
+
+let facturasPendientes: any[] = [];
+let error = '';
+let successMessage = '';
+
+// Procesar confirmación de pago
+if (Astro.request.method === 'POST') {
+  try {
+    const formData = await Astro.request.formData();
+    const facturaId = formData.get('factura_id') as string;
+    const metodoPago = formData.get('metodo_pago') as string;
+    const referencia = formData.get('referencia') as string;
+    
+    // Actualizar factura con el pago
+    await strapiPut(`/api/facturas/${facturaId}`, {
+      estado: 'pagado',
+      metodo_pago: metodoPago,
+      referencia_pago: referencia || null,
+      fecha_pago: new Date().toISOString(),
+    });
+    
+    successMessage = 'Pago confirmado exitosamente. El vehículo está listo para entrega.';
+  } catch (e: any) {
+    error = 'Error al confirmar pago: ' + e.message;
+  }
+}
+
+try {
+  // Obtener facturas pendientes de pago (órdenes facturadas)
+  // Las facturas se crean cuando la orden pasa a estado "facturado"
+  const response = await strapiGet('/api/facturas?filters[estado][$eq]=pendiente&populate[orden_de_trabajo][populate][vehiculo][populate][cliente]=*&pagination[pageSize]=100&sort=createdAt:desc');
+  facturasPendientes = response.data || [];
+} catch (e: any) {
+  // Si no encuentra facturas o hay error, mostrar lista vacía
+  console.error('Error fetching facturas:', e);
+  facturasPendientes = [];
+}
+
+const formatMoney = (amount: number) => `$${(amount || 0).toLocaleString('es-CL')}`;
+---
+
+<DashboardLayout title="Confirmar Pago" role="recepcionista" currentPath="/recepcion/confirmar_pago">
+  <div class="max-w-6xl mx-auto">
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold text-gray-800 dark:text-white">Confirmar Pago</h1>
+      <p class="text-gray-600 dark:text-gray-400 mt-2">Registrar pago de facturas para autorizar entrega de vehículos</p>
+    </div>
+
+    {error && (
+      <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-6 flex items-center gap-2">
+        <span class="material-symbols-outlined">error</span>
+        {error}
+      </div>
+    )}
+
+    {successMessage && (
+      <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-lg mb-6 flex items-center gap-2">
+        <span class="material-symbols-outlined">check_circle</span>
+        {successMessage}
+      </div>
+    )}
+
+    <!-- Lista de facturas pendientes -->
+    <Card>
+      <h2 class="text-xl font-bold text-gray-800 dark:text-white mb-4 flex items-center gap-2">
+        <span class="material-symbols-outlined text-primary-600">receipt_long</span>
+        Facturas Pendientes de Pago ({facturasPendientes.length})
+      </h2>
+
+      {facturasPendientes.length === 0 ? (
+        <div class="text-center py-12 text-gray-500">
+          <span class="material-symbols-outlined text-6xl mb-4 block text-gray-300">payments</span>
+          <p class="text-lg font-medium">No hay facturas pendientes de pago</p>
+          <p class="text-sm mt-2">Las facturas aparecen aquí cuando el encargado aprueba una orden finalizada.</p>
+        </div>
+      ) : (
+        <div class="space-y-4">
+          {facturasPendientes.map((factura: any) => {
+            const orden = factura.orden_de_trabajo;
+            const vehiculo = orden?.vehiculo;
+            const cliente = vehiculo?.cliente;
+            
+            return (
+              <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:border-blue-300 transition-colors">
+                <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                  <!-- Info de la factura -->
+                  <div class="flex-1">
+                    <div class="flex items-center gap-3 mb-2">
+                      <span class="text-2xl font-bold text-gray-800 dark:text-white">
+                        #{factura.numero_factura || `F-${factura.id}`}
+                      </span>
+                      <span class="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs font-bold rounded-full">
+                        PENDIENTE
+                      </span>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div>
+                        <p class="text-gray-500">Cliente</p>
+                        <p class="font-medium text-gray-800 dark:text-white">
+                          {cliente ? `${cliente.nombre} ${cliente.apellido}` : 'N/A'}
+                        </p>
+                      </div>
+                      <div>
+                        <p class="text-gray-500">Vehículo</p>
+                        <p class="font-medium text-gray-800 dark:text-white">
+                          {vehiculo ? `${vehiculo.patente} - ${vehiculo.marca}` : 'N/A'}
+                        </p>
+                      </div>
+                      <div>
+                        <p class="text-gray-500">Orden</p>
+                        <p class="font-medium text-gray-800 dark:text-white">
+                          OT-{orden?.id || 'N/A'}
+                        </p>
+                      </div>
+                      <div>
+                        <p class="text-gray-500">Total</p>
+                        <p class="font-bold text-xl text-green-600">
+                          {formatMoney(factura.total)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Formulario de pago -->
+                  <form method="POST" class="flex flex-col gap-2 min-w-[280px]">
+                    <input type="hidden" name="factura_id" value={factura.documentId} />
+                    
+                    <select 
+                      name="metodo_pago" 
+                      required
+                      class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800"
+                    >
+                      <option value="">Método de pago...</option>
+                      <option value="efectivo">💵 Efectivo</option>
+                      <option value="tarjeta_debito">💳 Tarjeta Débito</option>
+                      <option value="tarjeta_credito">💳 Tarjeta Crédito</option>
+                      <option value="transferencia">🏦 Transferencia</option>
+                      <option value="cheque">📝 Cheque</option>
+                    </select>
+                    
+                    <input 
+                      type="text" 
+                      name="referencia"
+                      placeholder="N° Referencia/Voucher (opcional)"
+                      class="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-800"
+                    />
+                    
+                    <button 
+                      type="submit"
+                      class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2 font-medium"
+                    >
+                      <span class="material-symbols-outlined text-sm">check_circle</span>
+                      Confirmar Pago
+                    </button>
+                  </form>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+
+    <!-- Info adicional -->
+    <div class="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+      <h3 class="font-bold text-blue-800 dark:text-blue-300 mb-2 flex items-center gap-2">
+        <span class="material-symbols-outlined">info</span>
+        Información
+      </h3>
+      <ul class="text-sm text-blue-700 dark:text-blue-400 space-y-1">
+        <li>• Al confirmar el pago, el vehículo quedará listo para ser entregado al cliente.</li>
+        <li>• Asegúrese de verificar el monto y método de pago antes de confirmar.</li>
+        <li>• Para pagos con tarjeta o transferencia, registre el número de referencia.</li>
+      </ul>
+    </div>
+  </div>
+</DashboardLayout>

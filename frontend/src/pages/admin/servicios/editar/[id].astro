@@ -1,0 +1,137 @@
+---
+export const prerender = false;
+import DashboardLayout from '../../../../layouts/DashboardLayout.astro';
+import { strapiGet, strapiPut } from '../../../../lib/strapi';
+
+const id = Astro.params.id;
+let servicio: any = null;
+let error = '';
+
+if (id) {
+  try {
+    const response = await strapiGet(`/api/servicios/${id}`);
+    servicio = response.data;
+  } catch (e: any) {
+    error = e.message;
+  }
+}
+
+// Handle POST
+if (Astro.request.method === 'POST' && servicio) {
+  try {
+    const formData = await Astro.request.formData();
+    
+    await strapiPut(`/api/servicios/${id}`, {
+      nombre: formData.get('nombre'),
+      descripcion: formData.get('descripcion') || null,
+      precio_base: parseFloat(formData.get('precio_base') as string) || 0,
+      duracion_estimada: parseInt(formData.get('duracion_estimada') as string) || 60,
+      categoria: formData.get('categoria') || null,
+    });
+    
+    return Astro.redirect('/admin/servicios?success=updated');
+  } catch (e: any) {
+    error = e.message;
+  }
+}
+
+const categorias = ['Mantenimiento', 'Reparación', 'Diagnóstico', 'Electricidad', 'Pintura', 'Carrocería', 'Otros'];
+---
+
+<DashboardLayout title={servicio ? 'Editar Servicio' : 'Servicio no encontrado'} role="admin" currentPath="/admin/servicios">
+  <div class="container mx-auto px-4 py-8 max-w-2xl">
+    <div class="flex items-center mb-6">
+      <a href="/admin/servicios" class="text-gray-600 hover:text-blue-600 mr-4 transition-colors">
+        ← Volver
+      </a>
+      <h1 class="text-3xl font-bold text-gray-800">Editar Servicio</h1>
+    </div>
+
+    {error && (
+      <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+        Error: {error}
+      </div>
+    )}
+
+    {!servicio && !error && (
+      <div class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-4">
+        Servicio no encontrado
+      </div>
+    )}
+
+    {servicio && (
+      <form method="POST" class="card p-8">
+        <div class="space-y-4">
+          <div>
+            <label class="block text-gray-700 text-sm font-bold mb-2">Nombre *</label>
+            <input
+              type="text"
+              name="nombre"
+              required
+              value={servicio.nombre}
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label class="block text-gray-700 text-sm font-bold mb-2">Categoría</label>
+            <select
+              name="categoria"
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Seleccione...</option>
+              {categorias.map(cat => (
+                <option value={cat} selected={servicio.categoria === cat}>{cat}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-gray-700 text-sm font-bold mb-2">Precio Base *</label>
+            <div class="relative">
+              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+              <input
+                type="number"
+                name="precio_base"
+                required
+                min="0"
+                value={servicio.precio_base || 0}
+                class="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-gray-700 text-sm font-bold mb-2">Duración Estimada (min)</label>
+            <input
+              type="number"
+              name="duracion_estimada"
+              min="15"
+              step="15"
+              value={servicio.duracion_estimada || 60}
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label class="block text-gray-700 text-sm font-bold mb-2">Descripción</label>
+            <textarea
+              name="descripcion"
+              rows="3"
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            >{servicio.descripcion || ''}</textarea>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between pt-6 mt-6 border-t">
+          <button type="submit" class="btn-primary">
+            Guardar Cambios
+          </button>
+          <a href="/admin/servicios" class="text-gray-600 hover:text-gray-800 font-medium">
+            Cancelar
+          </a>
+        </div>
+      </form>
+    )}
+  </div>
+</DashboardLayout>

@@ -1,0 +1,81 @@
+---
+/**
+ * FormField Component - Campo de formulario con validación visual
+ */
+type InputType = 'text' | 'email' | 'password' | 'number' | 'tel' | 'url' | 'date' | 'time' | 'datetime-local' | 'search' | 'hidden';
+
+interface Props {
+  label: string;
+  name: string;
+  type?: InputType;
+  placeholder?: string;
+  required?: boolean;
+  error?: string;
+  hint?: string;
+  value?: string | number;
+  class?: string;
+}
+
+const { 
+  label, 
+  name, 
+  type = 'text',
+  placeholder,
+  required = false,
+  error = '',
+  hint,
+  value,
+  class: className = ''
+} = Astro.props;
+
+const errorAttr = error ? error.replace(/'/g, "\\'") : '';
+---
+
+<div class:list={["space-y-1", className]} x-data={`{ error: '${errorAttr}', touched: false }`}>
+  <!-- Label -->
+  <label for={name} class="block text-sm font-medium text-gray-700">
+    {label}
+    {required && <span class="text-red-500 ml-0.5">*</span>}
+  </label>
+  
+  <!-- Input -->
+  <div class="relative">
+    <input
+      type={type}
+      id={name}
+      name={name}
+      placeholder={placeholder}
+      required={required}
+      value={value}
+      @blur="touched = true"
+      @input="error = ''"
+      class:list={[
+        "w-full px-4 py-2 border rounded-lg transition-all duration-200 outline-none",
+        "focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500",
+        "placeholder:text-gray-400 border-gray-300 hover:border-gray-400"
+      ]}
+      x-bind:class="error && touched ? 'border-red-500 bg-red-50 focus:border-red-500 focus:ring-red-500/20' : ''"
+    />
+    
+    <!-- Icono de error -->
+    <span 
+      x-show="error && touched"
+      class="absolute right-3 top-1/2 -translate-y-1/2 text-red-500"
+    >
+      <span class="material-symbols-outlined text-lg">error</span>
+    </span>
+  </div>
+  
+  <!-- Error message -->
+  <p 
+    x-show="error && touched"
+    x-transition
+    class="text-sm text-red-600 flex items-center gap-1"
+    x-html="error"
+  ></p>
+  
+  <!-- Hint -->
+  {hint && !error && (
+    <p class="text-sm text-gray-500">{hint}</p>
+  )}
+</div>

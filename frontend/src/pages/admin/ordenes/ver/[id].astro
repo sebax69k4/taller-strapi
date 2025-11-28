@@ -1,0 +1,395 @@
+---
+export const prerender = false;
+import DashboardLayout from '../../../../layouts/DashboardLayout.astro';
+import { strapiGet } from '../../../../lib/strapi';
+
+const id = Astro.params.id;
+let orden: any = null;
+let bitacoras: any[] = [];
+let error = '';
+
+if (id) {
+  try {
+    const [ordenRes, bitacorasRes] = await Promise.all([
+      strapiGet(`/api/orden-de-trabajos/${id}?populate[vehiculo][populate][cliente]=*&populate[mecanico]=*&populate[zona]=*&populate[repuestos]=*&populate[presupuesto]=*&populate[factura]=*`),
+      strapiGet(`/api/bitacoras?filters[orden_de_trabajo][documentId][$eq]=${id}&sort=createdAt:desc&pagination[pageSize]=100`),
+    ]);
+    
+    orden = ordenRes.data;
+    bitacoras = bitacorasRes.data || [];
+  } catch (e: any) {
+    error = e.message;
+  }
+}
+
+const getEstadoColor = (estado: string) => {
+  switch (estado) {
+    case 'ingresado': return 'bg-blue-100 text-blue-800';
+    case 'en_diagnostico': return 'bg-yellow-100 text-yellow-800';
+    case 'en_reparacion': return 'bg-orange-100 text-orange-800';
+    case 'finalizado': return 'bg-green-100 text-green-800';
+    case 'facturado': return 'bg-purple-100 text-purple-800';
+    case 'entregado': return 'bg-gray-100 text-gray-800';
+    default: return 'bg-gray-100 text-gray-800';
+  }
+};
+
+const formatEstado = (estado: string) => {
+  const estados: Record<string, string> = {
+    ingresado: '📋 Ingresado',
+    en_diagnostico: '🔍 En Diagnóstico',
+    en_reparacion: '🔧 En Reparación',
+    finalizado: '✅ Finalizado',
+    facturado: '💰 Facturado',
+    entregado: '🚗 Entregado',
+  };
+  return estados[estado] || estado;
+};
+
+const formatDate = (dateStr: string | null) => {
+  if (!dateStr) return '-';
+  return new Date(dateStr).toLocaleDateString('es-CL');
+};
+
+const formatMoney = (amount: number | null) => {
+  if (amount === null || amount === undefined) return '-';
+  return `$${amount.toLocaleString('es-CL')}`;
+};
+---
+
+<DashboardLayout title={orden ? `Orden #${orden.id}` : 'Orden no encontrada'} role="admin" currentPath="/admin/ordenes">
+  <div class="container mx-auto px-4 py-8 max-w-6xl">
+    <div class="flex items-center justify-between mb-6">
+      <div class="flex items-center">
+        <a href="/admin?tab=ordenes" class="text-gray-600 hover:text-blue-600 mr-4 transition-colors">
+          ← Volver
+        </a>
+        <h1 class="text-3xl font-bold text-gray-800">Detalle de Orden #{orden?.id}</h1>
+      </div>
+      {orden && (
+        <a href={`/admin/ordenes/editar/${id}`} class="btn-primary">
+          ✏️ Editar
+        </a>
+      )}
+    </div>
+
+    {error && (
+      <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+        Error: {error}
+      </div>
+    )}
+
+    {!orden && !error && (
+      <div class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-4">
+        Orden de trabajo no encontrada
+      </div>
+    )}
+
+    {orden && (
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Columna izquierda -->
+        <div class="lg:col-span-2 space-y-6">
+          <!-- Estado y fechas -->
+          <div class="card p-6">
+            <div class="flex items-center justify-between mb-4">
+              <h2 class="text-xl font-bold text-gray-800">Estado de la Orden</h2>
+              <span class={`px-4 py-2 rounded-full text-sm font-bold ${getEstadoColor(orden.estado)}`}>
+                {formatEstado(orden.estado)}
+              </span>
+            </div>
+            
+            <div class="grid grid-cols-3 gap-4">
+              <div class="text-center p-4 bg-gray-50 rounded-lg">
+                <p class="text-sm text-gray-500">Ingreso</p>
+                <p class="text-lg font-bold text-gray-800">{formatDate(orden.fecha_ingreso)}</p>
+              </div>
+              <div class="text-center p-4 bg-gray-50 rounded-lg">
+                <p class="text-sm text-gray-500">Estimada</p>
+                <p class="text-lg font-bold text-gray-800">{formatDate(orden.fecha_estimada)}</p>
+              </div>
+              <div class="text-center p-4 bg-gray-50 rounded-lg">
+                <p class="text-sm text-gray-500">Entrega</p>
+                <p class="text-lg font-bold text-gray-800">{formatDate(orden.fecha_entrega)}</p>
+              </div>
+            </div>
+
+            <!-- Progress bar -->
+            <div class="mt-4">
+              <div class="flex justify-between text-xs text-gray-500 mb-1">
+                {['ingresado', 'en_diagnostico', 'en_reparacion', 'finalizado', 'facturado', 'entregado'].map((est, i) => (
+                  <span class={orden.estado === est ? 'font-bold text-blue-600' : ''}>{i + 1}</span>
+                ))}
+              </div>
+              <div class="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  class="bg-blue-600 h-2 rounded-full transition-all duration-500"
+                  style={`width: ${(['ingresado', 'en_diagnostico', 'en_reparacion', 'finalizado', 'facturado', 'entregado'].indexOf(orden.estado) + 1) / 6 * 100}%`}
+                ></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Descripción y diagnóstico -->
+          <div class="card p-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">Detalles del Trabajo</h2>
+            
+            <div class="space-y-4">
+              <div>
+                <h3 class="text-sm font-bold text-gray-600 mb-2">Descripción</h3>
+                <p class="text-gray-700 bg-gray-50 p-4 rounded-lg whitespace-pre-wrap">
+                  {orden.descripcion || 'Sin descripción'}
+                </p>
+              </div>
+              
+              <div>
+                <h3 class="text-sm font-bold text-gray-600 mb-2">Diagnóstico Técnico</h3>
+                <p class="text-gray-700 bg-gray-50 p-4 rounded-lg whitespace-pre-wrap">
+                  {orden.diagnostico || 'Sin diagnóstico registrado'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Repuestos utilizados -->
+          <div class="card p-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">Repuestos Utilizados</h2>
+            
+            {orden.repuestos && orden.repuestos.length > 0 ? (
+              <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                  <thead>
+                    <tr class="border-b border-gray-200">
+                      <th class="text-left py-2 px-2 font-bold text-gray-600">Repuesto</th>
+                      <th class="text-left py-2 px-2 font-bold text-gray-600">SKU</th>
+                      <th class="text-right py-2 px-2 font-bold text-gray-600">Precio</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {orden.repuestos.map((rep: any) => (
+                      <tr class="border-b border-gray-100 hover:bg-gray-50">
+                        <td class="py-2 px-2">{rep.nombre}</td>
+                        <td class="py-2 px-2 text-gray-500">{rep.sku}</td>
+                        <td class="py-2 px-2 text-right font-medium">{formatMoney(rep.precio_venta || rep.precio)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr class="font-bold bg-gray-50">
+                      <td colspan="2" class="py-2 px-2">Total Repuestos</td>
+                      <td class="py-2 px-2 text-right">
+                        {formatMoney(orden.repuestos.reduce((sum: number, r: any) => sum + (r.precio_venta || r.precio || 0), 0))}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            ) : (
+              <p class="text-gray-500 text-center py-4">No hay repuestos asignados</p>
+            )}
+          </div>
+
+          <!-- Bitácora -->
+          <div class="card p-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">Bitácora de la Orden</h2>
+            
+            {bitacoras.length > 0 ? (
+              <div class="relative">
+                <div class="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-200"></div>
+                <div class="space-y-4">
+                  {bitacoras.map((entrada: any) => (
+                    <div class="relative pl-10">
+                      <div class="absolute left-2 top-1 w-4 h-4 bg-blue-500 rounded-full border-2 border-white"></div>
+                      <div class="bg-gray-50 p-4 rounded-lg">
+                        <div class="flex items-center justify-between mb-2">
+                          <span class={`text-xs font-bold px-2 py-0.5 rounded ${
+                            entrada.tipo === 'estado' ? 'bg-blue-100 text-blue-700' :
+                            entrada.tipo === 'nota' ? 'bg-green-100 text-green-700' :
+                            'bg-gray-100 text-gray-700'
+                          }`}>
+                            {entrada.tipo?.toUpperCase() || 'NOTA'}
+                          </span>
+                          <span class="text-xs text-gray-500">
+                            {new Date(entrada.createdAt).toLocaleString('es-CL')}
+                          </span>
+                        </div>
+                        <p class="text-gray-700">{entrada.descripcion}</p>
+                        {entrada.usuario && (
+                          <p class="text-xs text-gray-500 mt-2">Por: {entrada.usuario}</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p class="text-gray-500 text-center py-4">No hay entradas en la bitácora</p>
+            )}
+          </div>
+        </div>
+
+        <!-- Columna derecha -->
+        <div class="space-y-6">
+          <!-- Vehículo -->
+          <div class="card p-6">
+            <h2 class="text-lg font-bold text-gray-800 mb-4">🚗 Vehículo</h2>
+            {orden.vehiculo ? (
+              <div class="space-y-3">
+                <div class="text-center bg-gray-50 p-4 rounded-lg">
+                  <p class="text-3xl font-bold text-gray-800">{orden.vehiculo.patente}</p>
+                  <p class="text-gray-600">{orden.vehiculo.marca} {orden.vehiculo.modelo}</p>
+                  <p class="text-sm text-gray-500">Año {orden.vehiculo.anio}</p>
+                </div>
+                {orden.vehiculo.cliente && (
+                  <div class="border-t pt-3">
+                    <p class="text-sm text-gray-500">Propietario</p>
+                    <p class="font-bold text-gray-800">
+                      {orden.vehiculo.cliente.nombre} {orden.vehiculo.cliente.apellido}
+                    </p>
+                    {orden.vehiculo.cliente.telefono && (
+                      <p class="text-sm text-gray-600">📱 {orden.vehiculo.cliente.telefono}</p>
+                    )}
+                    {orden.vehiculo.cliente.email && (
+                      <p class="text-sm text-gray-600">✉️ {orden.vehiculo.cliente.email}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p class="text-gray-500 text-center">Sin vehículo asignado</p>
+            )}
+          </div>
+
+          <!-- Mecánico -->
+          <div class="card p-6">
+            <h2 class="text-lg font-bold text-gray-800 mb-4">👨‍🔧 Mecánico Asignado</h2>
+            {orden.mecanico ? (
+              <div class="space-y-2">
+                <p class="text-xl font-bold text-gray-800">
+                  {orden.mecanico.nombre} {orden.mecanico.apellido}
+                </p>
+                {orden.mecanico.especialidad && (
+                  <p class="text-sm text-gray-600">
+                    <span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs font-medium">
+                      {orden.mecanico.especialidad}
+                    </span>
+                  </p>
+                )}
+                {orden.mecanico.telefono && (
+                  <p class="text-sm text-gray-600">📱 {orden.mecanico.telefono}</p>
+                )}
+              </div>
+            ) : (
+              <p class="text-gray-500 text-center">Sin mecánico asignado</p>
+            )}
+          </div>
+
+          <!-- Zona -->
+          <div class="card p-6">
+            <h2 class="text-lg font-bold text-gray-800 mb-4">📍 Zona de Trabajo</h2>
+            {orden.zona ? (
+              <div class="text-center bg-gray-50 p-4 rounded-lg">
+                <p class="text-xl font-bold text-gray-800">{orden.zona.nombre}</p>
+              </div>
+            ) : (
+              <p class="text-gray-500 text-center">Sin zona asignada</p>
+            )}
+          </div>
+
+          <!-- Presupuesto -->
+          <div class="card p-6">
+            <h2 class="text-lg font-bold text-gray-800 mb-4">💵 Presupuesto</h2>
+            {orden.presupuesto ? (
+              <div class="space-y-3">
+                <div class="flex justify-between items-center">
+                  <span class="text-gray-600">Subtotal</span>
+                  <span class="font-medium">{formatMoney(orden.presupuesto.subtotal)}</span>
+                </div>
+                <div class="flex justify-between items-center">
+                  <span class="text-gray-600">Descuento</span>
+                  <span class="font-medium text-red-600">-{formatMoney(orden.presupuesto.descuento || 0)}</span>
+                </div>
+                <div class="flex justify-between items-center">
+                  <span class="text-gray-600">IVA</span>
+                  <span class="font-medium">{formatMoney(orden.presupuesto.iva || 0)}</span>
+                </div>
+                <div class="border-t pt-2 flex justify-between items-center">
+                  <span class="text-lg font-bold text-gray-800">Total</span>
+                  <span class="text-xl font-bold text-green-600">{formatMoney(orden.presupuesto.total)}</span>
+                </div>
+                <div class="mt-2">
+                  <span class={`text-xs font-bold px-2 py-1 rounded-full ${
+                    orden.presupuesto.estado === 'aprobado' ? 'bg-green-100 text-green-800' :
+                    orden.presupuesto.estado === 'rechazado' ? 'bg-red-100 text-red-800' :
+                    'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {orden.presupuesto.estado?.toUpperCase() || 'PENDIENTE'}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div class="text-center">
+                <p class="text-gray-500 mb-2">Sin presupuesto</p>
+                <a href={`/encargado/presupuestos?orden=${id}`} class="text-blue-600 hover:underline text-sm">
+                  Crear presupuesto →
+                </a>
+              </div>
+            )}
+          </div>
+
+          <!-- Factura -->
+          <div class="card p-6">
+            <h2 class="text-lg font-bold text-gray-800 mb-4">🧾 Factura</h2>
+            {orden.factura ? (
+              <div class="space-y-3">
+                <div class="text-center bg-green-50 p-4 rounded-lg">
+                  <p class="text-sm text-gray-600">N° Factura</p>
+                  <p class="text-2xl font-bold text-green-700">{orden.factura.numero}</p>
+                </div>
+                <div class="flex justify-between items-center">
+                  <span class="text-gray-600">Monto Total</span>
+                  <span class="text-xl font-bold text-gray-800">{formatMoney(orden.factura.total)}</span>
+                </div>
+                <div class="flex justify-between items-center">
+                  <span class="text-gray-600">Fecha</span>
+                  <span class="font-medium">{formatDate(orden.factura.fecha)}</span>
+                </div>
+              </div>
+            ) : (
+              <div class="text-center">
+                <p class="text-gray-500 mb-2">Sin factura generada</p>
+                {orden.estado === 'finalizado' && (
+                  <a href={`/recepcion/facturar?orden=${id}`} class="text-blue-600 hover:underline text-sm">
+                    Generar factura →
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
+
+          <!-- Información del sistema -->
+          <div class="card p-6 bg-gray-50">
+            <h2 class="text-lg font-bold text-gray-800 mb-4">ℹ️ Información</h2>
+            <div class="space-y-2 text-sm">
+              <div class="flex justify-between">
+                <span class="text-gray-500">ID</span>
+                <span class="font-mono">{orden.id}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-gray-500">Document ID</span>
+                <span class="font-mono text-xs">{orden.documentId}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-gray-500">Creado</span>
+                <span>{new Date(orden.createdAt).toLocaleString('es-CL')}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-gray-500">Actualizado</span>
+                <span>{new Date(orden.updatedAt).toLocaleString('es-CL')}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
+</DashboardLayout>

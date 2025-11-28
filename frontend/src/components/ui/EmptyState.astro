@@ -1,0 +1,68 @@
+---
+/**
+ * EmptyState Component - Estado vacío con ilustración
+ */
+interface Props {
+  icon?: string;
+  title: string;
+  description?: string;
+  actionLabel?: string;
+  actionHref?: string;
+  variant?: 'default' | 'search' | 'error';
+}
+
+const { 
+  icon = 'inbox', 
+  title, 
+  description,
+  actionLabel,
+  actionHref,
+  variant = 'default'
+} = Astro.props;
+
+const variantConfig = {
+  default: {
+    bgColor: 'bg-gray-100',
+    iconColor: 'text-gray-400'
+  },
+  search: {
+    bgColor: 'bg-blue-50',
+    iconColor: 'text-blue-400'
+  },
+  error: {
+    bgColor: 'bg-red-50',
+    iconColor: 'text-red-400'
+  }
+};
+
+const config = variantConfig[variant];
+---
+
+<div class="flex flex-col items-center justify-center py-12 px-4">
+  <!-- Icono -->
+  <div class:list={["w-20 h-20 rounded-full flex items-center justify-center mb-6", config.bgColor]}>
+    <span class:list={["material-symbols-outlined text-5xl", config.iconColor]}>{icon}</span>
+  </div>
+  
+  <!-- Título -->
+  <h3 class="text-xl font-bold text-gray-800 mb-2 text-center">{title}</h3>
+  
+  <!-- Descripción -->
+  {description && (
+    <p class="text-gray-500 text-center max-w-md mb-6">{description}</p>
+  )}
+  
+  <!-- Acción -->
+  {actionLabel && actionHref && (
+    <a 
+      href={actionHref}
+      class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+    >
+      <span class="material-symbols-outlined text-lg">add</span>
+      {actionLabel}
+    </a>
+  )}
+  
+  <!-- Slot para contenido adicional -->
+  <slot />
+</div>

@@ -15,7 +15,7 @@ interface Order {
   estado: string;
   cliente: { nombre: string; apellido: string };
   vehiculo: { marca: string; modelo: string; patente: string };
-  factura?: { total: number; numero_factura: string };
+  factura?: { total: number; numero_factura: string; estado: string; metodo_pago: string };
 }
 
 let readyOrders: Order[] = [];
@@ -42,8 +42,9 @@ try {
     }
   }
 
-  // Fetch orders with status 'facturado' - cliente viene anidado en vehiculo
-  const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=facturado&populate[vehiculo][populate][cliente][fields][0]=nombre&populate[vehiculo][populate][cliente][fields][1]=apellido&populate[factura][fields][0]=total&populate[factura][fields][1]=numero_factura&sort[0]=updatedAt:desc');
+  // Fetch orders with status 'facturado' AND factura.estado = 'pagado'
+  // Solo mostrar vehículos cuyo pago ya fue confirmado
+  const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=facturado&filters[factura][estado][$eq]=pagado&populate[vehiculo][populate][cliente][fields][0]=nombre&populate[vehiculo][populate][cliente][fields][1]=apellido&populate[factura][fields][0]=total&populate[factura][fields][1]=numero_factura&populate[factura][fields][2]=estado&populate[factura][fields][3]=metodo_pago&sort[0]=updatedAt:desc');
   // Mapear para tener cliente accesible directamente
   readyOrders = (data.data || []).map((order: any) => ({
     ...order,
@@ -61,7 +62,7 @@ try {
     <div class="max-w-5xl mx-auto">
         <div class="flex flex-col gap-2 mb-8">
             <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Entrega de Vehículos</h1>
-            <p class="text-gray-500 dark:text-gray-400">Gestione la entrega final de vehículos facturados.</p>
+            <p class="text-gray-500 dark:text-gray-400">Vehículos con pago confirmado, listos para entregar al cliente.</p>
         </div>
         
         {successMessage && <div class="p-4 mb-6 text-sm text-green-700 bg-green-100 rounded-lg dark:bg-green-200 dark:text-green-800 flex items-center gap-2" role="alert"><span class="material-symbols-outlined">check_circle</span>{successMessage}</div>}
@@ -74,7 +75,7 @@ try {
                         <div class="flex items-center gap-3 mb-2">
                             <h3 class="font-bold text-xl text-gray-900 dark:text-white">Orden #{order.documentId.slice(0, 6)}</h3>
                             <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 border border-green-200 dark:border-green-800">
-                                Facturado
+                                ✓ Pagado
                             </span>
                         </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm">
@@ -91,14 +92,19 @@ try {
                     
                     <div class="flex items-center gap-4">
                         <div class="text-right mr-4 hidden md:block">
-                            <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total a Pagar</p>
-                            <p class="text-2xl font-bold text-gray-900 dark:text-white">
+                            <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Pagado</p>
+                            <p class="text-2xl font-bold text-green-600">
                                 {order.factura?.total 
                                     ? new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(order.factura.total)
                                     : 'Por calcular'}
                             </p>
                             {order.factura?.numero_factura && (
                                 <p class="text-xs text-gray-500 dark:text-gray-400">{order.factura.numero_factura}</p>
+                            )}
+                            {order.factura?.metodo_pago && (
+                                <p class="text-xs text-green-600 dark:text-green-400 mt-1">
+                                    Método: {order.factura.metodo_pago.replace('_', ' ')}
+                                </p>
                             )}
                         </div>
 
@@ -120,7 +126,11 @@ try {
                         <span class="material-symbols-outlined text-3xl text-gray-400">no_crash</span>
                     </div>
                     <h3 class="text-lg font-medium text-gray-900 dark:text-white">No hay vehículos para entrega</h3>
-                    <p class="text-gray-500 dark:text-gray-400 mt-1">Las órdenes facturadas por el encargado aparecerán aquí.</p>
+                    <p class="text-gray-500 dark:text-gray-400 mt-1">Los vehículos aparecen aquí cuando el cliente ha pagado la factura.</p>
+                    <a href="/recepcion/confirmar_pago" class="inline-flex items-center gap-2 mt-4 text-primary-600 hover:text-primary-700 font-medium">
+                        <span class="material-symbols-outlined text-sm">payments</span>
+                        Ir a Confirmar Pagos
+                    </a>
                 </div>
             )}
         </div>

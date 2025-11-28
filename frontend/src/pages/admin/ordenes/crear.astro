@@ -1,5 +1,5 @@
 ---
-import Layout from '../../../layouts/Layout.astro';
+import DashboardLayout from '../../../layouts/DashboardLayout.astro';
 import { vehiculos, mecanicos, zonas, repuestos } from '../../../lib/crud';
 
 let vehiculosList: any[] = [];
@@ -25,7 +25,7 @@ try {
 }
 ---
 
-<Layout title="Crear Orden de Trabajo">
+<DashboardLayout title="Crear Orden de Trabajo" role="admin" currentPath="/admin/ordenes">
   <div class="container mx-auto px-4 py-8 max-w-4xl">
     <div class="flex items-center mb-6">
       <a href="/admin/ordenes" class="text-gray-600 hover:text-blue-600 mr-4 transition-colors">
@@ -230,7 +230,7 @@ try {
       </div>
     </form>
   </div>
-</Layout>
+</DashboardLayout>
 
 <script>
   const form = document.getElementById('ordenForm') as HTMLFormElement;

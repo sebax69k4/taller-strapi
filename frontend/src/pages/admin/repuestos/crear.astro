@@ -1,8 +1,8 @@
 ---
-import Layout from '../../../layouts/Layout.astro';
+import DashboardLayout from '../../../layouts/DashboardLayout.astro';
 ---
 
-<Layout title="Crear Repuesto">
+<DashboardLayout title="Crear Repuesto" role="admin" currentPath="/admin/repuestos">
   <div class="container mx-auto px-4 py-8 max-w-2xl">
     <div class="flex items-center mb-6">
       <a href="/admin/repuestos" class="text-gray-600 hover:text-blue-600 mr-4 transition-colors">
@@ -146,7 +146,7 @@ import Layout from '../../../layouts/Layout.astro';
       </div>
     </form>
   </div>
-</Layout>
+</DashboardLayout>
 
 <script>
   const form = document.getElementById('repuestoForm') as HTMLFormElement;

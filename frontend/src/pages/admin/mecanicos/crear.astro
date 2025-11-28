@@ -1,5 +1,5 @@
 ---
-import Layout from '../../../layouts/Layout.astro';
+import DashboardLayout from '../../../layouts/DashboardLayout.astro';
 import { zonas } from '../../../lib/crud';
 
 let zonasList: any[] = [];
@@ -13,7 +13,7 @@ try {
 }
 ---
 
-<Layout title="Crear Mecánico">
+<DashboardLayout title="Crear Mecánico" role="admin" currentPath="/admin/mecanicos">
   <div class="container mx-auto px-4 py-8 max-w-2xl">
     <div class="flex items-center mb-6">
       <a href="/admin/mecanicos" class="text-gray-600 hover:text-blue-600 mr-4 transition-colors">
@@ -144,7 +144,7 @@ try {
       </div>
     </form>
   </div>
-</Layout>
+</DashboardLayout>
 
 <script>
   const form = document.getElementById('mecanicoForm') as HTMLFormElement;

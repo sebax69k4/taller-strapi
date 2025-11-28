@@ -1,0 +1,376 @@
+---
+export const prerender = false;
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import Card from '../../components/ui/Card.astro';
+import { strapiGet } from '../../lib/strapi';
+import '../../styles/global.css';
+
+const userRole = Astro.cookies.get('user_role')?.value;
+if (!userRole) {
+  return Astro.redirect('/login');
+}
+
+// Fechas para filtros
+const today = new Date();
+const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0];
+const startOfWeek = new Date(today.setDate(today.getDate() - today.getDay())).toISOString().split('T')[0];
+
+interface Stats {
+  ordenesCompletadas: number;
+  ordenesActivas: number;
+  ingresosMes: number;
+  ticketPromedio: number;
+  mecanicosActivos: number;
+  clientesNuevos: number;
+}
+
+interface MecanicoRendimiento {
+  id: number;
+  nombre: string;
+  apellido: string;
+  ordenesCompletadas: number;
+  ordenesActivas: number;
+  ingresos: number;
+}
+
+interface OrdenReciente {
+  id: number;
+  documentId: string;
+  estado: string;
+  total: number;
+  cliente: string;
+  fecha: string;
+}
+
+let stats: Stats = {
+  ordenesCompletadas: 0,
+  ordenesActivas: 0,
+  ingresosMes: 0,
+  ticketPromedio: 0,
+  mecanicosActivos: 0,
+  clientesNuevos: 0
+};
+
+let mecanicosRendimiento: MecanicoRendimiento[] = [];
+let ordenesRecientes: OrdenReciente[] = [];
+let estadoDistribucion: Record<string, number> = {};
+
+try {
+  // Órdenes completadas este mes
+  const completadasRes = await strapiGet(`/api/orden-de-trabajos?filters[estado][$eq]=entregado&filters[updatedAt][$gte]=${startOfMonth}`);
+  stats.ordenesCompletadas = completadasRes.meta?.pagination?.total || 0;
+
+  // Órdenes activas
+  const activasRes = await strapiGet('/api/orden-de-trabajos?filters[estado][$notIn][0]=entregado&filters[estado][$notIn][1]=facturado');
+  stats.ordenesActivas = activasRes.meta?.pagination?.total || 0;
+
+  // Facturas del mes para calcular ingresos
+  const facturasRes = await strapiGet(`/api/facturas?filters[fecha_emision][$gte]=${startOfMonth}&filters[fecha_emision][$lte]=${endOfMonth}`);
+  const facturas = facturasRes.data || [];
+  stats.ingresosMes = facturas.reduce((sum: number, f: any) => sum + (f.total || 0), 0);
+  stats.ticketPromedio = facturas.length > 0 ? Math.round(stats.ingresosMes / facturas.length) : 0;
+
+  // Mecánicos activos
+  const mecanicosRes = await strapiGet('/api/mecenicos?populate[orden_de_trabajos][fields][0]=estado&populate[orden_de_trabajos][fields][1]=id');
+  const mecanicos = mecanicosRes.data || [];
+  stats.mecanicosActivos = mecanicos.filter((m: any) => {
+    const activas = m.orden_de_trabajos?.filter((o: any) => 
+      !['entregado', 'facturado'].includes(o.estado)
+    ).length || 0;
+    return activas > 0;
+  }).length;
+
+  // Calcular rendimiento por mecánico
+  mecanicosRendimiento = mecanicos.map((m: any) => {
+    const ordenes = m.orden_de_trabajos || [];
+    const completadas = ordenes.filter((o: any) => o.estado === 'entregado').length;
+    const activas = ordenes.filter((o: any) => !['entregado', 'facturado'].includes(o.estado)).length;
+    return {
+      id: m.id,
+      nombre: m.nombre,
+      apellido: m.apellido || '',
+      ordenesCompletadas: completadas,
+      ordenesActivas: activas,
+      ingresos: 0 // Se calcularía con facturas relacionadas
+    };
+  }).sort((a: MecanicoRendimiento, b: MecanicoRendimiento) => b.ordenesCompletadas - a.ordenesCompletadas);
+
+  // Clientes nuevos este mes
+  const clientesRes = await strapiGet(`/api/clientes?filters[createdAt][$gte]=${startOfMonth}`);
+  stats.clientesNuevos = clientesRes.meta?.pagination?.total || 0;
+
+  // Distribución por estado
+  const todasOrdenesRes = await strapiGet('/api/orden-de-trabajos?pagination[limit]=1000');
+  const todasOrdenes = todasOrdenesRes.data || [];
+  estadoDistribucion = todasOrdenes.reduce((acc: Record<string, number>, o: any) => {
+    acc[o.estado] = (acc[o.estado] || 0) + 1;
+    return acc;
+  }, {});
+
+  // Órdenes recientes con factura
+  const ordenesFacturadas = await strapiGet('/api/orden-de-trabajos?filters[estado][$in][0]=facturado&filters[estado][$in][1]=entregado&populate[vehiculo][populate][cliente][fields][0]=nombre&populate[vehiculo][populate][cliente][fields][1]=apellido&populate[factura][fields][0]=total&sort[0]=updatedAt:desc&pagination[limit]=10');
+  ordenesRecientes = (ordenesFacturadas.data || []).map((o: any) => ({
+    id: o.id,
+    documentId: o.documentId,
+    estado: o.estado,
+    total: o.factura?.total || 0,
+    cliente: o.vehiculo?.cliente ? `${o.vehiculo.cliente.nombre} ${o.vehiculo.cliente.apellido}` : 'N/A',
+    fecha: o.updatedAt
+  }));
+
+} catch (e) {
+  console.error('Error fetching report data:', e);
+}
+
+const estadoLabels: Record<string, string> = {
+  'ingresado': 'Ingresado',
+  'en_diagnostico': 'En Diagnóstico',
+  'en_reparacion': 'En Reparación',
+  'finalizado': 'Finalizado',
+  'facturado': 'Facturado',
+  'entregado': 'Entregado'
+};
+
+const estadoColors: Record<string, string> = {
+  'ingresado': 'bg-red-500',
+  'en_diagnostico': 'bg-purple-500',
+  'en_reparacion': 'bg-amber-500',
+  'finalizado': 'bg-blue-500',
+  'facturado': 'bg-green-500',
+  'entregado': 'bg-gray-500'
+};
+
+function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(amount);
+}
+
+function formatDate(dateString: string): string {
+  return new Date(dateString).toLocaleDateString('es-CL', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  });
+}
+
+const totalOrdenes = Object.values(estadoDistribucion).reduce((a, b) => a + b, 0);
+---
+
+<DashboardLayout title="Reportes y Estadísticas" role="encargado" currentPath="/encargado/reportes">
+  <div class="max-w-7xl mx-auto">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+      <div>
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Reportes y Estadísticas</h1>
+        <p class="text-gray-500 dark:text-gray-400 mt-2">Resumen del rendimiento del taller este mes</p>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="window.print()" class="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-2">
+          <span class="material-symbols-outlined text-sm">print</span>
+          Imprimir
+        </button>
+        <button class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2">
+          <span class="material-symbols-outlined text-sm">download</span>
+          Exportar
+        </button>
+      </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+      <Card class="text-center">
+        <span class="material-symbols-outlined text-3xl text-green-500 mb-2">task_alt</span>
+        <p class="text-3xl font-bold text-gray-900 dark:text-white">{stats.ordenesCompletadas}</p>
+        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Completadas (Mes)</p>
+      </Card>
+      
+      <Card class="text-center">
+        <span class="material-symbols-outlined text-3xl text-amber-500 mb-2">pending</span>
+        <p class="text-3xl font-bold text-gray-900 dark:text-white">{stats.ordenesActivas}</p>
+        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">En Proceso</p>
+      </Card>
+      
+      <Card class="text-center">
+        <span class="material-symbols-outlined text-3xl text-blue-500 mb-2">payments</span>
+        <p class="text-2xl font-bold text-gray-900 dark:text-white">{formatCurrency(stats.ingresosMes)}</p>
+        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Ingresos (Mes)</p>
+      </Card>
+      
+      <Card class="text-center">
+        <span class="material-symbols-outlined text-3xl text-purple-500 mb-2">receipt</span>
+        <p class="text-2xl font-bold text-gray-900 dark:text-white">{formatCurrency(stats.ticketPromedio)}</p>
+        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Ticket Promedio</p>
+      </Card>
+      
+      <Card class="text-center">
+        <span class="material-symbols-outlined text-3xl text-primary-500 mb-2">engineering</span>
+        <p class="text-3xl font-bold text-gray-900 dark:text-white">{stats.mecanicosActivos}</p>
+        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Mecánicos Activos</p>
+      </Card>
+      
+      <Card class="text-center">
+        <span class="material-symbols-outlined text-3xl text-teal-500 mb-2">person_add</span>
+        <p class="text-3xl font-bold text-gray-900 dark:text-white">{stats.clientesNuevos}</p>
+        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Clientes Nuevos</p>
+      </Card>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+      <!-- Distribución por Estado -->
+      <Card>
+        <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary-500">pie_chart</span>
+          Distribución por Estado
+        </h3>
+        <div class="space-y-3">
+          {Object.entries(estadoDistribucion).map(([estado, cantidad]) => {
+            const porcentaje = totalOrdenes > 0 ? Math.round((cantidad / totalOrdenes) * 100) : 0;
+            return (
+              <div>
+                <div class="flex justify-between text-sm mb-1">
+                  <span class="text-gray-700 dark:text-gray-300">{estadoLabels[estado] || estado}</span>
+                  <span class="font-bold text-gray-900 dark:text-white">{cantidad} ({porcentaje}%)</span>
+                </div>
+                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                  <div 
+                    class={`h-2 rounded-full ${estadoColors[estado] || 'bg-gray-500'}`}
+                    style={`width: ${porcentaje}%`}
+                  ></div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {totalOrdenes > 0 && (
+          <p class="text-sm text-gray-500 dark:text-gray-400 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+            Total: {totalOrdenes} órdenes
+          </p>
+        )}
+      </Card>
+
+      <!-- Rendimiento de Mecánicos -->
+      <Card class="lg:col-span-2">
+        <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary-500">leaderboard</span>
+          Rendimiento de Mecánicos
+        </h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="border-b border-gray-200 dark:border-gray-700">
+              <tr>
+                <th class="text-left py-2 text-gray-500 dark:text-gray-400 font-medium">Mecánico</th>
+                <th class="text-center py-2 text-gray-500 dark:text-gray-400 font-medium">Completadas</th>
+                <th class="text-center py-2 text-gray-500 dark:text-gray-400 font-medium">Activas</th>
+                <th class="text-right py-2 text-gray-500 dark:text-gray-400 font-medium">Rendimiento</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+              {mecanicosRendimiento.slice(0, 5).map((mec, index) => {
+                const total = mec.ordenesCompletadas + mec.ordenesActivas;
+                const rendimiento = total > 0 ? Math.round((mec.ordenesCompletadas / total) * 100) : 0;
+                return (
+                  <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                    <td class="py-3">
+                      <div class="flex items-center gap-3">
+                        <div class={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${
+                          index === 0 ? 'bg-amber-500' : index === 1 ? 'bg-gray-400' : index === 2 ? 'bg-amber-700' : 'bg-gray-300'
+                        }`}>
+                          {index + 1}
+                        </div>
+                        <span class="font-medium text-gray-900 dark:text-white">{mec.nombre} {mec.apellido}</span>
+                      </div>
+                    </td>
+                    <td class="text-center py-3">
+                      <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                        {mec.ordenesCompletadas}
+                      </span>
+                    </td>
+                    <td class="text-center py-3">
+                      <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                        {mec.ordenesActivas}
+                      </span>
+                    </td>
+                    <td class="text-right py-3">
+                      <div class="flex items-center justify-end gap-2">
+                        <div class="w-16 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+                          <div 
+                            class="h-1.5 rounded-full bg-primary-500"
+                            style={`width: ${rendimiento}%`}
+                          ></div>
+                        </div>
+                        <span class="text-sm font-bold text-gray-900 dark:text-white">{rendimiento}%</span>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {mecanicosRendimiento.length === 0 && (
+          <p class="text-center text-gray-500 dark:text-gray-400 py-8">No hay datos de mecánicos</p>
+        )}
+      </Card>
+    </div>
+
+    <!-- Últimas Transacciones -->
+    <Card>
+      <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+        <span class="material-symbols-outlined text-primary-500">history</span>
+        Últimas Transacciones
+      </h3>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="border-b border-gray-200 dark:border-gray-700">
+            <tr>
+              <th class="text-left py-3 text-gray-500 dark:text-gray-400 font-medium">Orden</th>
+              <th class="text-left py-3 text-gray-500 dark:text-gray-400 font-medium">Cliente</th>
+              <th class="text-left py-3 text-gray-500 dark:text-gray-400 font-medium">Fecha</th>
+              <th class="text-left py-3 text-gray-500 dark:text-gray-400 font-medium">Estado</th>
+              <th class="text-right py-3 text-gray-500 dark:text-gray-400 font-medium">Total</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+            {ordenesRecientes.map((orden) => (
+              <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                <td class="py-3">
+                  <a href={`/encargado/detalles_de_orden?id=${orden.documentId}`} class="font-medium text-primary-600 hover:underline">
+                    OT-{orden.id}
+                  </a>
+                </td>
+                <td class="py-3 text-gray-700 dark:text-gray-300">{orden.cliente}</td>
+                <td class="py-3 text-gray-500 dark:text-gray-400">{formatDate(orden.fecha)}</td>
+                <td class="py-3">
+                  <span class={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    orden.estado === 'entregado' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' :
+                    'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+                  }`}>
+                    {estadoLabels[orden.estado] || orden.estado}
+                  </span>
+                </td>
+                <td class="py-3 text-right font-bold text-gray-900 dark:text-white">
+                  {orden.total > 0 ? formatCurrency(orden.total) : '-'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {ordenesRecientes.length === 0 && (
+        <p class="text-center text-gray-500 dark:text-gray-400 py-8">No hay transacciones recientes</p>
+      )}
+    </Card>
+  </div>
+</DashboardLayout>
+
+<style>
+  @media print {
+    :global(aside), :global(nav), :global(button) {
+      display: none !important;
+    }
+    :global(main) {
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+  }
+</style>

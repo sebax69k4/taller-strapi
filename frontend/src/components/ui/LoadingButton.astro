@@ -1,0 +1,69 @@
+---
+/**
+ * LoadingButton Component - Botón con estado de carga
+ */
+interface Props {
+  type?: 'submit' | 'button';
+  variant?: 'primary' | 'secondary' | 'danger' | 'success';
+  size?: 'sm' | 'md' | 'lg';
+  loading?: boolean;
+  disabled?: boolean;
+  class?: string;
+  id?: string;
+}
+
+const { 
+  type = 'button', 
+  variant = 'primary',
+  size = 'md',
+  loading = false,
+  disabled = false,
+  class: className = '',
+  id
+} = Astro.props;
+
+const variantClasses = {
+  primary: 'bg-blue-600 hover:bg-blue-700 text-white disabled:bg-blue-400',
+  secondary: 'bg-gray-200 hover:bg-gray-300 text-gray-800 disabled:bg-gray-100',
+  danger: 'bg-red-600 hover:bg-red-700 text-white disabled:bg-red-400',
+  success: 'bg-green-600 hover:bg-green-700 text-white disabled:bg-green-400'
+};
+
+const sizeClasses = {
+  sm: 'px-3 py-1.5 text-sm',
+  md: 'px-4 py-2 text-sm',
+  lg: 'px-6 py-3 text-base'
+};
+---
+
+<button
+  type={type}
+  id={id}
+  disabled={loading || disabled}
+  class:list={[
+    "inline-flex items-center justify-center gap-2 font-medium rounded-lg transition-all duration-200",
+    "disabled:cursor-not-allowed",
+    variantClasses[variant],
+    sizeClasses[size],
+    className
+  ]}
+  x-data={`{ loading: ${loading} }`}
+>
+  <!-- Spinner cuando está cargando -->
+  <svg 
+    x-show="loading"
+    class="animate-spin w-4 h-4"
+    xmlns="http://www.w3.org/2000/svg" 
+    fill="none" 
+    viewBox="0 0 24 24"
+  >
+    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+  </svg>
+  
+  <!-- Contenido -->
+  <span x-show="!loading">
+    <slot />
+  </span>
+  <span x-show="loading">Cargando...</span>
+</button>

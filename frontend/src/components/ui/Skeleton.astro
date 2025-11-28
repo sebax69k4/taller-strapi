@@ -1,0 +1,44 @@
+---
+/**
+ * Skeleton Component - Placeholder de carga
+ */
+interface Props {
+  variant?: 'text' | 'circular' | 'rectangular' | 'card';
+  width?: string;
+  height?: string;
+  class?: string;
+}
+
+const { 
+  variant = 'text', 
+  width, 
+  height,
+  class: className = ''
+} = Astro.props;
+
+const variantClasses = {
+  text: 'h-4 rounded',
+  circular: 'rounded-full',
+  rectangular: 'rounded-lg',
+  card: 'rounded-xl'
+};
+
+const defaultSizes = {
+  text: { width: '100%', height: '1rem' },
+  circular: { width: '3rem', height: '3rem' },
+  rectangular: { width: '100%', height: '4rem' },
+  card: { width: '100%', height: '12rem' }
+};
+
+const finalWidth = width || defaultSizes[variant].width;
+const finalHeight = height || defaultSizes[variant].height;
+---
+
+<div 
+  class:list={[
+    "bg-gray-200 animate-pulse",
+    variantClasses[variant],
+    className
+  ]}
+  style={`width: ${finalWidth}; height: ${finalHeight};`}
+></div>

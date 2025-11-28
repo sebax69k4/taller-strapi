@@ -1,0 +1,90 @@
+---
+/**
+ * Toast Component - Sistema de notificaciones
+ * Se incluye una vez en el Layout y se controla via Alpine.js
+ */
+---
+
+<div 
+  x-data="toastManager()" 
+  x-on:show-toast.window="show($event.detail)"
+  class="fixed bottom-4 right-4 z-50 flex flex-col gap-2"
+  id="toast-container"
+></div>
+
+<script is:inline>
+  function toastManager() {
+    return {
+      show({ message, type = 'info', duration = 4000 }) {
+        const id = Date.now();
+        const toast = this.createToastElement(id, message, type);
+        this.$el.appendChild(toast);
+        
+        // Trigger animation
+        setTimeout(() => toast.classList.add('show'), 10);
+        
+        if (duration > 0) {
+          setTimeout(() => this.remove(id), duration);
+        }
+      },
+      
+      remove(id) {
+        const toast = document.getElementById('toast-' + id);
+        if (toast) {
+          toast.classList.remove('show');
+          setTimeout(() => toast.remove(), 200);
+        }
+      },
+      
+      createToastElement(id, message, type) {
+        const colors = {
+          success: 'bg-green-50 border-green-200 text-green-800',
+          error: 'bg-red-50 border-red-200 text-red-800',
+          warning: 'bg-yellow-50 border-yellow-200 text-yellow-800',
+          info: 'bg-blue-50 border-blue-200 text-blue-800'
+        };
+        
+        const icons = {
+          success: 'check_circle',
+          error: 'error',
+          warning: 'warning',
+          info: 'info'
+        };
+        
+        const div = document.createElement('div');
+        div.id = 'toast-' + id;
+        div.className = 'toast-item flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg min-w-[300px] max-w-md border ' + (colors[type] || colors.info);
+        
+        div.innerHTML = '<span class="material-symbols-outlined text-xl">' + (icons[type] || 'info') + '</span>' +
+          '<span class="flex-1 text-sm font-medium">' + message + '</span>' +
+          '<button onclick="document.getElementById(\'toast-' + id + '\').remove()" class="text-current opacity-50 hover:opacity-100 transition-opacity">' +
+            '<span class="material-symbols-outlined text-lg">close</span>' +
+          '</button>';
+        
+        return div;
+      }
+    };
+  }
+  
+  // Helper global para mostrar toasts
+  window.showToast = function(message, type, duration) {
+    type = type || 'info';
+    duration = duration || 4000;
+    window.dispatchEvent(new CustomEvent('show-toast', {
+      detail: { message: message, type: type, duration: duration }
+    }));
+  };
+</script>
+
+<style is:global>
+  .toast-item {
+    opacity: 0;
+    transform: translateY(0.5rem);
+    transition: all 0.3s ease;
+  }
+  
+  .toast-item.show {
+    opacity: 1;
+    transform: translateY(0);
+  }
+</style>

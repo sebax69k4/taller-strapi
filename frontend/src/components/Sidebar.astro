@@ -1,87 +1,261 @@
 ---
 interface Props {
-  role: 'recepcionista' | 'encargado' | 'mecanico';
+  role: 'recepcionista' | 'encargado' | 'mecanico' | 'admin';
   currentPath: string;
 }
 
 const { role, currentPath } = Astro.props;
 
-const links = {
+interface LinkItem {
+  href: string;
+  icon: string;
+  label: string;
+}
+
+interface LinkSection {
+  title: string;
+  items: LinkItem[];
+}
+
+const linkSections: Record<string, LinkSection[]> = {
   recepcionista: [
-    { href: '/recepcion/dash_recep', icon: 'dashboard', label: 'Dashboard' },
-    { href: '/recepcion/buscar_cliente', icon: 'person_search', label: 'Buscar Cliente' },
-    { href: '/recepcion/crear_cliente', icon: 'person_add', label: 'Nuevo Cliente' },
-    { href: '/recepcion/crear_vehiculo', icon: 'directions_car', label: 'Nuevo Vehículo' },
-    { href: '/recepcion/crear_orden', icon: 'post_add', label: 'Crear Orden' },
-    { href: '/recepcion/ver_estado_orden', icon: 'search', label: 'Consultar Estado' },
-    { href: '/recepcion/historial_vehiculo', icon: 'history', label: 'Historial Vehículo' },
-    { href: '/recepcion/entrega_vehiculo', icon: 'key', label: 'Entrega Vehículo' },
-    { href: '/recepcion/list_c_y_v', icon: 'group', label: 'Listar Clientes' },
+    {
+      title: 'Principal',
+      items: [
+        { href: '/recepcion/dash_recep', icon: 'dashboard', label: 'Dashboard' },
+      ]
+    },
+    {
+      title: 'Clientes',
+      items: [
+        { href: '/recepcion/buscar_cliente', icon: 'person_search', label: 'Buscar Cliente' },
+        { href: '/recepcion/crear_cliente', icon: 'person_add', label: 'Nuevo Cliente' },
+        { href: '/recepcion/list_c_y_v', icon: 'groups', label: 'Listado' },
+      ]
+    },
+    {
+      title: 'Vehículos',
+      items: [
+        { href: '/recepcion/crear_vehiculo', icon: 'directions_car', label: 'Nuevo Vehículo' },
+        { href: '/recepcion/historial_vehiculo', icon: 'history', label: 'Historial' },
+      ]
+    },
+    {
+      title: 'Órdenes',
+      items: [
+        { href: '/recepcion/crear_orden', icon: 'post_add', label: 'Nueva Orden' },
+        { href: '/recepcion/ver_estado_orden', icon: 'search', label: 'Consultar Estado' },
+      ]
+    },
+    {
+      title: 'Entregas',
+      items: [
+        { href: '/recepcion/confirmar_pago', icon: 'payments', label: 'Confirmar Pago' },
+        { href: '/recepcion/entrega_vehiculo', icon: 'key', label: 'Entregar Vehículo' },
+        { href: '/recepcion/comprobante', icon: 'receipt', label: 'Comprobante' },
+      ]
+    },
   ],
   encargado: [
-    { href: '/encargado/dash_enc', icon: 'dashboard', label: 'Dashboard' },
-    { href: '/encargado/trabajos_en_curso', icon: 'construction', label: 'Trabajos en Curso' },
-    { href: '/encargado/historial', icon: 'history', label: 'Historial' },
-    { href: '/encargado/asig_orden', icon: 'assignment_ind', label: 'Asignar Orden' },
-    { href: '/encargado/disp_mec', icon: 'calendar_view_week', label: 'Disponibilidad Mecánicos' },
-    { href: '/encargado/disp_mec_zonas', icon: 'view_quilt', label: 'Disponibilidad Zonas' },
-    { href: '/encargado/asignar_orden_zona', icon: 'add_road', label: 'Asignar Zona' },
-    { href: '/encargado/gen_factura', icon: 'receipt_long', label: 'Aprobar Facturas' },
-    { href: '/encargado/aprobar_solicitudes', icon: 'approval', label: 'Solicitudes Repuesto' },
-    { href: '/encargado/inventario', icon: 'inventory', label: 'Inventario' },
-    { href: '/encargado/alert_stock', icon: 'inventory_2', label: 'Alertas Stock' },
+    {
+      title: 'Principal',
+      items: [
+        { href: '/encargado/dash_enc', icon: 'dashboard', label: 'Dashboard' },
+        { href: '/encargado/reportes', icon: 'analytics', label: 'Reportes' },
+      ]
+    },
+    {
+      title: 'Equipo',
+      items: [
+        { href: '/encargado/asig_orden', icon: 'assignment_ind', label: 'Asignar Orden' },
+        { href: '/encargado/reasignar_orden', icon: 'swap_horiz', label: 'Reasignar Orden' },
+        { href: '/encargado/gestion_mecanicos', icon: 'engineering', label: 'Mecánicos' },
+      ]
+    },
+    {
+      title: 'Órdenes',
+      items: [
+        { href: '/encargado/trabajos_en_curso', icon: 'construction', label: 'En Curso' },
+        { href: '/encargado/historial', icon: 'history', label: 'Historial' },
+        { href: '/encargado/detalles_de_orden', icon: 'info', label: 'Ver Detalle' },
+      ]
+    },
+    {
+      title: 'Facturación',
+      items: [
+        { href: '/encargado/presupuestos', icon: 'request_quote', label: 'Presupuestos' },
+        { href: '/encargado/gen_factura', icon: 'receipt_long', label: 'Generar Factura' },
+        { href: '/encargado/ver_factura', icon: 'description', label: 'Ver Factura' },
+        { href: '/encargado/marc_orden', icon: 'check_circle', label: 'Marcar Entrega' },
+      ]
+    },
+    {
+      title: 'Inventario',
+      items: [
+        { href: '/encargado/inventario', icon: 'inventory', label: 'Stock' },
+        { href: '/encargado/alert_stock', icon: 'warning', label: 'Alertas' },
+        { href: '/encargado/aprobar_solicitudes', icon: 'approval', label: 'Solicitudes' },
+      ]
+    },
   ],
   mecanico: [
-    { href: '/mecanico/dash_mec', icon: 'dashboard', label: 'Mis Órdenes' },
-    { href: '/mecanico/detalle_orden_trabajo', icon: 'build', label: 'Detalle Orden' },
-    { href: '/mecanico/bitacora_repuestos', icon: 'inventory', label: 'Bitácora' },
-    { href: '/mecanico/solicitar_repuesto', icon: 'shopping_cart', label: 'Solicitar Repuesto' },
-    { href: '/mecanico/pausar_trabajo', icon: 'pause_circle', label: 'Pausar Trabajo' },
-    { href: '/mecanico/historial_vehiculo', icon: 'history', label: 'Historial Vehículo' },
+    {
+      title: 'Principal',
+      items: [
+        { href: '/mecanico/dash_mec', icon: 'dashboard', label: 'Mis Órdenes' },
+      ]
+    },
+    {
+      title: 'Trabajo',
+      items: [
+        { href: '/mecanico/detalle_orden_trabajo', icon: 'build', label: 'Detalle Orden' },
+        { href: '/mecanico/bitacora_repuestos', icon: 'edit_note', label: 'Bitácora' },
+        { href: '/mecanico/pausar_trabajo', icon: 'pause_circle', label: 'Pausar Trabajo' },
+        { href: '/mecanico/checklist_entrega', icon: 'checklist', label: 'Checklist Entrega' },
+      ]
+    },
+    {
+      title: 'Repuestos',
+      items: [
+        { href: '/mecanico/solicitar_repuesto', icon: 'shopping_cart', label: 'Solicitar' },
+        { href: '/mecanico/historial_vehiculo', icon: 'history', label: 'Historial Vehículo' },
+      ]
+    },
+  ],
+  admin: [
+    {
+      title: 'Principal',
+      items: [
+        { href: '/admin', icon: 'dashboard', label: 'Dashboard' },
+      ]
+    },
+    {
+      title: 'Usuarios',
+      items: [
+        { href: '/admin/usuarios', icon: 'manage_accounts', label: 'Gestionar Usuarios' },
+      ]
+    },
+    {
+      title: 'Catálogos',
+      items: [
+        { href: '/admin/servicios', icon: 'home_repair_service', label: 'Servicios' },
+        { href: '/admin/clientes', icon: 'people', label: 'Clientes' },
+        { href: '/admin/vehiculos', icon: 'directions_car', label: 'Vehículos' },
+        { href: '/admin/mecanicos', icon: 'engineering', label: 'Mecánicos' },
+        { href: '/admin/repuestos', icon: 'inventory_2', label: 'Repuestos' },
+        { href: '/admin/zonas', icon: 'location_on', label: 'Zonas' },
+      ]
+    },
+    {
+      title: 'Operaciones',
+      items: [
+        { href: '/admin/ordenes', icon: 'assignment', label: 'Órdenes' },
+      ]
+    },
   ]
 };
 
-const currentLinks = links[role] || [];
+const currentSections = linkSections[role] || [];
+
+// Determinar qué secciones deben estar abiertas inicialmente
+const getInitialOpenSections = () => {
+  const openSections: string[] = [];
+  currentSections.forEach((section) => {
+    const hasActiveItem = section.items.some(
+      item => currentPath === item.href || currentPath.startsWith(item.href + '/')
+    );
+    if (hasActiveItem) {
+      openSections.push(section.title);
+    }
+  });
+  // Si no hay ninguna activa, abrir la primera por defecto
+  if (openSections.length === 0 && currentSections.length > 0) {
+    openSections.push(currentSections[0].title);
+  }
+  return openSections;
+};
+
+const initialOpen = getInitialOpenSections();
 ---
 
-<aside class="flex w-64 flex-col gap-4 p-4 bg-surface-light dark:bg-surface-dark border-r border-border-light dark:border-border-dark h-screen sticky top-0">
-    <div class="flex gap-3 items-center px-2 py-2">
+<aside 
+  class="flex w-64 flex-col gap-2 p-4 bg-surface-light dark:bg-surface-dark border-r border-border-light dark:border-border-dark h-screen sticky top-0 overflow-y-auto"
+  x-data={`{ openSections: ${JSON.stringify(initialOpen)} }`}
+>
+    <div class="flex gap-3 items-center px-2 py-2 mb-2">
         <div class="bg-primary-600 text-white rounded-lg p-2 flex items-center justify-center">
              <span class="material-symbols-outlined">garage</span>
         </div>
         <div class="flex flex-col">
             <h1 class="text-text-light dark:text-text-dark text-base font-bold font-display">Taller Veloz</h1>
-            <p class="text-text-muted-light dark:text-text-muted-dark text-xs capitalize">Panel {role}</p>
+            <p class="text-text-muted-light dark:text-text-muted-dark text-xs capitalize">{role}</p>
         </div>
     </div>
     
-    <nav class="flex flex-col gap-1 mt-4 flex-1">
-        {currentLinks.map(link => {
-            const isActive = currentPath === link.href || currentPath.startsWith(link.href + '/');
+    <nav class="flex flex-col gap-1 flex-1">
+        {currentSections.map((section) => {
+            const sectionId = section.title;
+            const hasActiveItem = section.items.some(
+              item => currentPath === item.href || currentPath.startsWith(item.href + '/')
+            );
             return (
-                <a 
-                    href={link.href} 
-                    class:list={[
-                        "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
-                        isActive 
-                            ? "bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300" 
-                            : "text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-text-light dark:hover:text-text-dark"
-                    ]}
-                >
-                    <span class:list={["material-symbols-outlined text-[20px]", isActive ? "text-primary-600 dark:text-primary-400" : "text-gray-400"]}>{link.icon}</span>
-                    {link.label}
-                </a>
+                <div class="mb-1">
+                    <!-- Dropdown Header -->
+                    <button 
+                        type="button"
+                        @click={`openSections.includes('${sectionId}') ? openSections = openSections.filter(s => s !== '${sectionId}') : openSections.push('${sectionId}')`}
+                        class:list={[
+                            "w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-semibold transition-all duration-200 group",
+                            hasActiveItem 
+                                ? "text-primary-700 dark:text-primary-300 bg-primary-50/50 dark:bg-primary-900/10"
+                                : "text-text-muted-light dark:text-text-muted-dark hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-text-light dark:hover:text-text-dark"
+                        ]}
+                    >
+                        <span class="uppercase tracking-wider text-xs">{section.title}</span>
+                        <span 
+                            class="material-symbols-outlined text-[16px] transition-transform duration-200"
+                            x-bind:class={`openSections.includes('${sectionId}') ? 'rotate-180' : ''`}
+                        >
+                            expand_more
+                        </span>
+                    </button>
+                    
+                    <!-- Dropdown Content -->
+                    <div 
+                        x-show={`openSections.includes('${sectionId}')`}
+                        x-collapse
+                        class="flex flex-col gap-0.5 mt-1 ml-2 pl-2 border-l-2 border-gray-200 dark:border-gray-700"
+                    >
+                        {section.items.map((link) => {
+                            const isActive = currentPath === link.href || currentPath.startsWith(link.href + '/');
+                            return (
+                                <a 
+                                    href={link.href} 
+                                    class:list={[
+                                        "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                                        isActive 
+                                            ? "bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300" 
+                                            : "text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-text-light dark:hover:text-text-dark"
+                                    ]}
+                                >
+                                    <span class:list={["material-symbols-outlined text-[18px]", isActive ? "text-primary-600 dark:text-primary-400" : "text-gray-400"]}>{link.icon}</span>
+                                    {link.label}
+                                </a>
+                            );
+                        })}
+                    </div>
+                </div>
             );
         })}
     </nav>
 
-    <div class="mt-auto flex flex-col gap-1 pt-4 border-t border-border-light dark:border-border-dark">
-        <a href="/settings" class="flex items-center gap-3 px-3 py-2.5 text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-text-light dark:hover:text-text-dark rounded-lg text-sm font-medium transition-colors">
-            <span class="material-symbols-outlined text-[20px] text-gray-400">settings</span>
+    <div class="mt-auto flex flex-col gap-1 pt-3 border-t border-border-light dark:border-border-dark">
+        <a href="/settings" class="flex items-center gap-3 px-3 py-2 text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-text-light dark:hover:text-text-dark rounded-lg text-sm font-medium transition-colors">
+            <span class="material-symbols-outlined text-[18px] text-gray-400">settings</span>
             Configuración
         </a>
-        <a href="/logout" class="flex items-center gap-3 px-3 py-2.5 text-status-error hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-sm font-medium transition-colors">
-            <span class="material-symbols-outlined text-[20px]">logout</span>
+        <a href="/logout" class="flex items-center gap-3 px-3 py-2 text-status-error hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-sm font-medium transition-colors">
+            <span class="material-symbols-outlined text-[18px]">logout</span>
             Cerrar Sesión
         </a>
     </div>

@@ -1,0 +1,279 @@
+---
+export const prerender = false;
+import DashboardLayout from '../../../layouts/DashboardLayout.astro';
+import PageHeader from '../../../components/ui/PageHeader.astro';
+import Breadcrumbs from '../../../components/ui/Breadcrumbs.astro';
+import Badge from '../../../components/ui/Badge.astro';
+import EmptyState from '../../../components/ui/EmptyState.astro';
+import { strapiGet } from '../../../lib/strapi';
+
+let ordenes: any[] = [];
+let error = '';
+const filtroEstado = Astro.url.searchParams.get('estado');
+
+try {
+  let url = '/api/orden-de-trabajos?populate[vehiculo][populate][cliente]=*&populate[mecanico]=*&populate[zona]=*&pagination[pageSize]=200&sort=fecha_ingreso:desc';
+  if (filtroEstado) {
+    url += `&filters[estado][$eq]=${filtroEstado}`;
+  }
+  const response = await strapiGet(url);
+  ordenes = response.data || [];
+} catch (e: any) {
+  error = e.message;
+}
+
+const getEstadoBadge = (estado: string): 'default' | 'success' | 'warning' | 'error' | 'info' | 'purple' => {
+  const map: Record<string, 'default' | 'success' | 'warning' | 'error' | 'info' | 'purple'> = {
+    ingresado: 'info',
+    en_diagnostico: 'warning',
+    en_reparacion: 'warning',
+    finalizado: 'success',
+    facturado: 'purple',
+    entregado: 'default'
+  };
+  return map[estado] || 'default';
+};
+
+const formatEstado = (estado: string) => {
+  const estados: Record<string, string> = {
+    ingresado: 'Ingresado',
+    en_diagnostico: 'En Diagnóstico',
+    en_reparacion: 'En Reparación',
+    finalizado: 'Finalizado',
+    facturado: 'Facturado',
+    entregado: 'Entregado',
+  };
+  return estados[estado] || estado;
+};
+
+// Estadísticas
+const stats = {
+  total: ordenes.length,
+  ingresado: ordenes.filter(o => o.estado === 'ingresado').length,
+  en_diagnostico: ordenes.filter(o => o.estado === 'en_diagnostico').length,
+  en_reparacion: ordenes.filter(o => o.estado === 'en_reparacion').length,
+  finalizado: ordenes.filter(o => o.estado === 'finalizado').length,
+  facturado: ordenes.filter(o => o.estado === 'facturado').length,
+  entregado: ordenes.filter(o => o.estado === 'entregado').length,
+};
+
+const breadcrumbs = [
+  { label: 'Admin', href: '/admin', icon: 'home' },
+  { label: 'Órdenes' }
+];
+---
+
+<DashboardLayout title="Gestión de Órdenes de Trabajo" role="admin" currentPath="/admin/ordenes">
+  <div class="container mx-auto px-4 py-8">
+    <Breadcrumbs items={breadcrumbs} />
+    
+    <PageHeader title="Órdenes de Trabajo" subtitle={`${ordenes.length} órdenes en total`}>
+      <a slot="actions" href="/admin/ordenes/crear" class="btn-primary inline-flex items-center gap-2">
+        <span class="material-symbols-outlined text-lg">add</span>
+        Nueva Orden
+      </a>
+    </PageHeader>
+
+    {error && (
+      <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-6 flex items-center gap-2">
+        <span class="material-symbols-outlined">error</span>
+        Error: {error}
+      </div>
+    )}
+
+    <!-- Estadísticas mejoradas -->
+    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3 mb-6">
+      <a href="/admin/ordenes" class={`card p-4 text-center transition-all hover:shadow-md hover:-translate-y-0.5 ${!filtroEstado ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}>
+        <p class="text-3xl font-bold text-gray-800">{stats.total}</p>
+        <p class="text-xs text-gray-600 font-medium">Total</p>
+      </a>
+      <a href="/admin/ordenes?estado=ingresado" class={`card p-4 text-center transition-all hover:shadow-md hover:-translate-y-0.5 ${filtroEstado === 'ingresado' ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}>
+        <p class="text-3xl font-bold text-blue-600">{stats.ingresado}</p>
+        <p class="text-xs text-gray-600 font-medium">Ingresado</p>
+      </a>
+      <a href="/admin/ordenes?estado=en_diagnostico" class={`card p-4 text-center transition-all hover:shadow-md hover:-translate-y-0.5 ${filtroEstado === 'en_diagnostico' ? 'ring-2 ring-yellow-500 bg-yellow-50' : ''}`}>
+        <p class="text-3xl font-bold text-yellow-600">{stats.en_diagnostico}</p>
+        <p class="text-xs text-gray-600 font-medium">Diagnóstico</p>
+      </a>
+      <a href="/admin/ordenes?estado=en_reparacion" class={`card p-4 text-center transition-all hover:shadow-md hover:-translate-y-0.5 ${filtroEstado === 'en_reparacion' ? 'ring-2 ring-orange-500 bg-orange-50' : ''}`}>
+        <p class="text-3xl font-bold text-orange-600">{stats.en_reparacion}</p>
+        <p class="text-xs text-gray-600">Reparación</p>
+      </a>
+      <a href="/admin/ordenes?estado=finalizado" class={`card p-3 text-center transition-all hover:shadow-md ${filtroEstado === 'finalizado' ? 'ring-2 ring-green-500' : ''}`}>
+        <p class="text-2xl font-bold text-green-600">{stats.finalizado}</p>
+        <p class="text-xs text-gray-600">Finalizado</p>
+      </a>
+      <a href="/admin/ordenes?estado=facturado" class={`card p-3 text-center transition-all hover:shadow-md ${filtroEstado === 'facturado' ? 'ring-2 ring-purple-500' : ''}`}>
+        <p class="text-2xl font-bold text-purple-600">{stats.facturado}</p>
+        <p class="text-xs text-gray-600">Facturado</p>
+      </a>
+      <a href="/admin/ordenes?estado=entregado" class={`card p-3 text-center transition-all hover:shadow-md ${filtroEstado === 'entregado' ? 'ring-2 ring-gray-500' : ''}`}>
+        <p class="text-2xl font-bold text-gray-600">{stats.entregado}</p>
+        <p class="text-xs text-gray-600">Entregado</p>
+      </a>
+    </div>
+
+    <!-- Buscador -->
+    <div class="card p-4 mb-6">
+      <input 
+        type="text" 
+        id="searchInput"
+        placeholder="Buscar por patente, cliente, mecánico o descripción..."
+        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+      />
+    </div>
+
+    <!-- Lista de órdenes -->
+    <div class="card overflow-hidden">
+      <table class="w-full">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="text-left px-4 py-3 font-bold text-gray-700">ID</th>
+            <th class="text-left px-4 py-3 font-bold text-gray-700">Vehículo</th>
+            <th class="text-left px-4 py-3 font-bold text-gray-700">Cliente</th>
+            <th class="text-left px-4 py-3 font-bold text-gray-700">Mecánico</th>
+            <th class="text-center px-4 py-3 font-bold text-gray-700">Estado</th>
+            <th class="text-left px-4 py-3 font-bold text-gray-700">Ingreso</th>
+            <th class="text-center px-4 py-3 font-bold text-gray-700">Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="ordenesTable" class="divide-y divide-gray-100">
+          {ordenes.length === 0 && (
+            <tr>
+              <td colspan="7" class="text-center py-8 text-gray-500">
+                No hay órdenes de trabajo {filtroEstado ? `con estado "${formatEstado(filtroEstado)}"` : ''}
+              </td>
+            </tr>
+          )}
+          {ordenes.map((orden: any) => (
+            <tr class="hover:bg-gray-50 transition-colors orden-row" 
+                data-search={`${orden.vehiculo?.patente || ''} ${orden.vehiculo?.marca || ''} ${orden.vehiculo?.modelo || ''} ${orden.vehiculo?.cliente?.nombre || ''} ${orden.vehiculo?.cliente?.apellido || ''} ${orden.mecanico?.nombre || ''} ${orden.mecanico?.apellido || ''} ${orden.descripcion || ''}`.toLowerCase()}>
+              <td class="px-4 py-3">
+                <span class="font-bold text-gray-800">#{orden.id}</span>
+              </td>
+              <td class="px-4 py-3">
+                {orden.vehiculo ? (
+                  <div>
+                    <span class="font-bold bg-gray-100 px-2 py-0.5 rounded text-sm">
+                      {orden.vehiculo.patente}
+                    </span>
+                    <div class="text-sm text-gray-500 mt-1">
+                      {orden.vehiculo.marca} {orden.vehiculo.modelo}
+                    </div>
+                  </div>
+                ) : (
+                  <span class="text-gray-400">Sin vehículo</span>
+                )}
+              </td>
+              <td class="px-4 py-3">
+                {orden.vehiculo?.cliente ? (
+                  <div>
+                    <div class="font-medium text-gray-800">
+                      {orden.vehiculo.cliente.nombre} {orden.vehiculo.cliente.apellido}
+                    </div>
+                    {orden.vehiculo.cliente.telefono && (
+                      <div class="text-sm text-gray-500">{orden.vehiculo.cliente.telefono}</div>
+                    )}
+                  </div>
+                ) : (
+                  <span class="text-gray-400">-</span>
+                )}
+              </td>
+              <td class="px-4 py-3">
+                {orden.mecanico ? (
+                  <div class="font-medium text-gray-800">
+                    {orden.mecanico.nombre} {orden.mecanico.apellido}
+                  </div>
+                ) : (
+                  <span class="text-yellow-600 text-sm">Sin asignar</span>
+                )}
+              </td>
+              <td class="px-4 py-3 text-center">
+                <Badge variant={getEstadoBadge(orden.estado)} size="sm">
+                  {formatEstado(orden.estado)}
+                </Badge>
+              </td>
+              <td class="px-4 py-3 text-sm text-gray-600">
+                {orden.fecha_ingreso ? new Date(orden.fecha_ingreso).toLocaleDateString('es-CL') : '-'}
+              </td>
+              <td class="px-4 py-3">
+                <div class="flex items-center justify-center gap-1">
+                  <a 
+                    href={`/admin/ordenes/ver/${orden.documentId}`}
+                    class="text-green-600 hover:text-green-800 font-medium text-sm px-2"
+                    title="Ver detalle"
+                  >
+                    👁️
+                  </a>
+                  <a 
+                    href={`/admin/ordenes/editar/${orden.documentId}`}
+                    class="text-blue-600 hover:text-blue-800 font-medium text-sm px-2"
+                    title="Editar"
+                  >
+                    ✏️
+                  </a>
+                  <button 
+                    type="button"
+                    class="text-red-600 hover:text-red-800 font-medium text-sm px-2 delete-btn"
+                    data-id={orden.documentId}
+                    data-name={`#${orden.id}`}
+                    title="Eliminar"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="mt-4 text-gray-500 text-sm">
+      Mostrando: <span id="visibleCount">{ordenes.length}</span> órdenes
+    </div>
+  </div>
+</DashboardLayout>
+
+<script>
+  const searchInput = document.getElementById('searchInput') as HTMLInputElement;
+  const rows = document.querySelectorAll('.orden-row');
+  const visibleCount = document.getElementById('visibleCount');
+
+  searchInput?.addEventListener('input', () => {
+    const query = searchInput.value.toLowerCase();
+    let visible = 0;
+    
+    rows.forEach(row => {
+      const searchData = row.getAttribute('data-search') || '';
+      const matches = searchData.includes(query);
+      (row as HTMLElement).style.display = matches ? '' : 'none';
+      if (matches) visible++;
+    });
+    
+    if (visibleCount) visibleCount.textContent = visible.toString();
+  });
+
+  // Delete functionality
+  document.querySelectorAll('.delete-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const target = e.currentTarget as HTMLButtonElement;
+      const id = target.dataset.id;
+      const name = target.dataset.name;
+      
+      if (!confirm(`¿Está seguro de eliminar la orden "${name}"? Esta acción no se puede deshacer.`)) return;
+      
+      try {
+        const response = await fetch(`http://localhost:1337/api/orden-de-trabajos/${id}`, {
+          method: 'DELETE',
+        });
+        
+        if (!response.ok) throw new Error('Error al eliminar');
+        
+        window.location.href = '/admin/ordenes?success=deleted';
+      } catch (error) {
+        alert('Error al eliminar la orden de trabajo');
+      }
+    });
+  });
+</script>

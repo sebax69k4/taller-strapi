@@ -4,41 +4,45 @@
   "info": {
     "singularName": "servicio",
     "pluralName": "servicios",
-    "displayName": "servicio"
+    "displayName": "servicio",
+    "description": "Catálogo de servicios del taller"
   },
   "options": {
     "draftAndPublish": true
   },
   "pluginOptions": {},
   "attributes": {
-    "fecha_ingreso": {
-      "type": "datetime"
-    },
-    "fecha_entrega": {
-      "type": "datetime"
+    "nombre": {
+      "type": "string",
+      "required": true
     },
     "descripcion": {
       "type": "text"
     },
-    "diagnostico": {
-      "type": "text"
+    "precio_base": {
+      "type": "decimal",
+      "required": true,
+      "default": 0
     },
-    "estado": {
+    "tiempo_estimado": {
+      "type": "integer",
+      "default": 60,
+      "min": 0
+    },
+    "categoria": {
       "type": "enumeration",
-      "enum": [
-        "ingresado, en_diagnostico, en_reparacion, finalizado, entregado"
-      ]
+      "enum": ["mantencion", "reparacion", "diagnostico", "pintura", "electrico", "neumaticos", "otros"],
+      "default": "otros"
     },
-    "vehiculo": {
-      "type": "relation",
-      "relation": "oneToOne",
-      "target": "api::vehiculo.vehiculo"
+    "activo": {
+      "type": "boolean",
+      "default": true
     },
-    "mecenico": {
+    "orden_de_trabajos": {
       "type": "relation",
-      "relation": "manyToOne",
-      "target": "api::mecenico.mecenico",
-      "inversedBy": "servicios"
+      "relation": "manyToMany",
+      "target": "api::orden-de-trabajo.orden-de-trabajo",
+      "mappedBy": "servicios"
     },
     "repuestos": {
       "type": "relation",

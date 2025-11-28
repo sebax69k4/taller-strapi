@@ -80,6 +80,12 @@
       "target": "api::bitacora.bitacora",
       "mappedBy": "orden_de_trabajo"
     },
+    "servicios": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::servicio.servicio",
+      "inversedBy": "orden_de_trabajos"
+    },
     "fecha_inicio_planificada": {
       "type": "datetime"
     },

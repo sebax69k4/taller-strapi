@@ -517,7 +517,10 @@ export interface ApiFacturaFactura extends Struct.CollectionTypeSchema {
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    estado: Schema.Attribute.Enumeration<['pendiente', 'pagado']> &
+      Schema.Attribute.DefaultTo<'pendiente'>;
     fecha_emision: Schema.Attribute.Date & Schema.Attribute.Required;
+    fecha_pago: Schema.Attribute.DateTime;
     iva: Schema.Attribute.Decimal & Schema.Attribute.Required;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
@@ -525,12 +528,22 @@ export interface ApiFacturaFactura extends Struct.CollectionTypeSchema {
       'api::factura.factura'
     > &
       Schema.Attribute.Private;
+    metodo_pago: Schema.Attribute.Enumeration<
+      [
+        'efectivo',
+        'tarjeta_debito',
+        'tarjeta_credito',
+        'transferencia',
+        'cheque',
+      ]
+    >;
     numero_factura: Schema.Attribute.String & Schema.Attribute.Unique;
     orden_de_trabajo: Schema.Attribute.Relation<
       'oneToOne',
       'api::orden-de-trabajo.orden-de-trabajo'
     >;
     publishedAt: Schema.Attribute.DateTime;
+    referencia_pago: Schema.Attribute.String;
     subtotal: Schema.Attribute.Decimal & Schema.Attribute.Required;
     total: Schema.Attribute.Decimal & Schema.Attribute.Required;
     updatedAt: Schema.Attribute.DateTime;
@@ -634,6 +647,10 @@ export interface ApiOrdenDeTrabajoOrdenDeTrabajo
       'manyToMany',
       'api::repuesto.repuesto'
     >;
+    servicios: Schema.Attribute.Relation<
+      'manyToMany',
+      'api::servicio.servicio'
+    >;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -727,6 +744,7 @@ export interface ApiRepuestoRepuesto extends Struct.CollectionTypeSchema {
 export interface ApiServicioServicio extends Struct.CollectionTypeSchema {
   collectionName: 'servicios';
   info: {
+    description: 'Cat\u00E1logo de servicios del taller';
     displayName: 'servicio';
     pluralName: 'servicios';
     singularName: 'servicio';
@@ -735,32 +753,53 @@ export interface ApiServicioServicio extends Struct.CollectionTypeSchema {
     draftAndPublish: true;
   };
   attributes: {
+    activo: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>;
+    categoria: Schema.Attribute.Enumeration<
+      [
+        'mantencion',
+        'reparacion',
+        'diagnostico',
+        'pintura',
+        'electrico',
+        'neumaticos',
+        'otros',
+      ]
+    > &
+      Schema.Attribute.DefaultTo<'otros'>;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
     descripcion: Schema.Attribute.Text;
-    diagnostico: Schema.Attribute.Text;
-    estado: Schema.Attribute.Enumeration<
-      ['ingresado, en_diagnostico, en_reparacion, finalizado, entregado']
-    >;
-    fecha_entrega: Schema.Attribute.DateTime;
-    fecha_ingreso: Schema.Attribute.DateTime;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
       'oneToMany',
       'api::servicio.servicio'
     > &
       Schema.Attribute.Private;
-    mecenico: Schema.Attribute.Relation<'manyToOne', 'api::mecenico.mecenico'>;
+    nombre: Schema.Attribute.String & Schema.Attribute.Required;
+    orden_de_trabajos: Schema.Attribute.Relation<
+      'manyToMany',
+      'api::orden-de-trabajo.orden-de-trabajo'
+    >;
+    precio_base: Schema.Attribute.Decimal &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<0>;
     publishedAt: Schema.Attribute.DateTime;
     repuestos: Schema.Attribute.Relation<
       'manyToMany',
       'api::repuesto.repuesto'
     >;
+    tiempo_estimado: Schema.Attribute.Integer &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<60>;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
-    vehiculo: Schema.Attribute.Relation<'oneToOne', 'api::vehiculo.vehiculo'>;
   };
 }
 

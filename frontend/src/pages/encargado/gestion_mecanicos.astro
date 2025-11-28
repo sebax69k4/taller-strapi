@@ -1,0 +1,290 @@
+---
+export const prerender = false;
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import Card from '../../components/ui/Card.astro';
+import { strapiGet, strapiPut } from '../../lib/strapi';
+import '../../styles/global.css';
+
+const userRole = Astro.cookies.get('user_role')?.value;
+if (!userRole) {
+  return Astro.redirect('/login');
+}
+
+interface Orden {
+  id: number;
+  documentId: string;
+  estado: string;
+  descripcion: string;
+  fecha_ingreso: string;
+  vehiculo: {
+    marca: string;
+    modelo: string;
+    patente: string;
+  } | null;
+}
+
+interface Mecanico {
+  id: number;
+  documentId: string;
+  nombre: string;
+  apellido: string;
+  especialidad: string;
+  telefono: string;
+  email: string;
+  disponibilidad: boolean;
+  orden_de_trabajos: Orden[];
+}
+
+let mecanicos: Mecanico[] = [];
+let message = '';
+let messageType = '';
+let error = '';
+
+const urlMessage = Astro.url.searchParams.get('message');
+const urlType = Astro.url.searchParams.get('type');
+if (urlMessage) {
+  message = urlMessage;
+  messageType = urlType || 'success';
+}
+
+try {
+  // Obtener mecánicos con sus órdenes
+  const mecanicosRes = await strapiGet('/api/mecenicos?populate[orden_de_trabajos][populate][vehiculo][fields][0]=marca&populate[orden_de_trabajos][populate][vehiculo][fields][1]=modelo&populate[orden_de_trabajos][populate][vehiculo][fields][2]=patente');
+  mecanicos = mecanicosRes.data || [];
+
+  // Manejar POST para cambiar disponibilidad
+  if (Astro.request.method === 'POST') {
+    const formData = await Astro.request.formData();
+    const action = formData.get('action');
+    const mecanicoId = formData.get('mecanicoId');
+
+    if (action === 'toggle_disponibilidad') {
+      const disponibilidadActual = formData.get('disponibilidadActual') === 'true';
+      
+      await strapiPut(`/api/mecenicos/${mecanicoId}`, {
+        disponibilidad: !disponibilidadActual
+      });
+
+      return Astro.redirect(`/encargado/gestion_mecanicos?message=${encodeURIComponent('Disponibilidad actualizada.')}&type=success`);
+    }
+  }
+
+} catch (e: any) {
+  console.error('Error:', e);
+  error = 'Error al cargar mecánicos';
+}
+
+// Calcular estadísticas
+const totalMecanicos = mecanicos.length;
+const mecanicosDisponibles = mecanicos.filter(m => m.disponibilidad !== false).length;
+const totalOrdenesActivas = mecanicos.reduce((sum, m) => {
+  const activas = m.orden_de_trabajos?.filter(o => !['entregado', 'facturado'].includes(o.estado)).length || 0;
+  return sum + activas;
+}, 0);
+
+const estadoLabels: Record<string, string> = {
+  'ingresado': 'Ingresado',
+  'en_diagnostico': 'En Diagnóstico',
+  'en_reparacion': 'En Reparación',
+  'finalizado': 'Finalizado',
+  'facturado': 'Facturado',
+  'entregado': 'Entregado'
+};
+
+const estadoColors: Record<string, string> = {
+  'ingresado': 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+  'en_diagnostico': 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
+  'en_reparacion': 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
+  'finalizado': 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+  'facturado': 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+  'entregado': 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'
+};
+---
+
+<DashboardLayout title="Gestión de Mecánicos" role="encargado" currentPath="/encargado/gestion_mecanicos">
+  <div class="max-w-7xl mx-auto">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+      <div>
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Gestión de Mecánicos</h1>
+        <p class="text-gray-500 dark:text-gray-400 mt-2">Administra el equipo de mecánicos y su carga de trabajo.</p>
+      </div>
+      <a 
+        href="/create-mechanic"
+        class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2"
+      >
+        <span class="material-symbols-outlined">person_add</span>
+        Agregar Mecánico
+      </a>
+    </div>
+
+    {message && (
+      <div class={`p-4 mb-6 rounded-lg border flex items-center gap-3 ${messageType === 'success' ? 'bg-green-50 border-green-200 text-green-800 dark:bg-green-900/30 dark:border-green-800 dark:text-green-300' : 'bg-red-50 border-red-200 text-red-800 dark:bg-red-900/30 dark:border-red-800 dark:text-red-300'}`}>
+        <span class="material-symbols-outlined">{messageType === 'success' ? 'check_circle' : 'error'}</span>
+        <p>{message}</p>
+      </div>
+    )}
+
+    {error && (
+      <div class="p-4 mb-6 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg text-red-800 dark:text-red-200">
+        {error}
+      </div>
+    )}
+
+    <!-- Stats -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      <Card class="text-center">
+        <span class="material-symbols-outlined text-3xl text-primary-500 mb-2">engineering</span>
+        <p class="text-3xl font-bold text-gray-900 dark:text-white">{totalMecanicos}</p>
+        <p class="text-sm text-gray-500 dark:text-gray-400">Total Mecánicos</p>
+      </Card>
+      <Card class="text-center">
+        <span class="material-symbols-outlined text-3xl text-green-500 mb-2">check_circle</span>
+        <p class="text-3xl font-bold text-gray-900 dark:text-white">{mecanicosDisponibles}</p>
+        <p class="text-sm text-gray-500 dark:text-gray-400">Disponibles</p>
+      </Card>
+      <Card class="text-center">
+        <span class="material-symbols-outlined text-3xl text-amber-500 mb-2">assignment</span>
+        <p class="text-3xl font-bold text-gray-900 dark:text-white">{totalOrdenesActivas}</p>
+        <p class="text-sm text-gray-500 dark:text-gray-400">Órdenes Activas</p>
+      </Card>
+    </div>
+
+    <!-- Lista de Mecánicos -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {mecanicos.map((mecanico) => {
+        const ordenesActivas = mecanico.orden_de_trabajos?.filter(o => !['entregado', 'facturado'].includes(o.estado)) || [];
+        const ordenesCompletadas = mecanico.orden_de_trabajos?.filter(o => o.estado === 'entregado').length || 0;
+        const cargaTrabajo = Math.min((ordenesActivas.length / 5) * 100, 100);
+        const disponible = mecanico.disponibilidad !== false;
+
+        return (
+          <Card>
+            <div class="flex items-start gap-4">
+              <!-- Avatar -->
+              <div class={`w-16 h-16 rounded-full flex items-center justify-center text-white text-xl font-bold ${disponible ? 'bg-primary-500' : 'bg-gray-400'}`}>
+                {mecanico.nombre.charAt(0)}{mecanico.apellido?.charAt(0) || ''}
+              </div>
+
+              <!-- Info -->
+              <div class="flex-1">
+                <div class="flex items-center gap-2">
+                  <h3 class="text-lg font-bold text-gray-900 dark:text-white">
+                    {mecanico.nombre} {mecanico.apellido}
+                  </h3>
+                  <span class={`px-2 py-0.5 rounded-full text-xs font-medium ${disponible ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'}`}>
+                    {disponible ? 'Disponible' : 'No disponible'}
+                  </span>
+                </div>
+                <p class="text-sm text-gray-500 dark:text-gray-400">
+                  {mecanico.especialidad || 'Mecánico General'}
+                </p>
+
+                <!-- Contacto -->
+                <div class="flex flex-wrap gap-4 mt-2 text-sm text-gray-600 dark:text-gray-400">
+                  {mecanico.telefono && (
+                    <span class="flex items-center gap-1">
+                      <span class="material-symbols-outlined text-sm">phone</span>
+                      {mecanico.telefono}
+                    </span>
+                  )}
+                  {mecanico.email && (
+                    <span class="flex items-center gap-1">
+                      <span class="material-symbols-outlined text-sm">email</span>
+                      {mecanico.email}
+                    </span>
+                  )}
+                </div>
+
+                <!-- Carga de trabajo -->
+                <div class="mt-4">
+                  <div class="flex justify-between text-sm mb-1">
+                    <span class="text-gray-600 dark:text-gray-400">Carga de trabajo</span>
+                    <span class="font-medium text-gray-900 dark:text-white">{ordenesActivas.length} activas / {ordenesCompletadas} completadas</span>
+                  </div>
+                  <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                    <div 
+                      class={`h-2 rounded-full transition-all ${
+                        cargaTrabajo > 80 ? 'bg-red-500' : 
+                        cargaTrabajo > 50 ? 'bg-amber-500' : 
+                        'bg-green-500'
+                      }`}
+                      style={`width: ${cargaTrabajo}%`}
+                    ></div>
+                  </div>
+                </div>
+
+                <!-- Órdenes activas -->
+                {ordenesActivas.length > 0 && (
+                  <div class="mt-4 space-y-2">
+                    <p class="text-sm font-medium text-gray-700 dark:text-gray-300">Órdenes en curso:</p>
+                    <div class="flex flex-wrap gap-2">
+                      {ordenesActivas.slice(0, 4).map((orden) => (
+                        <a 
+                          href={`/encargado/detalles_de_orden?id=${orden.documentId}`}
+                          class="inline-flex items-center gap-1 px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-xs hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                        >
+                          <span class={`w-2 h-2 rounded-full ${
+                            orden.estado === 'en_diagnostico' ? 'bg-purple-500' :
+                            orden.estado === 'en_reparacion' ? 'bg-amber-500' :
+                            'bg-blue-500'
+                          }`}></span>
+                          OT-{orden.id}
+                        </a>
+                      ))}
+                      {ordenesActivas.length > 4 && (
+                        <span class="text-xs text-gray-500 dark:text-gray-400">+{ordenesActivas.length - 4} más</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <!-- Acciones -->
+              <div class="flex flex-col gap-2">
+                <form method="POST">
+                  <input type="hidden" name="action" value="toggle_disponibilidad" />
+                  <input type="hidden" name="mecanicoId" value={mecanico.documentId} />
+                  <input type="hidden" name="disponibilidadActual" value={String(disponible)} />
+                  <button 
+                    type="submit"
+                    class={`p-2 rounded-lg transition-colors ${disponible ? 'bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400' : 'bg-green-100 text-green-600 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400'}`}
+                    title={disponible ? 'Marcar como no disponible' : 'Marcar como disponible'}
+                  >
+                    <span class="material-symbols-outlined text-sm">
+                      {disponible ? 'person_off' : 'person'}
+                    </span>
+                  </button>
+                </form>
+                <a 
+                  href={`/encargado/asig_orden`}
+                  class="p-2 bg-primary-100 text-primary-600 hover:bg-primary-200 dark:bg-primary-900/30 dark:text-primary-400 rounded-lg transition-colors"
+                  title="Asignar orden"
+                >
+                  <span class="material-symbols-outlined text-sm">assignment_add</span>
+                </a>
+              </div>
+            </div>
+          </Card>
+        );
+      })}
+    </div>
+
+    {mecanicos.length === 0 && (
+      <Card>
+        <div class="text-center py-12">
+          <span class="material-symbols-outlined text-5xl text-gray-300 dark:text-gray-600 mb-4">engineering</span>
+          <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">No hay mecánicos registrados</h3>
+          <p class="text-gray-500 dark:text-gray-400 mb-6">Agrega mecánicos para comenzar a asignar órdenes de trabajo.</p>
+          <a 
+            href="/create-mechanic"
+            class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+          >
+            <span class="material-symbols-outlined">person_add</span>
+            Agregar Mecánico
+          </a>
+        </div>
+      </Card>
+    )}
+  </div>
+</DashboardLayout>

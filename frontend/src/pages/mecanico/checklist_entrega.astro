@@ -1,0 +1,241 @@
+---
+export const prerender = false;
+import Layout from '../../layouts/Layout.astro';
+import Sidebar from '../../components/Sidebar.astro';
+import { strapiGet, strapiPut, strapiPost } from '../../lib/strapi';
+
+const ordenId = Astro.url.searchParams.get('orden');
+let orden: any = null;
+let error = '';
+let successMessage = '';
+
+if (ordenId) {
+  try {
+    const response = await strapiGet(`/api/orden-de-trabajos/${ordenId}?populate[vehiculo][populate][cliente]=*&populate[mecanico]=*`);
+    orden = response.data;
+  } catch (e: any) {
+    error = e.message;
+  }
+}
+
+// Procesar checklist
+if (Astro.request.method === 'POST' && orden) {
+  try {
+    const formData = await Astro.request.formData();
+    
+    // Verificar items del checklist
+    const checkItems = [
+      'limpieza_interior', 'limpieza_exterior', 'niveles_fluidos',
+      'luces_funcionando', 'frenos_verificados', 'neumaticos_ok',
+      'documentos_orden', 'herramientas_retiradas', 'piezas_cambiadas',
+      'prueba_manejo'
+    ];
+    
+    const completados: string[] = [];
+    const faltantes: string[] = [];
+    
+    checkItems.forEach(item => {
+      if (formData.get(item) === 'on') {
+        completados.push(item);
+      } else {
+        faltantes.push(item);
+      }
+    });
+    
+    const notas = formData.get('notas') as string;
+    const confirmar = formData.get('confirmar_entrega') === 'on';
+    
+    // Verificar items críticos
+    const itemsCriticos = ['frenos_verificados', 'luces_funcionando', 'prueba_manejo'];
+    const criticosFaltantes = itemsCriticos.filter(i => !completados.includes(i));
+    
+    if (confirmar && criticosFaltantes.length > 0) {
+      error = 'No se puede finalizar sin completar los items críticos (frenos, luces, prueba de manejo)';
+    } else if (confirmar) {
+      // Registrar en bitácora
+      await strapiPost('/api/bitacoras', {
+        descripcion: `Checklist de entrega completado. Items verificados: ${completados.length}/${checkItems.length}. ${notas ? 'Notas: ' + notas : ''}`,
+        tipo: 'checklist',
+        orden_de_trabajo: orden.id,
+      });
+      
+      // Cambiar estado a finalizado
+      await strapiPut(`/api/orden-de-trabajos/${ordenId}`, {
+        estado: 'finalizado',
+      });
+      
+      successMessage = '¡Checklist completado! La orden ha sido marcada como finalizada y lista para facturación.';
+      
+      // Recargar orden
+      const response = await strapiGet(`/api/orden-de-trabajos/${ordenId}?populate[vehiculo][populate][cliente]=*&populate[mecanico]=*`);
+      orden = response.data;
+    } else {
+      // Solo guardar progreso
+      await strapiPost('/api/bitacoras', {
+        descripcion: `Progreso de checklist guardado. Items completados: ${completados.length}/${checkItems.length}`,
+        tipo: 'nota',
+        orden_de_trabajo: orden.id,
+      });
+      successMessage = 'Progreso guardado correctamente.';
+    }
+  } catch (e: any) {
+    error = e.message;
+  }
+}
+
+const checklistItems = [
+  { id: 'limpieza_interior', label: 'Limpieza interior del vehículo', icon: 'cleaning_services', critico: false },
+  { id: 'limpieza_exterior', label: 'Limpieza exterior del vehículo', icon: 'local_car_wash', critico: false },
+  { id: 'niveles_fluidos', label: 'Niveles de fluidos verificados', icon: 'water_drop', critico: false },
+  { id: 'luces_funcionando', label: 'Todas las luces funcionando', icon: 'lightbulb', critico: true },
+  { id: 'frenos_verificados', label: 'Sistema de frenos verificado', icon: 'do_not_step', critico: true },
+  { id: 'neumaticos_ok', label: 'Estado y presión de neumáticos', icon: 'tire_repair', critico: false },
+  { id: 'documentos_orden', label: 'Documentación de orden completa', icon: 'description', critico: false },
+  { id: 'herramientas_retiradas', label: 'Herramientas retiradas del vehículo', icon: 'construction', critico: false },
+  { id: 'piezas_cambiadas', label: 'Piezas reemplazadas entregadas al cliente', icon: 'inventory_2', critico: false },
+  { id: 'prueba_manejo', label: 'Prueba de manejo realizada', icon: 'directions_car', critico: true },
+];
+---
+
+<Layout title="Checklist de Entrega">
+  <div class="flex min-h-screen bg-background-light dark:bg-background-dark">
+    <Sidebar role="mecanico" currentPath="/mecanico/checklist_entrega" />
+    
+    <main class="flex-1 p-8">
+      <div class="max-w-4xl mx-auto">
+        <div class="mb-8">
+          <h1 class="text-3xl font-bold text-gray-800 dark:text-white">Checklist de Entrega</h1>
+          <p class="text-gray-600 dark:text-gray-400 mt-2">Verificación final antes de marcar la orden como finalizada</p>
+        </div>
+
+        {!ordenId && (
+          <div class="card p-8">
+            <h2 class="text-xl font-bold text-gray-800 dark:text-white mb-4">Seleccionar Orden</h2>
+            <p class="text-gray-600 mb-4">Ingrese el ID de la orden para realizar el checklist de entrega:</p>
+            <form class="flex gap-4">
+              <input 
+                type="text" 
+                name="orden"
+                placeholder="ID de la orden..."
+                class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              />
+              <button type="submit" class="btn-primary">Buscar</button>
+            </form>
+          </div>
+        )}
+
+        {error && (
+          <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
+            ⚠️ {error}
+          </div>
+        )}
+
+        {successMessage && (
+          <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6">
+            ✓ {successMessage}
+          </div>
+        )}
+
+        {orden && (
+          <>
+            <!-- Info de la orden -->
+            <div class="card p-6 mb-6">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h2 class="text-xl font-bold text-gray-800 dark:text-white">
+                    Orden #{orden.id}
+                  </h2>
+                  <p class="text-gray-600">
+                    {orden.vehiculo?.patente} - {orden.vehiculo?.marca} {orden.vehiculo?.modelo}
+                  </p>
+                  <p class="text-sm text-gray-500">
+                    Cliente: {orden.vehiculo?.cliente?.nombre} {orden.vehiculo?.cliente?.apellido}
+                  </p>
+                </div>
+                <div class="text-right">
+                  <span class={`px-3 py-1 rounded-full text-sm font-bold ${
+                    orden.estado === 'finalizado' ? 'bg-green-100 text-green-800' :
+                    orden.estado === 'en_reparacion' ? 'bg-orange-100 text-orange-800' :
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                    {orden.estado?.replace('_', ' ').toUpperCase()}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {orden.estado === 'finalizado' ? (
+              <div class="card p-8 text-center">
+                <span class="material-symbols-outlined text-6xl text-green-500 mb-4">task_alt</span>
+                <h3 class="text-xl font-bold text-gray-800 dark:text-white mb-2">Orden Finalizada</h3>
+                <p class="text-gray-600">Esta orden ya ha sido marcada como finalizada y está lista para facturación.</p>
+              </div>
+            ) : (
+              <form method="POST" class="card p-6">
+                <h2 class="text-xl font-bold text-gray-800 dark:text-white mb-6">
+                  Lista de Verificación
+                </h2>
+                
+                <div class="space-y-3 mb-6">
+                  {checklistItems.map((item) => (
+                    <label class={`flex items-center p-4 rounded-lg border-2 cursor-pointer transition-all hover:border-blue-300 ${item.critico ? 'border-red-200 bg-red-50/50' : 'border-gray-200'}`}>
+                      <input 
+                        type="checkbox" 
+                        name={item.id}
+                        class="w-5 h-5 rounded text-blue-600 focus:ring-blue-500 mr-4"
+                      />
+                      <span class="material-symbols-outlined text-gray-400 mr-3">{item.icon}</span>
+                      <span class="flex-1 font-medium text-gray-800 dark:text-white">
+                        {item.label}
+                      </span>
+                      {item.critico && (
+                        <span class="text-xs bg-red-100 text-red-800 px-2 py-1 rounded-full font-bold">
+                          CRÍTICO
+                        </span>
+                      )}
+                    </label>
+                  ))}
+                </div>
+
+                <div class="mb-6">
+                  <label class="block text-gray-700 dark:text-gray-300 font-bold mb-2">
+                    Notas adicionales
+                  </label>
+                  <textarea 
+                    name="notas"
+                    rows="3"
+                    placeholder="Observaciones, detalles adicionales..."
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  ></textarea>
+                </div>
+
+                <div class="p-4 bg-yellow-50 border border-yellow-200 rounded-lg mb-6">
+                  <label class="flex items-center cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      name="confirmar_entrega"
+                      class="w-5 h-5 rounded text-green-600 focus:ring-green-500 mr-3"
+                    />
+                    <span class="font-bold text-yellow-800">
+                      ✓ Confirmo que he verificado todos los items y el vehículo está listo para entrega
+                    </span>
+                  </label>
+                </div>
+
+                <div class="flex gap-4">
+                  <button type="submit" class="btn-primary flex-1">
+                    <span class="material-symbols-outlined mr-2">save</span>
+                    Guardar y Finalizar Orden
+                  </button>
+                  <a href="/mecanico/dash_mec" class="btn-secondary">
+                    Cancelar
+                  </a>
+                </div>
+              </form>
+            )}
+          </>
+        )}
+      </div>
+    </main>
+  </div>
+</Layout>

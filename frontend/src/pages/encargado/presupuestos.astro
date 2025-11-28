@@ -1,0 +1,573 @@
+---
+export const prerender = false;
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import Card from '../../components/ui/Card.astro';
+import { strapiGet, strapiPost, strapiPut } from '../../lib/strapi';
+import '../../styles/global.css';
+
+const userRole = Astro.cookies.get('user_role')?.value;
+if (!userRole) {
+  return Astro.redirect('/login');
+}
+
+interface Servicio {
+  id: number;
+  documentId: string;
+  nombre: string;
+  precio_base: number;
+  categoria: string;
+}
+
+interface Repuesto {
+  id: number;
+  documentId: string;
+  nombre: string;
+  precio: number;
+  precio_venta: number;
+  stock: number;
+}
+
+interface Orden {
+  id: number;
+  documentId: string;
+  descripcion: string;
+  diagnostico: string | null;
+  estado: string;
+  vehiculo: {
+    marca: string;
+    modelo: string;
+    patente: string;
+    cliente: {
+      nombre: string;
+      apellido: string;
+    } | null;
+  } | null;
+  presupuesto: {
+    id: number;
+    documentId: string;
+    monto_total: number;
+    estado_aprobacion: string;
+  } | null;
+}
+
+let ordenes: Orden[] = [];
+let servicios: Servicio[] = [];
+let repuestos: Repuesto[] = [];
+let message = '';
+let messageType = '';
+let error = '';
+
+const urlMessage = Astro.url.searchParams.get('message');
+const urlType = Astro.url.searchParams.get('type');
+if (urlMessage) {
+  message = urlMessage;
+  messageType = urlType || 'success';
+}
+
+const selectedOrderId = Astro.url.searchParams.get('ordenId') || '';
+
+try {
+  // Obtener órdenes en diagnóstico o reparación que necesitan presupuesto
+  const ordenesRes = await strapiGet('/api/orden-de-trabajos?filters[$or][0][estado][$eq]=en_diagnostico&filters[$or][1][estado][$eq]=en_reparacion&populate[vehiculo][populate][cliente][fields][0]=nombre&populate[vehiculo][populate][cliente][fields][1]=apellido&populate[presupuesto][fields][0]=monto_total&populate[presupuesto][fields][1]=estado_aprobacion&sort[0]=updatedAt:desc');
+  ordenes = ordenesRes.data || [];
+
+  // Obtener servicios disponibles
+  const serviciosRes = await strapiGet('/api/servicios?filters[activo][$eq]=true&sort[0]=nombre:asc');
+  servicios = serviciosRes.data || [];
+
+  // Obtener repuestos disponibles
+  const repuestosRes = await strapiGet('/api/repuestos?filters[stock][$gt]=0&sort[0]=nombre:asc');
+  repuestos = repuestosRes.data || [];
+
+  // Manejar POST
+  if (Astro.request.method === 'POST') {
+    const formData = await Astro.request.formData();
+    const action = formData.get('action');
+
+    if (action === 'crear_presupuesto') {
+      const ordenId = formData.get('ordenId');
+      const serviciosSeleccionados = formData.getAll('servicios[]');
+      const repuestosSeleccionados = formData.getAll('repuestos[]');
+      const cantidades = formData.getAll('cantidades[]');
+      const manoObra = parseFloat(formData.get('mano_obra') as string || '0');
+      const descuento = parseFloat(formData.get('descuento') as string || '0');
+      const notas = formData.get('notas') || '';
+
+      // Calcular totales
+      let subtotalServicios = 0;
+      let subtotalRepuestos = 0;
+
+      // Sumar servicios
+      serviciosSeleccionados.forEach((sId) => {
+        const servicio = servicios.find(s => s.documentId === sId);
+        if (servicio) subtotalServicios += servicio.precio_base;
+      });
+
+      // Sumar repuestos con cantidades
+      repuestosSeleccionados.forEach((rId, index) => {
+        const repuesto = repuestos.find(r => r.documentId === rId);
+        const cantidad = parseInt(cantidades[index] as string || '1');
+        if (repuesto) subtotalRepuestos += (repuesto.precio_venta || repuesto.precio) * cantidad;
+      });
+
+      const subtotal = subtotalServicios + subtotalRepuestos + manoObra;
+      const descuentoMonto = (subtotal * descuento) / 100;
+      const iva = (subtotal - descuentoMonto) * 0.19;
+      const total = subtotal - descuentoMonto + iva;
+
+      // Obtener ID numérico de la orden
+      const orderRes = await strapiGet(`/api/orden-de-trabajos/${ordenId}`);
+      const orderNumericId = orderRes.data?.id;
+
+      // Crear presupuesto
+      await strapiPost('/api/presupuestos', {
+        monto_total: Math.round(total),
+        estado_aprobacion: 'pendiente',
+        descripcion: `Servicios: ${serviciosSeleccionados.length}, Repuestos: ${repuestosSeleccionados.length}. ${notas}`,
+        orden_de_trabajo: orderNumericId
+      });
+
+      return Astro.redirect(`/encargado/presupuestos?message=${encodeURIComponent('Presupuesto creado exitosamente.')}&type=success`);
+    }
+
+    if (action === 'aprobar_presupuesto') {
+      const presupuestoId = formData.get('presupuestoId');
+      
+      await strapiPut(`/api/presupuestos/${presupuestoId}`, {
+        estado_aprobacion: 'aprobado'
+      });
+
+      return Astro.redirect(`/encargado/presupuestos?message=${encodeURIComponent('Presupuesto aprobado.')}&type=success`);
+    }
+
+    if (action === 'rechazar_presupuesto') {
+      const presupuestoId = formData.get('presupuestoId');
+      
+      await strapiPut(`/api/presupuestos/${presupuestoId}`, {
+        estado_aprobacion: 'rechazado'
+      });
+
+      return Astro.redirect(`/encargado/presupuestos?message=${encodeURIComponent('Presupuesto rechazado.')}&type=warning`);
+    }
+  }
+
+} catch (e: any) {
+  console.error('Error:', e);
+  error = 'Error al cargar datos';
+}
+
+function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(amount);
+}
+
+const ordenesConPresupuesto = ordenes.filter(o => o.presupuesto);
+const ordenesSinPresupuesto = ordenes.filter(o => !o.presupuesto);
+---
+
+<DashboardLayout title="Gestión de Presupuestos" role="encargado" currentPath="/encargado/presupuestos">
+  <div class="max-w-7xl mx-auto" x-data="presupuestosApp()">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+      <div>
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Gestión de Presupuestos</h1>
+        <p class="text-gray-500 dark:text-gray-400 mt-2">Crea y gestiona presupuestos para órdenes de trabajo.</p>
+      </div>
+    </div>
+
+    {message && (
+      <div class={`p-4 mb-6 rounded-lg border flex items-center gap-3 ${messageType === 'success' ? 'bg-green-50 border-green-200 text-green-800 dark:bg-green-900/30 dark:border-green-800 dark:text-green-300' : messageType === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-900/30 dark:border-amber-800 dark:text-amber-300' : 'bg-red-50 border-red-200 text-red-800 dark:bg-red-900/30 dark:border-red-800 dark:text-red-300'}`}>
+        <span class="material-symbols-outlined">{messageType === 'success' ? 'check_circle' : messageType === 'warning' ? 'warning' : 'error'}</span>
+        <p>{message}</p>
+      </div>
+    )}
+
+    {error && (
+      <div class="p-4 mb-6 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg text-red-800 dark:text-red-200">
+        {error}
+      </div>
+    )}
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- Lista de Órdenes -->
+      <div class="lg:col-span-2 space-y-6">
+        <!-- Órdenes sin presupuesto -->
+        <Card>
+          <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <span class="material-symbols-outlined text-amber-500">pending_actions</span>
+            Órdenes sin Presupuesto ({ordenesSinPresupuesto.length})
+          </h3>
+          
+          {ordenesSinPresupuesto.length > 0 ? (
+            <div class="space-y-3">
+              {ordenesSinPresupuesto.map((orden) => (
+                <div class="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                      <div class="flex items-center gap-2">
+                        <h4 class="font-bold text-gray-900 dark:text-white">OT-{orden.id}</h4>
+                        <span class={`px-2 py-0.5 rounded text-xs font-medium ${
+                          orden.estado === 'en_diagnostico' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' :
+                          'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
+                        }`}>
+                          {orden.estado === 'en_diagnostico' ? 'En Diagnóstico' : 'En Reparación'}
+                        </span>
+                      </div>
+                      <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                        {orden.vehiculo?.marca} {orden.vehiculo?.modelo} - {orden.vehiculo?.patente}
+                      </p>
+                      <p class="text-sm text-gray-500 dark:text-gray-500">
+                        Cliente: {orden.vehiculo?.cliente?.nombre} {orden.vehiculo?.cliente?.apellido}
+                      </p>
+                      {orden.diagnostico && (
+                        <p class="text-sm text-gray-600 dark:text-gray-400 mt-2 line-clamp-2">
+                          <span class="font-medium">Diagnóstico:</span> {orden.diagnostico}
+                        </p>
+                      )}
+                    </div>
+                    <button 
+                      type="button"
+                      @click={`selectedOrden = ${JSON.stringify(orden)}; showModal = true`}
+                      class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2 whitespace-nowrap"
+                    >
+                      <span class="material-symbols-outlined text-sm">add</span>
+                      Crear Presupuesto
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p class="text-center text-gray-500 dark:text-gray-400 py-8">
+              No hay órdenes pendientes de presupuesto
+            </p>
+          )}
+        </Card>
+
+        <!-- Presupuestos existentes -->
+        <Card>
+          <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <span class="material-symbols-outlined text-green-500">description</span>
+            Presupuestos Creados ({ordenesConPresupuesto.length})
+          </h3>
+          
+          {ordenesConPresupuesto.length > 0 ? (
+            <div class="space-y-3">
+              {ordenesConPresupuesto.map((orden) => (
+                <div class="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                      <div class="flex items-center gap-2">
+                        <h4 class="font-bold text-gray-900 dark:text-white">OT-{orden.id}</h4>
+                        <span class={`px-2 py-0.5 rounded text-xs font-medium ${
+                          orden.presupuesto?.estado_aprobacion === 'aprobado' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' :
+                          orden.presupuesto?.estado_aprobacion === 'rechazado' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' :
+                          'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
+                        }`}>
+                          {orden.presupuesto?.estado_aprobacion === 'aprobado' ? 'Aprobado' :
+                           orden.presupuesto?.estado_aprobacion === 'rechazado' ? 'Rechazado' : 'Pendiente'}
+                        </span>
+                      </div>
+                      <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                        {orden.vehiculo?.marca} {orden.vehiculo?.modelo} - {orden.vehiculo?.patente}
+                      </p>
+                      <p class="text-lg font-bold text-primary-600 dark:text-primary-400 mt-2">
+                        {formatCurrency(orden.presupuesto?.monto_total || 0)}
+                      </p>
+                    </div>
+                    
+                    {orden.presupuesto?.estado_aprobacion === 'pendiente' && (
+                      <div class="flex gap-2">
+                        <form method="POST">
+                          <input type="hidden" name="action" value="aprobar_presupuesto" />
+                          <input type="hidden" name="presupuestoId" value={orden.presupuesto.documentId} />
+                          <button 
+                            type="submit"
+                            class="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-1"
+                          >
+                            <span class="material-symbols-outlined text-sm">check</span>
+                            Aprobar
+                          </button>
+                        </form>
+                        <form method="POST">
+                          <input type="hidden" name="action" value="rechazar_presupuesto" />
+                          <input type="hidden" name="presupuestoId" value={orden.presupuesto.documentId} />
+                          <button 
+                            type="submit"
+                            class="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-1"
+                          >
+                            <span class="material-symbols-outlined text-sm">close</span>
+                            Rechazar
+                          </button>
+                        </form>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p class="text-center text-gray-500 dark:text-gray-400 py-8">
+              No hay presupuestos creados
+            </p>
+          )}
+        </Card>
+      </div>
+
+      <!-- Panel de ayuda -->
+      <div class="space-y-6">
+        <Card>
+          <h3 class="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <span class="material-symbols-outlined text-blue-500">info</span>
+            Flujo de Presupuestos
+          </h3>
+          <ol class="text-sm text-gray-600 dark:text-gray-400 space-y-3 list-decimal list-inside">
+            <li>Mecánico realiza diagnóstico</li>
+            <li>Encargado crea presupuesto</li>
+            <li>Se notifica al cliente</li>
+            <li>Cliente aprueba o rechaza</li>
+            <li>Si aprueba, mecánico inicia reparación</li>
+          </ol>
+        </Card>
+
+        <Card>
+          <h3 class="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <span class="material-symbols-outlined text-green-500">summarize</span>
+            Resumen
+          </h3>
+          <div class="space-y-3">
+            <div class="flex justify-between">
+              <span class="text-gray-600 dark:text-gray-400">Sin presupuesto</span>
+              <span class="font-bold text-amber-600">{ordenesSinPresupuesto.length}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-600 dark:text-gray-400">Pendientes</span>
+              <span class="font-bold text-blue-600">{ordenesConPresupuesto.filter(o => o.presupuesto?.estado_aprobacion === 'pendiente').length}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-600 dark:text-gray-400">Aprobados</span>
+              <span class="font-bold text-green-600">{ordenesConPresupuesto.filter(o => o.presupuesto?.estado_aprobacion === 'aprobado').length}</span>
+            </div>
+          </div>
+        </Card>
+      </div>
+    </div>
+
+    <!-- Modal Crear Presupuesto -->
+    <div 
+      x-show="showModal" 
+      x-cloak
+      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      @click.self="showModal = false"
+    >
+      <div class="bg-white dark:bg-gray-800 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div class="p-6 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+          <h3 class="text-xl font-bold text-gray-900 dark:text-white">Crear Presupuesto</h3>
+          <button @click="showModal = false" class="text-gray-500 hover:text-gray-700">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        
+        <form method="POST" class="p-6 space-y-6">
+          <input type="hidden" name="action" value="crear_presupuesto" />
+          <input type="hidden" name="ordenId" x-bind:value="selectedOrden?.documentId" />
+
+          <!-- Info de la orden -->
+          <div class="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
+            <p class="font-bold text-gray-900 dark:text-white">
+              OT-<span x-text="selectedOrden?.id"></span>
+            </p>
+            <p class="text-sm text-gray-600 dark:text-gray-400" x-text="`${selectedOrden?.vehiculo?.marca} ${selectedOrden?.vehiculo?.modelo}`"></p>
+          </div>
+
+          <!-- Servicios -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Servicios
+            </label>
+            {servicios.length > 0 ? (
+              <div class="max-h-40 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg divide-y divide-gray-200 dark:divide-gray-700">
+                {servicios.map((servicio) => (
+                  <label class="flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      name="servicios[]" 
+                      value={servicio.documentId}
+                      @change="calcularTotal()"
+                      data-precio={servicio.precio_base}
+                      class="w-4 h-4 text-primary-600 rounded"
+                    />
+                    <span class="flex-1 text-gray-900 dark:text-white">{servicio.nombre}</span>
+                    <span class="text-xs text-gray-500 px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded">{servicio.categoria}</span>
+                    <span class="text-gray-600 dark:text-gray-400">{formatCurrency(servicio.precio_base)}</span>
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <div class="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800 text-sm text-amber-700 dark:text-amber-300">
+                <p class="flex items-center gap-2">
+                  <span class="material-symbols-outlined text-sm">warning</span>
+                  No hay servicios en el catálogo. <a href="/admin/servicios" class="underline font-medium">Crear servicios</a>
+                </p>
+              </div>
+            )}
+          </div>
+
+          <!-- Repuestos -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Repuestos
+            </label>
+            <div class="max-h-40 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg divide-y divide-gray-200 dark:divide-gray-700">
+              {repuestos.slice(0, 20).map((repuesto) => (
+                <label class="flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    name="repuestos[]" 
+                    value={repuesto.documentId}
+                    @change="calcularTotal()"
+                    data-precio={repuesto.precio_venta || repuesto.precio}
+                    class="w-4 h-4 text-primary-600 rounded repuesto-check"
+                  />
+                  <span class="flex-1 text-gray-900 dark:text-white">{repuesto.nombre}</span>
+                  <input 
+                    type="number" 
+                    name="cantidades[]" 
+                    value="1" 
+                    min="1" 
+                    max={repuesto.stock}
+                    @change="calcularTotal()"
+                    class="w-16 px-2 py-1 border rounded text-center"
+                  />
+                  <span class="text-gray-600 dark:text-gray-400 w-24 text-right">{formatCurrency(repuesto.precio_venta || repuesto.precio)}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <!-- Mano de obra y descuento -->
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Mano de Obra Adicional
+              </label>
+              <input 
+                type="number" 
+                name="mano_obra" 
+                value="0" 
+                min="0"
+                @input="calcularTotal()"
+                class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Descuento (%)
+              </label>
+              <input 
+                type="number" 
+                name="descuento" 
+                value="0" 
+                min="0" 
+                max="100"
+                @input="calcularTotal()"
+                class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900"
+              />
+            </div>
+          </div>
+
+          <!-- Notas -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Notas
+            </label>
+            <textarea 
+              name="notas"
+              rows="2"
+              class="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900"
+              placeholder="Observaciones adicionales..."
+            ></textarea>
+          </div>
+
+          <!-- Total -->
+          <div class="p-4 bg-primary-50 dark:bg-primary-900/20 rounded-lg">
+            <div class="flex justify-between items-center">
+              <span class="text-gray-700 dark:text-gray-300">Subtotal:</span>
+              <span class="font-medium" x-text="formatCurrency(subtotal)"></span>
+            </div>
+            <div class="flex justify-between items-center">
+              <span class="text-gray-700 dark:text-gray-300">IVA (19%):</span>
+              <span class="font-medium" x-text="formatCurrency(iva)"></span>
+            </div>
+            <div class="flex justify-between items-center text-xl font-bold text-primary-600 dark:text-primary-400 mt-2 pt-2 border-t border-primary-200 dark:border-primary-800">
+              <span>Total:</span>
+              <span x-text="formatCurrency(total)"></span>
+            </div>
+          </div>
+
+          <!-- Botones -->
+          <div class="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <button 
+              type="button"
+              @click="showModal = false"
+              class="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg"
+            >
+              Cancelar
+            </button>
+            <button 
+              type="submit"
+              class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+            >
+              Crear Presupuesto
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</DashboardLayout>
+
+<script>
+  declare const Alpine: any;
+  document.addEventListener('alpine:init', () => {
+    Alpine.data('presupuestosApp', () => ({
+      showModal: false,
+      selectedOrden: null,
+      subtotal: 0,
+      iva: 0,
+      total: 0,
+
+      calcularTotal() {
+        let sum = 0;
+        
+        // Sumar servicios
+        document.querySelectorAll('input[name="servicios[]"]:checked').forEach((el) => {
+          sum += parseFloat((el as HTMLInputElement).dataset.precio || '0');
+        });
+        
+        // Sumar repuestos con cantidad
+        document.querySelectorAll('input[name="repuestos[]"]:checked').forEach((el, index) => {
+          const precio = parseFloat((el as HTMLInputElement).dataset.precio || '0');
+          const cantidadInputs = document.querySelectorAll('input[name="cantidades[]"]');
+          const cantidad = parseInt((cantidadInputs[index] as HTMLInputElement)?.value || '1');
+          sum += precio * cantidad;
+        });
+        
+        // Agregar mano de obra
+        const manoObra = parseFloat((document.querySelector('input[name="mano_obra"]') as HTMLInputElement)?.value || '0');
+        sum += manoObra;
+        
+        // Aplicar descuento
+        const descuento = parseFloat((document.querySelector('input[name="descuento"]') as HTMLInputElement)?.value || '0');
+        const descuentoMonto = (sum * descuento) / 100;
+        
+        this.subtotal = sum - descuentoMonto;
+        this.iva = this.subtotal * 0.19;
+        this.total = this.subtotal + this.iva;
+      },
+
+      formatCurrency(amount: number) {
+        return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(amount);
+      }
+    }));
+  });
+</script>
