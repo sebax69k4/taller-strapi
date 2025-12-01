@@ -3,6 +3,7 @@ export const prerender = false;
 import { strapiGet, strapiPut } from '../../lib/strapi';
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
 import Button from '../../components/ui/Button.astro';
+import { validateCanDeliverVehicle } from '../../lib/validations';
 
 const userRole = Astro.cookies.get('user_role')?.value as 'recepcionista' | 'encargado' | 'mecanico' | undefined;
 if (!userRole) {
@@ -27,17 +28,33 @@ try {
   if (Astro.request.method === 'POST') {
     const formData = await Astro.request.formData();
     const action = formData.get('action');
-    const orderId = formData.get('orderId');
+    const orderId = formData.get('orderId')?.toString() || '';
 
     if (action === 'confirmDelivery' && orderId) {
         try {
-            await strapiPut(`/api/orden-de-trabajos/${orderId}`, {
-                estado: 'entregado'
-            });
-            successMessage = 'Vehículo entregado exitosamente. Orden cerrada.';
+            // Verificar que la orden existe y tiene factura pagada antes de entregar
+            const orderData = await strapiGet(`/api/orden-de-trabajos/${orderId}?populate=factura`);
+            const order = orderData.data;
+            
+            if (!order) {
+                errorMessage = 'Orden no encontrada.';
+            } else {
+                // Validar que se puede entregar
+                const deliveryValidation = validateCanDeliverVehicle(order.estado, order.factura?.estado || null);
+                
+                if (!deliveryValidation.valid) {
+                    errorMessage = deliveryValidation.message;
+                } else {
+                    await strapiPut(`/api/orden-de-trabajos/${orderId}`, {
+                        estado: 'entregado',
+                        fecha_entrega: new Date().toISOString().split('T')[0]
+                    });
+                    successMessage = 'Vehículo entregado exitosamente. Orden cerrada.';
+                }
+            }
         } catch (err: any) {
             console.error('Error updating order:', err);
-            errorMessage = 'Error al procesar la entrega.';
+            errorMessage = 'Error al procesar la entrega: ' + (err.message || 'Error desconocido');
         }
     }
   }

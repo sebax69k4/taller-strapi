@@ -33,7 +33,7 @@ const rolePermissions = db.prepare(`
   ORDER BY r.id
 `).all();
 
-rolePermissions.forEach(rp => {
+rolePermissions.forEach((/** @type {any} */ rp) => {
   console.log(`Role ID ${rp.role_id}: ${rp.role_name} (${rp.role_type}) - ${rp.num_permissions} permisos`);
 });
 
@@ -43,3 +43,5 @@ const roles = db.prepare('SELECT * FROM up_roles').all();
 console.log(JSON.stringify(roles, null, 2));
 
 db.close();
+
+

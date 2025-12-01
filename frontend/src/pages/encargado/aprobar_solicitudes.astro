@@ -3,6 +3,7 @@ export const prerender = false;
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
 import Card from '../../components/ui/Card.astro';
 import { strapiGet, strapiPut } from '../../lib/strapi';
+import { validateStock, validateCanApprovePart } from '../../lib/validations';
 import '../../styles/global.css';
 
 const userRole = Astro.cookies.get('user_role')?.value;
@@ -87,9 +88,10 @@ try {
     const stockActual = parseInt(formData.get('stockActual') as string || '0');
 
     if (action === 'aprobar') {
-      // Verificar stock
-      if (stockActual < cantidad) {
-        return Astro.redirect(`/encargado/aprobar_solicitudes?message=${encodeURIComponent('Stock insuficiente para aprobar esta solicitud.')}&type=error`);
+      // Verificar stock con validación
+      const stockValidation = validateCanApprovePart(stockActual, cantidad);
+      if (!stockValidation.valid) {
+        return Astro.redirect(`/encargado/aprobar_solicitudes?message=${encodeURIComponent(stockValidation.message)}&type=error`);
       }
 
       // Actualizar estado de solicitud
@@ -104,7 +106,7 @@ try {
 
       return Astro.redirect(`/encargado/aprobar_solicitudes?message=${encodeURIComponent('Solicitud aprobada y stock actualizado.')}&type=success`);
     } else if (action === 'rechazar') {
-      const motivoRechazo = formData.get('motivo_rechazo') || 'Sin especificar';
+      const motivoRechazo = formData.get('motivo_rechazo')?.toString().trim() || 'Sin especificar';
       
       await strapiPut(`/api/solicitud-de-repuestos/${solicitudId}`, {
         estado: 'rechazado',

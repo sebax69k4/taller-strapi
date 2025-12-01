@@ -3,6 +3,7 @@ export const prerender = false;
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
 import Card from '../../components/ui/Card.astro';
 import { strapiGet, strapiPut } from '../../lib/strapi';
+import { validateRequired } from '../../lib/validations';
 
 const userRole = Astro.cookies.get('user_role')?.value as 'recepcionista' | 'encargado' | 'mecanico' | undefined;
 if (!userRole) {
@@ -17,19 +18,29 @@ let successMessage = '';
 if (Astro.request.method === 'POST') {
   try {
     const formData = await Astro.request.formData();
-    const facturaId = formData.get('factura_id') as string;
-    const metodoPago = formData.get('metodo_pago') as string;
-    const referencia = formData.get('referencia') as string;
+    const facturaId = formData.get('factura_id')?.toString().trim() || '';
+    const metodoPago = formData.get('metodo_pago')?.toString().trim() || '';
+    const referencia = formData.get('referencia')?.toString().trim() || '';
     
-    // Actualizar factura con el pago
-    await strapiPut(`/api/facturas/${facturaId}`, {
-      estado: 'pagado',
-      metodo_pago: metodoPago,
-      referencia_pago: referencia || null,
-      fecha_pago: new Date().toISOString(),
-    });
+    // Validaciones
+    const facturaVal = validateRequired(facturaId, 'ID de factura');
+    const metodoVal = validateRequired(metodoPago, 'Método de pago');
     
-    successMessage = 'Pago confirmado exitosamente. El vehículo está listo para entrega.';
+    if (!facturaVal.valid) {
+      error = facturaVal.message;
+    } else if (!metodoVal.valid) {
+      error = metodoVal.message;
+    } else {
+      // Actualizar factura con el pago
+      await strapiPut(`/api/facturas/${facturaId}`, {
+        estado: 'pagado',
+        metodo_pago: metodoPago,
+        referencia_pago: referencia || null,
+        fecha_pago: new Date().toISOString(),
+      });
+      
+      successMessage = 'Pago confirmado exitosamente. El vehículo está listo para entrega.';
+    }
   } catch (e: any) {
     error = 'Error al confirmar pago: ' + e.message;
   }

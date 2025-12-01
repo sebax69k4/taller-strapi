@@ -6,6 +6,7 @@ import Card from '../../components/ui/Card.astro';
 import Button from '../../components/ui/Button.astro';
 import Input from '../../components/ui/Input.astro';
 import { strapiGet, strapiPost, strapiPut } from '../../lib/strapi';
+import { validateRut, validateEmail, validatePhone, validateRequired } from '../../lib/validations';
 
 const userRole = Astro.cookies.get('user_role')?.value;
 
@@ -30,23 +31,39 @@ if (isEditMode && clientId) {
 
 let message = Astro.url.searchParams.get('message');
 let messageType = Astro.url.searchParams.get('type');
+let validationErrors: string[] = [];
 
 if (Astro.request.method === 'POST') {
   try {
     const body = await Astro.request.text();
     const params = new URLSearchParams(body);
-    const nombre = params.get('nombre');
-    const apellido = params.get('apellido');
-    const email = params.get('email');
-    const telefono = params.get('telefono');
-    const rut = params.get('rut');
+    const nombre = params.get('nombre')?.trim() || '';
+    const apellido = params.get('apellido')?.trim() || '';
+    const email = params.get('email')?.trim() || '';
+    const telefono = params.get('telefono')?.trim() || '';
+    const rut = params.get('rut')?.trim() || '';
     const idToUpdate = params.get('id');
 
-    // Validación básica
-    if (!nombre || !apellido || !email || !telefono || !rut) {
+    // Validaciones del servidor
+    const nombreVal = validateRequired(nombre, 'Nombre');
+    if (!nombreVal.valid) validationErrors.push(nombreVal.message);
+
+    const apellidoVal = validateRequired(apellido, 'Apellido');
+    if (!apellidoVal.valid) validationErrors.push(apellidoVal.message);
+
+    const rutVal = validateRut(rut);
+    if (!rutVal.valid) validationErrors.push(rutVal.message);
+
+    const emailVal = validateEmail(email);
+    if (!emailVal.valid) validationErrors.push(emailVal.message);
+
+    const telefonoVal = validatePhone(telefono);
+    if (!telefonoVal.valid) validationErrors.push(telefonoVal.message);
+
+    if (validationErrors.length > 0) {
         const redirectUrl = idToUpdate ? `/recepcion/crear_cliente?id=${idToUpdate}` : '/recepcion/crear_cliente';
         const separator = idToUpdate ? '&' : '?';
-        return Astro.redirect(`${redirectUrl}${separator}message=${encodeURIComponent('Todos los campos son obligatorios.')}&type=error`);
+        return Astro.redirect(`${redirectUrl}${separator}message=${encodeURIComponent(validationErrors.join('. '))}&type=error`);
     }
 
     const clientData = { nombre, apellido, email, telefono, rut };
@@ -72,82 +89,242 @@ if (Astro.request.method === 'POST') {
 ---
 
 <DashboardLayout title={isEditMode ? 'Editar Cliente' : 'Registrar Nuevo Cliente'} role="recepcionista" currentPath={Astro.url.pathname}>
-    <script define:vars={{ message, messageType }}>
-        document.addEventListener('alpine:init', () => {
-            Alpine.data('clienteForm', () => ({
-                message: message || '',
-                messageType: messageType || ''
-            }));
-        });
+    <script is:inline>
+    document.addEventListener('alpine:init', () => {
+        Alpine.data('clienteFormValidator', (initialData) => ({
+            nombre: initialData.nombre || '',
+            apellido: initialData.apellido || '',
+            rut: initialData.rut || '',
+            email: initialData.email || '',
+            telefono: initialData.telefono || '',
+            errors: {},
+            touched: {},
+            serverMessage: initialData.serverMessage || '',
+            serverMessageType: initialData.serverMessageType || '',
+            isSubmitting: false,
+
+            formatRut(rut) {
+                let value = rut.replace(/\./g, '').replace(/-/g, '');
+                value = value.replace(/[^0-9kK]/g, '');
+                if (value.length === 0) return '';
+                const dv = value.slice(-1).toUpperCase();
+                let body = value.slice(0, -1);
+                let formatted = '';
+                while (body.length > 3) {
+                    formatted = '.' + body.slice(-3) + formatted;
+                    body = body.slice(0, -3);
+                }
+                formatted = body + formatted;
+                return formatted + '-' + dv;
+            },
+
+            calculateDV(rutBody) {
+                let sum = 0;
+                let multiplier = 2;
+                for (let i = rutBody.length - 1; i >= 0; i--) {
+                    sum += parseInt(rutBody[i]) * multiplier;
+                    multiplier = multiplier === 7 ? 2 : multiplier + 1;
+                }
+                const remainder = 11 - (sum % 11);
+                if (remainder === 11) return '0';
+                if (remainder === 10) return 'K';
+                return remainder.toString();
+            },
+
+            onRutInput(event) {
+                this.rut = this.formatRut(event.target.value);
+                event.target.value = this.rut;
+                if (this.touched.rut) this.validateField('rut');
+            },
+
+            validateField(field) {
+                this.touched[field] = true;
+                delete this.errors[field];
+
+                switch (field) {
+                    case 'nombre':
+                        if (!this.nombre.trim()) {
+                            this.errors.nombre = 'El nombre es obligatorio';
+                        } else if (this.nombre.length < 2) {
+                            this.errors.nombre = 'El nombre debe tener al menos 2 caracteres';
+                        }
+                        break;
+                    case 'apellido':
+                        if (!this.apellido.trim()) {
+                            this.errors.apellido = 'El apellido es obligatorio';
+                        } else if (this.apellido.length < 2) {
+                            this.errors.apellido = 'El apellido debe tener al menos 2 caracteres';
+                        }
+                        break;
+                    case 'rut':
+                        const cleanRut = this.rut.replace(/\./g, '').replace(/-/g, '').toUpperCase();
+                        if (!cleanRut || cleanRut.length < 8 || cleanRut.length > 9) {
+                            this.errors.rut = 'El RUT debe tener entre 8 y 9 caracteres';
+                        } else {
+                            const body = cleanRut.slice(0, -1);
+                            const dv = cleanRut.slice(-1);
+                            if (!/^\d+$/.test(body)) {
+                                this.errors.rut = 'El RUT contiene caracteres inválidos';
+                            } else if (dv !== this.calculateDV(body)) {
+                                this.errors.rut = 'RUT inválido (dígito verificador incorrecto)';
+                            }
+                        }
+                        break;
+                    case 'email':
+                        const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+                        if (!this.email.trim()) {
+                            this.errors.email = 'El email es obligatorio';
+                        } else if (!emailRegex.test(this.email)) {
+                            this.errors.email = 'El formato del email no es válido';
+                        }
+                        break;
+                    case 'telefono':
+                        const cleanPhone = this.telefono.replace(/[^\d]/g, '');
+                        if (!cleanPhone) {
+                            this.errors.telefono = 'El teléfono es obligatorio';
+                        } else if (cleanPhone.length !== 9 && cleanPhone.length !== 11) {
+                            this.errors.telefono = 'El teléfono debe tener 9 dígitos';
+                        } else if (cleanPhone.length === 9 && !cleanPhone.startsWith('9')) {
+                            this.errors.telefono = 'Los celulares deben comenzar con 9';
+                        }
+                        break;
+                }
+                return !this.errors[field];
+            },
+
+            validateAll() {
+                ['nombre', 'apellido', 'rut', 'email', 'telefono'].forEach(f => this.validateField(f));
+                return Object.keys(this.errors).length === 0;
+            },
+
+            get isValid() {
+                return Object.keys(this.errors).length === 0 && 
+                       this.nombre && this.apellido && this.rut && this.email && this.telefono;
+            },
+
+            submitForm(event) {
+                if (!this.validateAll()) {
+                    event.preventDefault();
+                    return false;
+                }
+                this.isSubmitting = true;
+                return true;
+            }
+        }));
+    });
     </script>
-    <div class="w-full max-w-2xl mx-auto" x-data="clienteForm">
+    <div class="w-full max-w-2xl mx-auto" x-data={`clienteFormValidator(${JSON.stringify({ nombre: cliente?.nombre || '', apellido: cliente?.apellido || '', rut: cliente?.rut || '', email: cliente?.email || '', telefono: cliente?.telefono || '', serverMessage: message || '', serverMessageType: messageType || '' })})`}>
         <div class="flex flex-col gap-2 mb-6">
             <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">{isEditMode ? 'Editar' : 'Registrar Nuevo'} Cliente</h1>
             <p class="text-gray-500 dark:text-gray-400">{isEditMode ? 'Modifique los datos del cliente.' : 'Complete los siguientes campos para añadir un nuevo cliente al sistema.'}</p>
         </div>
         
-        <template x-if="message">
-            <div x-show="message" x-transition class="p-4 mb-6 rounded-lg text-sm flex items-center gap-2" :class="{ 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300': messageType === 'success', 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300': messageType === 'error' }" role="alert">
-                <span class="material-symbols-outlined text-lg" x-text="messageType === 'success' ? 'check_circle' : 'error'"></span>
-                <span x-text="message"></span>
+        <!-- Server Message -->
+        <template x-if="serverMessage">
+            <div x-show="serverMessage" x-transition class="p-4 mb-6 rounded-lg text-sm flex items-center gap-2" :class="{ 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300': serverMessageType === 'success', 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300': serverMessageType === 'error' }" role="alert">
+                <span class="material-symbols-outlined text-lg" x-text="serverMessageType === 'success' ? 'check_circle' : 'error'"></span>
+                <span x-text="serverMessage"></span>
             </div>
         </template>
 
         <Card>
-            <form method="POST" class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+            <form method="POST" @submit="submitForm($event)" class="grid grid-cols-1 gap-6 sm:grid-cols-2">
                 {isEditMode && <input type="hidden" name="id" value={clientId} />}
                 
-                <Input 
-                    name="nombre" 
-                    id="nombre" 
-                    label="Nombre" 
-                    placeholder="ej: Juan" 
-                    required 
-                    value={cliente?.nombre || ''}
-                    class="sm:col-span-1"
-                />
+                <!-- Nombre -->
+                <div class="sm:col-span-1">
+                    <label for="nombre" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nombre <span class="text-red-500">*</span></label>
+                    <input 
+                        type="text"
+                        name="nombre" 
+                        id="nombre" 
+                        x-model="nombre"
+                        @blur="validateField('nombre')"
+                        @input="touched.nombre && validateField('nombre')"
+                        placeholder="ej: Juan"
+                        class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-800 dark:text-white transition-colors"
+                        :class="errors.nombre ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 dark:border-gray-600'"
+                        required
+                    />
+                    <p x-show="errors.nombre" x-text="errors.nombre" class="mt-1 text-sm text-red-600 dark:text-red-400"></p>
+                </div>
                 
-                <Input 
-                    name="apellido" 
-                    id="apellido" 
-                    label="Apellido" 
-                    placeholder="ej: Pérez" 
-                    required 
-                    value={cliente?.apellido || ''}
-                    class="sm:col-span-1"
-                />
+                <!-- Apellido -->
+                <div class="sm:col-span-1">
+                    <label for="apellido" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Apellido <span class="text-red-500">*</span></label>
+                    <input 
+                        type="text"
+                        name="apellido" 
+                        id="apellido" 
+                        x-model="apellido"
+                        @blur="validateField('apellido')"
+                        @input="touched.apellido && validateField('apellido')"
+                        placeholder="ej: Pérez"
+                        class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-800 dark:text-white transition-colors"
+                        :class="errors.apellido ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 dark:border-gray-600'"
+                        required
+                    />
+                    <p x-show="errors.apellido" x-text="errors.apellido" class="mt-1 text-sm text-red-600 dark:text-red-400"></p>
+                </div>
                 
-                <Input 
-                    name="rut" 
-                    id="rut" 
-                    label="RUT" 
-                    placeholder="ej: 12.345.678-9" 
-                    required 
-                    value={cliente?.rut || ''}
-                    class="sm:col-span-2"
-                />
+                <!-- RUT -->
+                <div class="sm:col-span-2">
+                    <label for="rut" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">RUT <span class="text-red-500">*</span></label>
+                    <input 
+                        type="text"
+                        name="rut" 
+                        id="rut" 
+                        x-model="rut"
+                        @input="onRutInput($event)"
+                        @blur="validateField('rut')"
+                        placeholder="ej: 12.345.678-9"
+                        maxlength="12"
+                        class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-800 dark:text-white transition-colors"
+                        :class="errors.rut ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 dark:border-gray-600'"
+                        required
+                    />
+                    <p x-show="errors.rut" x-text="errors.rut" class="mt-1 text-sm text-red-600 dark:text-red-400"></p>
+                    <p x-show="!errors.rut && touched.rut && rut" class="mt-1 text-sm text-green-600 dark:text-green-400 flex items-center gap-1">
+                        <span class="material-symbols-outlined text-sm">check_circle</span> RUT válido
+                    </p>
+                </div>
                 
-                <Input 
-                    name="email" 
-                    id="email" 
-                    label="Email" 
-                    type="email"
-                    placeholder="ej: juan.perez@email.com" 
-                    required 
-                    value={cliente?.email || ''}
-                    class="sm:col-span-2"
-                />
+                <!-- Email -->
+                <div class="sm:col-span-2">
+                    <label for="email" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email <span class="text-red-500">*</span></label>
+                    <input 
+                        type="email"
+                        name="email" 
+                        id="email" 
+                        x-model="email"
+                        @blur="validateField('email')"
+                        @input="touched.email && validateField('email')"
+                        placeholder="ej: juan.perez@email.com"
+                        class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-800 dark:text-white transition-colors"
+                        :class="errors.email ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 dark:border-gray-600'"
+                        required
+                    />
+                    <p x-show="errors.email" x-text="errors.email" class="mt-1 text-sm text-red-600 dark:text-red-400"></p>
+                </div>
                 
-                <Input 
-                    name="telefono" 
-                    id="telefono" 
-                    label="Teléfono" 
-                    type="tel"
-                    placeholder="ej: +56912345678" 
-                    required 
-                    value={cliente?.telefono || ''}
-                    class="sm:col-span-2"
-                />
+                <!-- Teléfono -->
+                <div class="sm:col-span-2">
+                    <label for="telefono" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Teléfono <span class="text-red-500">*</span></label>
+                    <input 
+                        type="tel"
+                        name="telefono" 
+                        id="telefono" 
+                        x-model="telefono"
+                        @blur="validateField('telefono')"
+                        @input="touched.telefono && validateField('telefono')"
+                        placeholder="ej: 912345678"
+                        class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-800 dark:text-white transition-colors"
+                        :class="errors.telefono ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 dark:border-gray-600'"
+                        required
+                    />
+                    <p x-show="errors.telefono" x-text="errors.telefono" class="mt-1 text-sm text-red-600 dark:text-red-400"></p>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Ingrese 9 dígitos comenzando con 9 (ej: 912345678)</p>
+                </div>
 
                 <div class="sm:col-span-2 flex justify-end gap-3 pt-4 border-t border-gray-100 dark:border-gray-800 mt-2">
                      <a href="/recepcion/list_c_y_v">
@@ -155,9 +332,15 @@ if (Astro.request.method === 'POST') {
                             Cancelar
                         </Button>
                     </a>
-                    <Button type="submit" icon="save">
-                        {isEditMode ? 'Actualizar Cliente' : 'Guardar Cliente'}
-                    </Button>
+                    <button 
+                        type="submit" 
+                        :disabled="isSubmitting || Object.keys(errors).length > 0"
+                        class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                        <span class="material-symbols-outlined text-lg" x-show="!isSubmitting">save</span>
+                        <span class="material-symbols-outlined text-lg animate-spin" x-show="isSubmitting">progress_activity</span>
+                        <span x-text="isSubmitting ? 'Guardando...' : '{isEditMode ? 'Actualizar' : 'Guardar'} Cliente'"></span>
+                    </button>
                 </div>
             </form>
         </Card>

@@ -5,6 +5,7 @@ import Card from '../../components/ui/Card.astro';
 import Button from '../../components/ui/Button.astro';
 import Input from '../../components/ui/Input.astro';
 import { strapiGet, strapiPost } from '../../lib/strapi';
+import { validatePatente, validateVehicleYear, validateRequired } from '../../lib/validations';
 
 
 // TypeScript Interfaces for Strapi Data
@@ -33,6 +34,7 @@ if (!userRole) {
 let message = Astro.url.searchParams.get('message');
 let messageType = Astro.url.searchParams.get('type');
 let clientes: Cliente[] = [];
+let validationErrors: string[] = [];
 
 try {
     const response = await strapiGet('/api/clientes?sort=nombre:asc');
@@ -47,25 +49,39 @@ try {
 if (Astro.request.method === 'POST') {
   try {
     const formData = await Astro.request.formData();
-    const clienteId = formData.get('cliente');
-    const patente = formData.get('patente');
-    const marca = formData.get('marca');
-    const modelo = formData.get('modelo');
-    const anio = formData.get('anio');
-    const vin = formData.get('vin');
+    const clienteId = formData.get('cliente')?.toString() || '';
+    const patente = formData.get('patente')?.toString().toUpperCase().trim() || '';
+    const marca = formData.get('marca')?.toString().trim() || '';
+    const modelo = formData.get('modelo')?.toString().trim() || '';
+    const anio = formData.get('anio')?.toString() || '';
+    const vin = formData.get('vin')?.toString().trim() || '';
 
-    // Basic validation
-    if (!clienteId || !patente || !marca || !modelo || !anio) {
-        return Astro.redirect(`/recepcion/crear_vehiculo?message=${encodeURIComponent('Todos los campos obligatorios deben ser completados.')}&type=error`);
+    // Validaciones del servidor
+    if (!clienteId) validationErrors.push('Debe seleccionar un cliente');
+
+    const patenteVal = validatePatente(patente);
+    if (!patenteVal.valid) validationErrors.push(patenteVal.message);
+
+    const marcaVal = validateRequired(marca, 'Marca');
+    if (!marcaVal.valid) validationErrors.push(marcaVal.message);
+
+    const modeloVal = validateRequired(modelo, 'Modelo');
+    if (!modeloVal.valid) validationErrors.push(modeloVal.message);
+
+    const anioVal = validateVehicleYear(anio);
+    if (!anioVal.valid) validationErrors.push(anioVal.message);
+
+    if (validationErrors.length > 0) {
+        return Astro.redirect(`/recepcion/crear_vehiculo?message=${encodeURIComponent(validationErrors.join('. '))}&type=error`);
     }
 
     const result = await strapiPost('/api/vehiculos', {
       patente,
       marca,
       modelo,
-      ano: parseInt(anio as string, 10),
+      ano: parseInt(anio, 10),
       numero_de_chasis: vin || null,
-      cliente: parseInt(clienteId as string, 10)
+      cliente: parseInt(clienteId, 10)
     });
 
     const successMessage = `Vehículo con patente "${patente}" creado y asociado exitosamente.`;
@@ -79,29 +95,116 @@ if (Astro.request.method === 'POST') {
 ---
 
 <DashboardLayout title="Añadir Nuevo Vehículo" role="recepcionista" currentPath={Astro.url.pathname}>
-    <script define:vars={{ message, messageType }}>
-        document.addEventListener('alpine:init', () => {
-            Alpine.data('vehiculoForm', () => ({
-                message: message || '',
-                messageType: messageType || ''
-            }));
-        });
+    <script is:inline>
+    document.addEventListener('alpine:init', () => {
+        Alpine.data('vehiculoFormValidator', (initialData) => ({
+            cliente: initialData.cliente || '',
+            patente: initialData.patente || '',
+            marca: initialData.marca || '',
+            modelo: initialData.modelo || '',
+            anio: initialData.anio || '',
+            vin: initialData.vin || '',
+            errors: {},
+            touched: {},
+            serverMessage: initialData.serverMessage || '',
+            serverMessageType: initialData.serverMessageType || '',
+            isSubmitting: false,
+
+            formatPatente(patente) {
+                return patente.toUpperCase().replace(/[^A-Z0-9]/g, '');
+            },
+
+            onPatenteInput(event) {
+                this.patente = this.formatPatente(event.target.value);
+                event.target.value = this.patente;
+                if (this.touched.patente) this.validateField('patente');
+            },
+
+            validateField(field) {
+                this.touched[field] = true;
+                delete this.errors[field];
+
+                switch (field) {
+                    case 'cliente':
+                        if (!this.cliente) {
+                            this.errors.cliente = 'Debe seleccionar un cliente';
+                        }
+                        break;
+                    case 'patente':
+                        const cleanPatente = this.formatPatente(this.patente);
+                        if (!cleanPatente) {
+                            this.errors.patente = 'La patente es obligatoria';
+                        } else {
+                            const formatoNuevo = /^[A-Z]{4}\d{2}$/;
+                            const formatoAntiguo = /^[A-Z]{2}\d{4}$/;
+                            const formatoIntermedio = /^[A-Z]{3}\d{3}$/;
+                            if (!formatoNuevo.test(cleanPatente) && !formatoAntiguo.test(cleanPatente) && !formatoIntermedio.test(cleanPatente)) {
+                                this.errors.patente = 'Formato inválido. Use: ABCD12, AB1234 o ABC123';
+                            }
+                        }
+                        break;
+                    case 'marca':
+                        if (!this.marca.trim()) {
+                            this.errors.marca = 'La marca es obligatoria';
+                        }
+                        break;
+                    case 'modelo':
+                        if (!this.modelo.trim()) {
+                            this.errors.modelo = 'El modelo es obligatorio';
+                        }
+                        break;
+                    case 'anio':
+                        const currentYear = new Date().getFullYear();
+                        const yearNum = parseInt(this.anio);
+                        if (isNaN(yearNum)) {
+                            this.errors.anio = 'El año debe ser un número';
+                        } else if (yearNum < 1900) {
+                            this.errors.anio = 'El año no puede ser anterior a 1900';
+                        } else if (yearNum > currentYear + 1) {
+                            this.errors.anio = `El año no puede ser mayor a ${currentYear + 1}`;
+                        }
+                        break;
+                }
+                return !this.errors[field];
+            },
+
+            validateAll() {
+                ['cliente', 'patente', 'marca', 'modelo', 'anio'].forEach(f => this.validateField(f));
+                return Object.keys(this.errors).length === 0;
+            },
+
+            get isValid() {
+                return Object.keys(this.errors).length === 0 && 
+                       this.cliente && this.patente && this.marca && this.modelo && this.anio;
+            },
+
+            submitForm(event) {
+                if (!this.validateAll()) {
+                    event.preventDefault();
+                    return false;
+                }
+                this.isSubmitting = true;
+                return true;
+            }
+        }));
+    });
     </script>
-    <div class="w-full max-w-3xl mx-auto" x-data="vehiculoForm">
+    <div class="w-full max-w-3xl mx-auto" x-data={`vehiculoFormValidator(${JSON.stringify({ cliente: '', patente: '', marca: '', modelo: '', anio: '', vin: '', serverMessage: message || '', serverMessageType: messageType || '' })})`}>
         <div class="flex flex-col gap-2 mb-8">
             <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Añadir Nuevo Vehículo</h1>
             <p class="text-gray-500 dark:text-gray-400">Seleccione un cliente y complete los detalles para registrar un nuevo vehículo.</p>
         </div>
 
-        <template x-if="message">
-            <div x-show="message" x-transition class="p-4 mb-6 rounded-lg text-sm flex items-center gap-2" :class="{ 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300': messageType === 'success', 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300': messageType === 'error' }" role="alert">
-                <span class="material-symbols-outlined text-lg" x-text="messageType === 'success' ? 'check_circle' : 'error'"></span>
-                <span x-text="message"></span>
+        <!-- Server Message -->
+        <template x-if="serverMessage">
+            <div x-show="serverMessage" x-transition class="p-4 mb-6 rounded-lg text-sm flex items-center gap-2" :class="{ 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300': serverMessageType === 'success', 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300': serverMessageType === 'error' }" role="alert">
+                <span class="material-symbols-outlined text-lg" x-text="serverMessageType === 'success' ? 'check_circle' : 'error'"></span>
+                <span x-text="serverMessage"></span>
             </div>
         </template>
 
         <Card>
-            <form method="POST" class="space-y-8">
+            <form method="POST" @submit="submitForm($event)" class="space-y-8">
                 <!-- Client Selection -->
                 <div>
                     <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
@@ -109,13 +212,21 @@ if (Astro.request.method === 'POST') {
                         Selección de Cliente
                     </h2>
                     <div class="flex flex-col gap-2">
-                        <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Cliente Existente</label>
-                        <select name="cliente" class="form-select w-full rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 focus:border-primary-500 focus:ring-primary-500 dark:text-gray-200" required>
-                            <option value="" disabled selected>Seleccione un cliente...</option>
+                        <label class="text-sm font-medium text-gray-700 dark:text-gray-300">Cliente Existente <span class="text-red-500">*</span></label>
+                        <select 
+                            name="cliente" 
+                            x-model="cliente"
+                            @change="validateField('cliente')"
+                            class="form-select w-full rounded-lg bg-white dark:bg-gray-800 focus:ring-primary-500 dark:text-gray-200 transition-colors"
+                            :class="errors.cliente ? 'border-red-500 focus:ring-red-500 focus:border-red-500' : 'border-gray-300 dark:border-gray-700 focus:border-primary-500'"
+                            required
+                        >
+                            <option value="" disabled>Seleccione un cliente...</option>
                             {clientes.map((cliente: any) => (
                                 <option value={cliente.id}>{cliente.nombre} {cliente.apellido} ({cliente.rut})</option>
                             ))}
                         </select>
+                        <p x-show="errors.cliente" x-text="errors.cliente" class="mt-1 text-sm text-red-600 dark:text-red-400"></p>
                         <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">El vehículo se asociará a este cliente. Si el cliente no existe, <a href="/recepcion/crear_cliente" class="text-primary-600 hover:underline">créelo aquí</a>.</p>
                     </div>
                 </div>
@@ -129,48 +240,97 @@ if (Astro.request.method === 'POST') {
                         Detalles del Vehículo
                     </h2>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                        <Input 
-                            name="patente" 
-                            id="patente" 
-                            label="Patente" 
-                            placeholder="ABCD12" 
-                            required 
-                        />
+                        <!-- Patente -->
+                        <div>
+                            <label for="patente" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Patente <span class="text-red-500">*</span></label>
+                            <input 
+                                type="text"
+                                name="patente" 
+                                id="patente"
+                                x-model="patente"
+                                @input="onPatenteInput($event)"
+                                @blur="validateField('patente')"
+                                placeholder="ABCD12"
+                                maxlength="6"
+                                class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-800 dark:text-white transition-colors uppercase"
+                                :class="errors.patente ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 dark:border-gray-600'"
+                                required
+                            />
+                            <p x-show="errors.patente" x-text="errors.patente" class="mt-1 text-sm text-red-600 dark:text-red-400"></p>
+                            <p x-show="!errors.patente && touched.patente && patente" class="mt-1 text-sm text-green-600 dark:text-green-400 flex items-center gap-1">
+                                <span class="material-symbols-outlined text-sm">check_circle</span> Patente válida
+                            </p>
+                        </div>
                         
-                        <Input 
-                            name="marca" 
-                            id="marca" 
-                            label="Marca" 
-                            placeholder="Ej: Toyota" 
-                            required 
-                        />
+                        <!-- Marca -->
+                        <div>
+                            <label for="marca" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Marca <span class="text-red-500">*</span></label>
+                            <input 
+                                type="text"
+                                name="marca" 
+                                id="marca"
+                                x-model="marca"
+                                @blur="validateField('marca')"
+                                @input="touched.marca && validateField('marca')"
+                                placeholder="Ej: Toyota"
+                                class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-800 dark:text-white transition-colors"
+                                :class="errors.marca ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 dark:border-gray-600'"
+                                required
+                            />
+                            <p x-show="errors.marca" x-text="errors.marca" class="mt-1 text-sm text-red-600 dark:text-red-400"></p>
+                        </div>
                         
-                        <Input 
-                            name="modelo" 
-                            id="modelo" 
-                            label="Modelo" 
-                            placeholder="Ej: Yaris" 
-                            required 
-                        />
+                        <!-- Modelo -->
+                        <div>
+                            <label for="modelo" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Modelo <span class="text-red-500">*</span></label>
+                            <input 
+                                type="text"
+                                name="modelo" 
+                                id="modelo"
+                                x-model="modelo"
+                                @blur="validateField('modelo')"
+                                @input="touched.modelo && validateField('modelo')"
+                                placeholder="Ej: Yaris"
+                                class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-800 dark:text-white transition-colors"
+                                :class="errors.modelo ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 dark:border-gray-600'"
+                                required
+                            />
+                            <p x-show="errors.modelo" x-text="errors.modelo" class="mt-1 text-sm text-red-600 dark:text-red-400"></p>
+                        </div>
                         
-                        <Input 
-                            name="anio" 
-                            id="anio" 
-                            label="Año" 
-                            type="number"
-                            placeholder="Ej: 2022" 
-                            min="1900" 
-                            max={new Date().getFullYear() + 1}
-                            required 
-                        />
+                        <!-- Año -->
+                        <div>
+                            <label for="anio" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Año <span class="text-red-500">*</span></label>
+                            <input 
+                                type="number"
+                                name="anio" 
+                                id="anio"
+                                x-model="anio"
+                                @blur="validateField('anio')"
+                                @input="touched.anio && validateField('anio')"
+                                placeholder="Ej: 2022"
+                                min="1900"
+                                max={new Date().getFullYear() + 1}
+                                class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-800 dark:text-white transition-colors"
+                                :class="errors.anio ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 dark:border-gray-600'"
+                                required
+                            />
+                            <p x-show="errors.anio" x-text="errors.anio" class="mt-1 text-sm text-red-600 dark:text-red-400"></p>
+                        </div>
                         
-                        <Input 
-                            name="vin" 
-                            id="vin" 
-                            label="Nº de Chasis (VIN)" 
-                            placeholder="Opcional" 
-                            class="sm:col-span-2"
-                        />
+                        <!-- VIN -->
+                        <div class="sm:col-span-2">
+                            <label for="vin" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nº de Chasis (VIN)</label>
+                            <input 
+                                type="text"
+                                name="vin" 
+                                id="vin"
+                                x-model="vin"
+                                placeholder="Opcional"
+                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-800 dark:text-white transition-colors"
+                            />
+                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Número de identificación del vehículo (opcional)</p>
+                        </div>
                     </div>
                 </div>
 
@@ -183,9 +343,15 @@ if (Astro.request.method === 'POST') {
                             Cancelar
                         </Button>
                     </a>
-                    <Button type="submit" icon="add_circle">
-                        Guardar Vehículo
-                    </Button>
+                    <button 
+                        type="submit" 
+                        :disabled="isSubmitting || Object.keys(errors).length > 0"
+                        class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                        <span class="material-symbols-outlined text-lg" x-show="!isSubmitting">add_circle</span>
+                        <span class="material-symbols-outlined text-lg animate-spin" x-show="isSubmitting">progress_activity</span>
+                        <span x-text="isSubmitting ? 'Guardando...' : 'Guardar Vehículo'"></span>
+                    </button>
                 </div>
             </form>
         </Card>

@@ -4,6 +4,7 @@ import DashboardLayout from '../../layouts/DashboardLayout.astro';
 import Button from '../../components/ui/Button.astro';
 import Input from '../../components/ui/Input.astro';
 import { strapiGet, strapiPost, strapiPut } from '../../lib/strapi';
+import { validateRequired, validateSku, validatePositiveInteger, validatePositiveDecimal } from '../../lib/validations';
 
 const userRole = Astro.cookies.get('user_role')?.value as 'recepcionista' | 'encargado' | 'mecanico' | undefined;
 if (!userRole) {
@@ -32,24 +33,53 @@ try {
     const action = formData.get('action');
     
     if (action === 'add') {
-        const nombre = formData.get('nombre');
-        const sku = formData.get('sku');
-        const stock = Number(formData.get('stock'));
-        const precio = Number(formData.get('precio'));
-        const descripcion = formData.get('descripcion');
+        const nombre = formData.get('nombre')?.toString().trim() || '';
+        const sku = formData.get('sku')?.toString().toUpperCase().trim() || '';
+        const stock = formData.get('stock')?.toString() || '';
+        const precio = formData.get('precio')?.toString() || '';
+        const descripcion = formData.get('descripcion')?.toString().trim() || '';
 
-        await strapiPost('/api/repuestos', {
-            nombre, sku, stock, precio, descripcion
-        });
-        success = 'Repuesto agregado correctamente.';
-    } else if (action === 'update') {
-        const id = formData.get('id');
-        const stock = Number(formData.get('stock'));
-        const precio = Number(formData.get('precio'));
+        // Validaciones del servidor
+        const validationErrors: string[] = [];
         
-        if (id) {
+        const nombreVal = validateRequired(nombre, 'Nombre');
+        if (!nombreVal.valid) validationErrors.push(nombreVal.message);
+
+        const skuVal = validateSku(sku);
+        if (!skuVal.valid) validationErrors.push(skuVal.message);
+
+        const stockVal = validatePositiveInteger(stock, 'Stock');
+        if (!stockVal.valid) validationErrors.push(stockVal.message);
+
+        const precioVal = validatePositiveDecimal(precio, 'Precio');
+        if (!precioVal.valid) validationErrors.push(precioVal.message);
+
+        if (validationErrors.length > 0) {
+            error = validationErrors.join('. ');
+        } else {
+            await strapiPost('/api/repuestos', {
+                nombre, sku, stock: Number(stock), precio: Number(precio), descripcion
+            });
+            success = 'Repuesto agregado correctamente.';
+        }
+    } else if (action === 'update') {
+        const id = formData.get('id')?.toString() || '';
+        const stock = formData.get('stock')?.toString() || '';
+        const precio = formData.get('precio')?.toString() || '';
+        
+        const validationErrors: string[] = [];
+        
+        const stockVal = validatePositiveInteger(stock, 'Stock');
+        if (!stockVal.valid) validationErrors.push(stockVal.message);
+
+        const precioVal = validatePositiveDecimal(precio, 'Precio');
+        if (!precioVal.valid) validationErrors.push(precioVal.message);
+
+        if (validationErrors.length > 0) {
+            error = validationErrors.join('. ');
+        } else if (id) {
             await strapiPut(`/api/repuestos/${id}`, {
-                stock, precio
+                stock: Number(stock), precio: Number(precio)
             });
             success = 'Repuesto actualizado correctamente.';
         }
