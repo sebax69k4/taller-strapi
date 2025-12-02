@@ -8,7 +8,7 @@ const { class: className, noPadding = false } = Astro.props;
 ---
 
 <div class:list={[
-  "bg-surface-light dark:bg-surface-dark rounded-xl shadow-sm border border-border-light dark:border-border-dark overflow-hidden",
+  "bg-white rounded-xl shadow-card border border-gray-100 overflow-hidden transition-all duration-200 hover:shadow-lg",
   noPadding ? "" : "p-6",
   className
 ]}>

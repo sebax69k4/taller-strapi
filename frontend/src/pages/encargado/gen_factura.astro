@@ -2,6 +2,10 @@
 export const prerender = false;
 import { strapiGet, strapiPut, strapiPost } from '../../lib/strapi';
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import Card from '../../components/ui/Card.astro';
+import Button from '../../components/ui/Button.astro';
+import Badge from '../../components/ui/Badge.astro';
+import EmptyState from '../../components/ui/EmptyState.astro';
 
 const userRole = Astro.cookies.get('user_role')?.value as 'recepcionista' | 'encargado' | 'mecanico' | undefined;
 if (!userRole) {
@@ -102,53 +106,105 @@ try {
 } catch (e) {
   console.error('Error fetching orders:', e);
 }
+
+const breadcrumbs = [
+  { label: 'Dashboard', href: '/encargado/dash_enc' },
+  { label: 'Facturación', href: '/encargado/gen_factura' },
+];
 ---
 
-<DashboardLayout title="Aprobar Facturas" role={userRole} currentPath="/encargado/gen_factura">
+<DashboardLayout 
+    title="Aprobar Facturas" 
+    role={userRole} 
+    currentPath="/encargado/gen_factura"
+    breadcrumbs={breadcrumbs}
+>
     <div class="max-w-4xl mx-auto">
-        <h1 class="text-3xl font-bold text-gray-900 dark:text-white mb-6 print:hidden">Aprobar Facturas</h1>
-        <p class="text-gray-600 dark:text-gray-400 mb-6 print:hidden">Órdenes finalizadas por mecánicos con factura generada, pendientes de aprobación para enviar a recepción.</p>
+        <div class="mb-8 print:hidden">
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Aprobar Facturas</h1>
+            <p class="text-gray-600 dark:text-gray-400 mt-2">Órdenes finalizadas por mecánicos con factura generada, pendientes de aprobación para enviar a recepción.</p>
+        </div>
         
-        {successMessage && <div class="p-4 mb-4 text-sm text-green-700 bg-green-100 rounded-lg dark:bg-green-200 dark:text-green-800 print:hidden" role="alert">{successMessage}</div>}
-        {errorMessage && <div class="p-4 mb-4 text-sm text-red-700 bg-red-100 rounded-lg dark:bg-red-200 dark:text-red-800 print:hidden" role="alert">{errorMessage}</div>}
+        {successMessage && (
+            <div class="p-4 mb-6 text-sm text-green-700 bg-green-100 rounded-lg dark:bg-green-900/30 dark:text-green-300 print:hidden flex items-center gap-2" role="alert">
+                <span class="material-symbols-outlined">check_circle</span>
+                {successMessage}
+            </div>
+        )}
+        {errorMessage && (
+            <div class="p-4 mb-6 text-sm text-red-700 bg-red-100 rounded-lg dark:bg-red-900/30 dark:text-red-300 print:hidden flex items-center gap-2" role="alert">
+                <span class="material-symbols-outlined">error</span>
+                {errorMessage}
+            </div>
+        )}
         
         <div class="grid gap-6 print:hidden">
             {completedOrders.map((order: Order) => (
-                <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row justify-between items-center gap-4">
-                    <div>
-                        <h3 class="font-bold text-lg text-gray-900 dark:text-white">Orden #{order.documentId.slice(0, 6)}</h3>
-                        <p class="text-gray-600 dark:text-gray-400">{order.cliente.nombre} {order.cliente.apellido} - {order.vehiculo.marca}</p>
-                    </div>
-                    <div class="flex items-center gap-3">
-                        <div class="flex flex-col text-right text-sm text-gray-500 dark:text-gray-400">
-                            {order.factura ? (
-                                <span class="text-green-600 dark:text-green-400 font-medium">Factura: {order.factura.numero_factura}</span>
-                            ) : (
-                                <span class="text-yellow-600 dark:text-yellow-400">Sin factura generada</span>
-                            )}
-                            {order.factura && <span>Total: ${order.factura.total?.toLocaleString('es-CL')}</span>}
+                <Card class="flex flex-col sm:flex-row justify-between items-center gap-4">
+                    <div class="flex items-start gap-4">
+                        <div class="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-blue-600 dark:text-blue-400">
+                            <span class="material-symbols-outlined text-2xl">receipt_long</span>
                         </div>
-                        <button onclick={`window.printInvoice('${order.documentId}')`} class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2">
-                            <span class="material-symbols-outlined text-sm">print</span>
-                            Imprimir
-                        </button>
-                        <form method="POST" onsubmit="return confirm('¿Aprobar factura y enviar a recepción para entrega?');">
-                            <input type="hidden" name="orderId" value={order.documentId} />
-                            <input type="hidden" name="action" value="approveInvoice" />
-                            <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2">
-                                <span class="material-symbols-outlined text-sm">verified</span>
-                                Aprobar y Enviar
-                            </button>
-                        </form>
+                        <div>
+                            <div class="flex items-center gap-2 mb-1">
+                                <h3 class="font-bold text-lg text-gray-900 dark:text-white">Orden #{order.documentId.slice(0, 6)}</h3>
+                                <Badge variant="info">Finalizado</Badge>
+                            </div>
+                            <p class="text-gray-600 dark:text-gray-400 font-medium">{order.cliente.nombre} {order.cliente.apellido}</p>
+                            <p class="text-sm text-gray-500 dark:text-gray-500">{order.vehiculo.marca} {order.vehiculo.modelo}</p>
+                        </div>
                     </div>
-                </div>
+                    
+                    <div class="flex flex-col items-end gap-3 w-full sm:w-auto">
+                        <div class="flex flex-col text-right text-sm text-gray-500 dark:text-gray-400 mb-1">
+                            {order.factura ? (
+                                <span class="text-green-600 dark:text-green-400 font-medium flex items-center justify-end gap-1">
+                                    <span class="material-symbols-outlined text-sm">check</span>
+                                    Factura: {order.factura.numero_factura}
+                                </span>
+                            ) : (
+                                <span class="text-amber-600 dark:text-amber-400 flex items-center justify-end gap-1">
+                                    <span class="material-symbols-outlined text-sm">pending</span>
+                                    Sin factura generada
+                                </span>
+                            )}
+                            {order.factura && <span class="text-lg font-bold text-gray-900 dark:text-white mt-1">${order.factura.total?.toLocaleString('es-CL')}</span>}
+                        </div>
+                        
+                        <div class="flex items-center gap-2 w-full sm:w-auto">
+                            <Button 
+                                variant="outline" 
+                                size="sm"
+                                onclick={`window.printInvoice('${order.documentId}')`}
+                                icon="print"
+                            >
+                                Imprimir
+                            </Button>
+                            
+                            <form method="POST" onsubmit="return confirm('¿Aprobar factura y enviar a recepción para entrega?');" class="w-full sm:w-auto">
+                                <input type="hidden" name="orderId" value={order.documentId} />
+                                <input type="hidden" name="action" value="approveInvoice" />
+                                <Button 
+                                    type="submit" 
+                                    variant="primary" 
+                                    size="sm"
+                                    icon="verified"
+                                    class="w-full sm:w-auto"
+                                >
+                                    Aprobar
+                                </Button>
+                            </form>
+                        </div>
+                    </div>
+                </Card>
             ))}
+            
             {completedOrders.length === 0 && (
-                <div class="text-center py-12">
-                    <span class="material-symbols-outlined text-5xl text-gray-300 dark:text-gray-600 mb-4">task_alt</span>
-                    <p class="text-gray-500 dark:text-gray-400">No hay facturas pendientes de aprobación.</p>
-                    <p class="text-gray-400 dark:text-gray-500 text-sm mt-2">Las facturas aparecen aquí cuando los mecánicos finalizan sus órdenes.</p>
-                </div>
+                <EmptyState 
+                    title="No hay facturas pendientes" 
+                    description="Las facturas aparecerán aquí cuando los mecánicos finalicen sus órdenes."
+                    icon="task_alt"
+                />
             )}
         </div>
 

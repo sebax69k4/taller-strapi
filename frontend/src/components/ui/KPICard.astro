@@ -1,0 +1,63 @@
+---
+interface Props {
+  title: string;
+  value: string | number;
+  icon?: string;
+  trend?: {
+    value: number;
+    label: string;
+    direction: 'up' | 'down' | 'neutral';
+  };
+  color?: 'primary' | 'secondary' | 'warning' | 'error';
+}
+
+const { title, value, icon, trend, color = 'primary' } = Astro.props;
+
+const colors = {
+  primary: 'bg-primary-50 text-primary-600',
+  secondary: 'bg-emerald-50 text-emerald-600',
+  warning: 'bg-amber-50 text-amber-600',
+  error: 'bg-red-50 text-red-600',
+};
+
+const trendColors = {
+  up: 'text-emerald-600',
+  down: 'text-red-600',
+  neutral: 'text-gray-500',
+};
+
+const trendIcons = {
+  up: 'trending_up',
+  down: 'trending_down',
+  neutral: 'remove',
+};
+---
+
+<div class="bg-white rounded-xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-200">
+  <div class="flex items-center justify-between mb-4">
+    <h3 class="text-sm font-medium text-gray-500">{title}</h3>
+    {icon && (
+      <div class:list={["p-2 rounded-lg", colors[color]]}>
+        <span class="material-symbols-outlined text-xl">{icon}</span>
+      </div>
+    )}
+  </div>
+  
+  <div class="flex items-end justify-between">
+    <div>
+      <p class="text-2xl font-bold text-gray-900 font-display">{value}</p>
+      
+      {trend && (
+        <div class="flex items-center mt-1 gap-1">
+          <span class:list={["material-symbols-outlined text-sm", trendColors[trend.direction]]}>
+            {trendIcons[trend.direction]}
+          </span>
+          <span class:list={["text-xs font-medium", trendColors[trend.direction]]}>
+            {trend.value}%
+          </span>
+          <span class="text-xs text-gray-400 ml-1">{trend.label}</span>
+        </div>
+      )}
+    </div>
+  </div>
+</div>

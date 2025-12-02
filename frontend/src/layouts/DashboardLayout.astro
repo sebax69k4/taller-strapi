@@ -1,23 +1,39 @@
 ---
 import Layout from './Layout.astro';
 import Sidebar from '../components/Sidebar.astro';
+import Toast from '../components/ui/Toast.astro';
+import Breadcrumbs from '../components/ui/Breadcrumbs.astro';
 
 interface Props {
   title: string;
   role: 'recepcionista' | 'encargado' | 'mecanico' | 'admin';
   currentPath: string;
+  breadcrumbs?: { label: string; href?: string }[];
 }
 
-const { title, role, currentPath } = Astro.props;
+const { title, role, currentPath, breadcrumbs } = Astro.props;
 ---
 
 <Layout title={title}>
-  <div class="flex min-h-screen bg-gray-50 dark:bg-gray-900">
+  <div class="flex min-h-screen bg-gray-50 dark:bg-gray-900 font-sans">
     <Sidebar role={role} currentPath={currentPath} />
-    <main class="flex-1 p-8 overflow-y-auto h-screen">
-      <div class="max-w-7xl mx-auto space-y-8">
-        <slot />
+    <main class="flex-1 flex flex-col h-screen overflow-hidden">
+      <!-- Top Header Area (Optional, for mobile menu or user profile) -->
+      <header class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 h-16 flex items-center px-8 justify-between shrink-0">
+        <div class="flex items-center gap-4">
+          {breadcrumbs && <Breadcrumbs items={breadcrumbs} />}
+        </div>
+        <div class="flex items-center gap-4">
+           <!-- User profile or notifications could go here -->
+        </div>
+      </header>
+
+      <div class="flex-1 overflow-y-auto p-8">
+        <div class="max-w-7xl mx-auto space-y-6 fade-in">
+          <slot />
+        </div>
       </div>
     </main>
+    <Toast />
   </div>
 </Layout>

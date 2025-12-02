@@ -179,41 +179,43 @@ const initialOpen = getInitialOpenSections();
 ---
 
 <aside 
-  class="flex w-64 flex-col gap-2 p-4 bg-surface-light dark:bg-surface-dark border-r border-border-light dark:border-border-dark h-screen sticky top-0 overflow-y-auto"
+  class="flex w-72 flex-col gap-4 p-5 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 h-screen sticky top-0 overflow-y-auto shadow-sm z-20"
   x-data={`{ openSections: ${JSON.stringify(initialOpen)} }`}
 >
-    <div class="flex gap-3 items-center px-2 py-2 mb-2">
-        <div class="bg-primary-600 text-white rounded-lg p-2 flex items-center justify-center">
-             <span class="material-symbols-outlined">garage</span>
+    <!-- Brand -->
+    <div class="flex gap-3 items-center px-2 py-1 mb-4">
+        <div class="bg-gradient-to-br from-primary-600 to-primary-700 text-white rounded-xl p-2.5 shadow-lg shadow-primary-500/30 flex items-center justify-center">
+             <span class="material-symbols-outlined text-2xl">garage</span>
         </div>
         <div class="flex flex-col">
-            <h1 class="text-text-light dark:text-text-dark text-base font-bold font-display">Taller Veloz</h1>
-            <p class="text-text-muted-light dark:text-text-muted-dark text-xs capitalize">{role}</p>
+            <h1 class="text-gray-900 dark:text-white text-lg font-bold font-display tracking-tight leading-tight">Taller Veloz</h1>
+            <p class="text-gray-500 dark:text-gray-400 text-xs font-medium uppercase tracking-wider">{role}</p>
         </div>
     </div>
     
-    <nav class="flex flex-col gap-1 flex-1">
+    <!-- Navigation -->
+    <nav class="flex flex-col gap-2 flex-1">
         {currentSections.map((section) => {
             const sectionId = section.title;
             const hasActiveItem = section.items.some(
               item => currentPath === item.href || currentPath.startsWith(item.href + '/')
             );
             return (
-                <div class="mb-1">
+                <div class="mb-2">
                     <!-- Dropdown Header -->
                     <button 
                         type="button"
                         @click={`openSections.includes('${sectionId}') ? openSections = openSections.filter(s => s !== '${sectionId}') : openSections.push('${sectionId}')`}
                         class:list={[
-                            "w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm font-semibold transition-all duration-200 group",
+                            "w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 group select-none",
                             hasActiveItem 
-                                ? "text-primary-700 dark:text-primary-300 bg-primary-50/50 dark:bg-primary-900/10"
-                                : "text-text-muted-light dark:text-text-muted-dark hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-text-light dark:hover:text-text-dark"
+                                ? "text-primary-700 dark:text-primary-300 bg-primary-50 dark:bg-primary-900/20"
+                                : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-200"
                         ]}
                     >
-                        <span class="uppercase tracking-wider text-xs">{section.title}</span>
+                        <span class="uppercase tracking-wider text-[11px] font-bold">{section.title}</span>
                         <span 
-                            class="material-symbols-outlined text-[16px] transition-transform duration-200"
+                            class="material-symbols-outlined text-[18px] transition-transform duration-200 opacity-50 group-hover:opacity-100"
                             x-bind:class={`openSections.includes('${sectionId}') ? 'rotate-180' : ''`}
                         >
                             expand_more
@@ -224,7 +226,7 @@ const initialOpen = getInitialOpenSections();
                     <div 
                         x-show={`openSections.includes('${sectionId}')`}
                         x-collapse
-                        class="flex flex-col gap-0.5 mt-1 ml-2 pl-2 border-l-2 border-gray-200 dark:border-gray-700"
+                        class="flex flex-col gap-1 mt-1 ml-3 pl-3 border-l border-gray-200 dark:border-gray-700"
                     >
                         {section.items.map((link) => {
                             const isActive = currentPath === link.href || currentPath.startsWith(link.href + '/');
@@ -234,11 +236,11 @@ const initialOpen = getInitialOpenSections();
                                     class:list={[
                                         "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
                                         isActive 
-                                            ? "bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300" 
-                                            : "text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-text-light dark:hover:text-text-dark"
+                                            ? "bg-primary-100/50 dark:bg-primary-900/40 text-primary-700 dark:text-primary-300 shadow-sm" 
+                                            : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-200 hover:translate-x-1"
                                     ]}
                                 >
-                                    <span class:list={["material-symbols-outlined text-[18px]", isActive ? "text-primary-600 dark:text-primary-400" : "text-gray-400"]}>{link.icon}</span>
+                                    <span class:list={["material-symbols-outlined text-[20px]", isActive ? "text-primary-600 dark:text-primary-400" : "text-gray-400"]}>{link.icon}</span>
                                     {link.label}
                                 </a>
                             );
@@ -249,13 +251,14 @@ const initialOpen = getInitialOpenSections();
         })}
     </nav>
 
-    <div class="mt-auto flex flex-col gap-1 pt-3 border-t border-border-light dark:border-border-dark">
-        <a href="/settings" class="flex items-center gap-3 px-3 py-2 text-text-secondary-light dark:text-text-secondary-dark hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-text-light dark:hover:text-text-dark rounded-lg text-sm font-medium transition-colors">
-            <span class="material-symbols-outlined text-[18px] text-gray-400">settings</span>
+    <!-- Footer Actions -->
+    <div class="mt-auto flex flex-col gap-1 pt-4 border-t border-gray-200 dark:border-gray-800">
+        <a href="/settings" class="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-200 rounded-xl text-sm font-medium transition-colors">
+            <span class="material-symbols-outlined text-[20px] text-gray-400">settings</span>
             Configuración
         </a>
-        <a href="/logout" class="flex items-center gap-3 px-3 py-2 text-status-error hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-sm font-medium transition-colors">
-            <span class="material-symbols-outlined text-[18px]">logout</span>
+        <a href="/logout" class="flex items-center gap-3 px-3 py-2.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl text-sm font-medium transition-colors">
+            <span class="material-symbols-outlined text-[20px]">logout</span>
             Cerrar Sesión
         </a>
     </div>

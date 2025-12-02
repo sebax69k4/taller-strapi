@@ -6,49 +6,63 @@ module.exports = {
     extend: {
       colors: {
         primary: {
-          DEFAULT: '#2563EB', // Blue 600
-          50: '#EFF6FF',
-          100: '#DBEAFE',
-          200: '#BFDBFE',
-          300: '#93C5FD',
-          400: '#60A5FA',
-          500: '#3B82F6',
-          600: '#2563EB',
-          700: '#1D4ED8',
-          800: '#1E40AF',
-          900: '#1E3A8A',
+          DEFAULT: '#4F46E5', // Indigo 600 - More modern than standard blue
+          50: '#EEF2FF',
+          100: '#E0E7FF',
+          200: '#C7D2FE',
+          300: '#A5B4FC',
+          400: '#818CF8',
+          500: '#6366F1',
+          600: '#4F46E5',
+          700: '#4338CA',
+          800: '#3730A3',
+          900: '#312E81',
+          950: '#1E1B4B',
+        },
+        secondary: {
+          DEFAULT: '#10B981', // Emerald 500
+          50: '#ECFDF5',
+          100: '#D1FAE5',
+          200: '#A7F3D0',
+          300: '#6EE7B7',
+          400: '#34D399',
+          500: '#10B981',
+          600: '#059669',
+          700: '#047857',
+          800: '#065F46',
+          900: '#064E3B',
         },
         surface: {
           light: '#FFFFFF',
-          dark: '#1F2937', // Gray 800
+          dark: '#1F2937',
         },
         background: {
-          light: '#F3F4F6', // Gray 100
-          dark: '#111827', // Gray 900
+          light: '#F9FAFB', // Gray 50
+          dark: '#111827',
         },
         text: {
-          light: '#111827', // Gray 900
-          dark: '#F9FAFB', // Gray 50
+          light: '#111827',
+          dark: '#F9FAFB',
           muted: {
-            light: '#6B7280', // Gray 500
-            dark: '#9CA3AF', // Gray 400
+            light: '#6B7280',
+            dark: '#9CA3AF',
           }
         },
-        border: {
-          light: '#E5E7EB', // Gray 200
-          dark: '#374151', // Gray 700
-        },
         status: {
-          success: '#10B981', // Emerald 500
-          warning: '#F59E0B', // Amber 500
-          error: '#EF4444', // Red 500
-          info: '#3B82F6', // Blue 500
+          success: '#10B981',
+          warning: '#F59E0B',
+          error: '#EF4444',
+          info: '#3B82F6',
         }
       },
       fontFamily: {
-        sans: ['Inter', 'sans-serif'],
-        display: ['Outfit', 'sans-serif'],
+        sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        display: ['Outfit', 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
+      boxShadow: {
+        'soft': '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03)',
+        'card': '0 0 0 1px rgba(0, 0, 0, 0.03), 0 2px 8px rgba(0, 0, 0, 0.04)',
+      }
     },
   },
   plugins: [

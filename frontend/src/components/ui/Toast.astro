@@ -1,90 +1,89 @@
 ---
-/**
- * Toast Component - Sistema de notificaciones
- * Se incluye una vez en el Layout y se controla via Alpine.js
- */
+// Toast notification component - Simple version
 ---
 
-<div 
-  x-data="toastManager()" 
-  x-on:show-toast.window="show($event.detail)"
-  class="fixed bottom-4 right-4 z-50 flex flex-col gap-2"
+<div
   id="toast-container"
+  class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"
+  role="status"
+  aria-live="polite"
 ></div>
 
 <script is:inline>
-  function toastManager() {
-    return {
-      show({ message, type = 'info', duration = 4000 }) {
-        const id = Date.now();
-        const toast = this.createToastElement(id, message, type);
-        this.$el.appendChild(toast);
-        
-        // Trigger animation
-        setTimeout(() => toast.classList.add('show'), 10);
-        
-        if (duration > 0) {
-          setTimeout(() => this.remove(id), duration);
-        }
-      },
-      
-      remove(id) {
-        const toast = document.getElementById('toast-' + id);
-        if (toast) {
-          toast.classList.remove('show');
-          setTimeout(() => toast.remove(), 200);
-        }
-      },
-      
-      createToastElement(id, message, type) {
-        const colors = {
-          success: 'bg-green-50 border-green-200 text-green-800',
-          error: 'bg-red-50 border-red-200 text-red-800',
-          warning: 'bg-yellow-50 border-yellow-200 text-yellow-800',
-          info: 'bg-blue-50 border-blue-200 text-blue-800'
-        };
-        
-        const icons = {
-          success: 'check_circle',
-          error: 'error',
-          warning: 'warning',
-          info: 'info'
-        };
-        
-        const div = document.createElement('div');
-        div.id = 'toast-' + id;
-        div.className = 'toast-item flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg min-w-[300px] max-w-md border ' + (colors[type] || colors.info);
-        
-        div.innerHTML = '<span class="material-symbols-outlined text-xl">' + (icons[type] || 'info') + '</span>' +
-          '<span class="flex-1 text-sm font-medium">' + message + '</span>' +
-          '<button onclick="document.getElementById(\'toast-' + id + '\').remove()" class="text-current opacity-50 hover:opacity-100 transition-opacity">' +
-            '<span class="material-symbols-outlined text-lg">close</span>' +
-          '</button>';
-        
-        return div;
-      }
+(function() {
+  function createToast(message, type) {
+    var container = document.getElementById('toast-container');
+    if (!container) return;
+    
+    var id = 'toast-' + Date.now();
+    var iconMap = {
+      success: 'check_circle',
+      error: 'error',
+      warning: 'warning',
+      info: 'info'
     };
+    var colorMap = {
+      success: 'text-green-400',
+      error: 'text-red-400',
+      warning: 'text-yellow-400',
+      info: 'text-blue-400'
+    };
+    
+    var icon = iconMap[type] || iconMap.info;
+    var color = colorMap[type] || colorMap.info;
+    
+    var div = document.createElement('div');
+    div.id = id;
+    div.className = 'max-w-sm w-full bg-white shadow-lg rounded-lg pointer-events-auto ring-1 ring-black ring-opacity-5 overflow-hidden transform transition-all duration-300 ease-out';
+    
+    var inner = document.createElement('div');
+    inner.className = 'p-4';
+    
+    var flex = document.createElement('div');
+    flex.className = 'flex items-start';
+    
+    var iconWrap = document.createElement('div');
+    iconWrap.className = 'flex-shrink-0';
+    var iconEl = document.createElement('span');
+    iconEl.className = 'material-symbols-outlined ' + color;
+    iconEl.textContent = icon;
+    iconWrap.appendChild(iconEl);
+    
+    var textWrap = document.createElement('div');
+    textWrap.className = 'ml-3 w-0 flex-1 pt-0.5';
+    var textEl = document.createElement('p');
+    textEl.className = 'text-sm font-medium text-gray-900';
+    textEl.textContent = message;
+    textWrap.appendChild(textEl);
+    
+    var btnWrap = document.createElement('div');
+    btnWrap.className = 'ml-4 flex-shrink-0 flex';
+    var btn = document.createElement('button');
+    btn.className = 'bg-white rounded-md inline-flex text-gray-400 hover:text-gray-500 focus:outline-none';
+    btn.onclick = function() { div.remove(); };
+    var closeIcon = document.createElement('span');
+    closeIcon.className = 'material-symbols-outlined text-lg';
+    closeIcon.textContent = 'close';
+    btn.appendChild(closeIcon);
+    btnWrap.appendChild(btn);
+    
+    flex.appendChild(iconWrap);
+    flex.appendChild(textWrap);
+    flex.appendChild(btnWrap);
+    inner.appendChild(flex);
+    div.appendChild(inner);
+    container.appendChild(div);
+    
+    setTimeout(function() {
+      div.classList.add('opacity-0', 'translate-x-2');
+      setTimeout(function() { div.remove(); }, 200);
+    }, 3000);
   }
   
-  // Helper global para mostrar toasts
-  window.showToast = function(message, type, duration) {
-    type = type || 'info';
-    duration = duration || 4000;
-    window.dispatchEvent(new CustomEvent('show-toast', {
-      detail: { message: message, type: type, duration: duration }
-    }));
-  };
+  window.showToast = createToast;
+  
+  window.addEventListener('notify', function(event) {
+    createToast(event.detail.message, event.detail.type);
+  });
+})();
 </script>
-
-<style is:global>
-  .toast-item {
-    opacity: 0;
-    transform: translateY(0.5rem);
-    transition: all 0.3s ease;
-  }
-  
-  .toast-item.show {
-    opacity: 1;
-    transform: translateY(0);
-  }
-</style>

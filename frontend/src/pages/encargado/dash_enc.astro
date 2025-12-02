@@ -2,6 +2,10 @@
 export const prerender = false;
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
 import Card from '../../components/ui/Card.astro';
+import KPICard from '../../components/ui/KPICard.astro';
+import Table from '../../components/ui/Table.astro';
+import Badge from '../../components/ui/Badge.astro';
+import EmptyState from '../../components/ui/EmptyState.astro';
 import { strapiGet } from '../../lib/strapi';
 import '../../styles/global.css';
 
@@ -50,6 +54,28 @@ if (userRole) {
 } else {
   return Astro.redirect('/login');
 }
+
+const getStatusVariant = (status: string) => {
+  switch (status) {
+    case 'entregado': return 'success';
+    case 'facturado': return 'info';
+    case 'finalizado': return 'info';
+    case 'ingresado': return 'error';
+    default: return 'warning';
+  }
+};
+
+const formatStatus = (status: string) => {
+  const map: Record<string, string> = {
+    ingresado: 'Ingresado',
+    en_diagnostico: 'En Diagnóstico',
+    en_reparacion: 'En Reparación',
+    finalizado: 'Finalizado',
+    facturado: 'Facturado',
+    entregado: 'Entregado'
+  };
+  return map[status] || status;
+};
 ---
 
 <DashboardLayout title="Dashboard Encargado" role="encargado" currentPath={Astro.url.pathname}>
@@ -62,38 +88,26 @@ if (userRole) {
 
     <!-- Stats Cards -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-      <Card class="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-l-primary-500">
-        <div class="flex items-center justify-between mb-4">
-          <p class="text-gray-500 dark:text-gray-400 font-medium">Órdenes Activas</p>
-          <span class="material-symbols-outlined text-primary-500 bg-primary-50 dark:bg-primary-900/20 p-2 rounded-lg">build_circle</span>
-        </div>
-        <p class="text-4xl font-bold text-gray-900 dark:text-white mb-1">{activeOrdersCount}</p>
-        <p class="text-sm text-green-600 dark:text-green-400 font-medium flex items-center gap-1">
-          <span class="material-symbols-outlined text-sm">trending_up</span> En proceso
-        </p>
-      </Card>
-
-      <Card class="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-l-green-500">
-        <div class="flex items-center justify-between mb-4">
-          <p class="text-gray-500 dark:text-gray-400 font-medium">Completadas Hoy</p>
-          <span class="material-symbols-outlined text-green-500 bg-green-50 dark:bg-green-900/20 p-2 rounded-lg">task_alt</span>
-        </div>
-        <p class="text-4xl font-bold text-gray-900 dark:text-white mb-1">{completedTodayCount}</p>
-        <p class="text-sm text-green-600 dark:text-green-400 font-medium flex items-center gap-1">
-          <span class="material-symbols-outlined text-sm">check_circle</span> Entregadas
-        </p>
-      </Card>
-
-      <Card class="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-l-red-500">
-        <div class="flex items-center justify-between mb-4">
-          <p class="text-gray-500 dark:text-gray-400 font-medium">Stock Bajo Mínimo</p>
-          <span class="material-symbols-outlined text-red-500 bg-red-50 dark:bg-red-900/20 p-2 rounded-lg">inventory_2</span>
-        </div>
-        <p class="text-4xl font-bold text-gray-900 dark:text-white mb-1">{lowStockCount}</p>
-        <p class="text-sm text-red-600 dark:text-red-400 font-medium flex items-center gap-1">
-          <span class="material-symbols-outlined text-sm">warning</span> Requiere atención
-        </p>
-      </Card>
+      <KPICard 
+        title="Órdenes Activas" 
+        value={activeOrdersCount} 
+        icon="build_circle" 
+        color="primary"
+        trend={{ value: 12, label: 'vs semana pasada', direction: 'up' }}
+      />
+      <KPICard 
+        title="Completadas Hoy" 
+        value={completedTodayCount} 
+        icon="task_alt" 
+        color="secondary"
+      />
+      <KPICard 
+        title="Stock Bajo Mínimo" 
+        value={lowStockCount} 
+        icon="inventory_2" 
+        color="error"
+        trend={lowStockCount > 0 ? { value: lowStockCount, label: 'items críticos', direction: 'down' } : undefined}
+      />
     </div>
 
     <!-- Quick Access -->
@@ -150,61 +164,35 @@ if (userRole) {
       <!-- Recent Activity -->
       <div class="lg:col-span-2">
         <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">Actividad Reciente</h2>
-        <Card noPadding class="overflow-hidden">
-          <div class="overflow-x-auto">
-            <table class="w-full text-left border-collapse">
-              <thead class="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800">
-                <tr>
-                  <th class="px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">ID</th>
-                  <th class="px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Cliente</th>
-                  <th class="px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Vehículo</th>
-                  <th class="px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Mecánico</th>
-                  <th class="px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Estado</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                {recentOrders.length > 0 ? (
-                  recentOrders.map((order: any) => (
-                    <tr class="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                      <td class="px-6 py-4 font-medium text-gray-900 dark:text-white">OT-{order.id}</td>
-                      <td class="px-6 py-4 text-gray-600 dark:text-gray-300">
-                        {order.cliente ? `${order.cliente.nombre} ${order.cliente.apellido}` : 'N/A'}
-                      </td>
-                      <td class="px-6 py-4 text-gray-600 dark:text-gray-300">
-                        {order.vehiculo ? `${order.vehiculo.marca} ${order.vehiculo.modelo}` : 'N/A'}
-                      </td>
-                      <td class="px-6 py-4 text-gray-600 dark:text-gray-300">
-                        {order.mecanico ? order.mecanico.nombre : 'Sin asignar'}
-                      </td>
-                      <td class="px-6 py-4">
-                        <span class={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          order.estado === 'entregado' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' :
-                          order.estado === 'facturado' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' :
-                          order.estado === 'finalizado' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' :
-                          order.estado === 'ingresado' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' :
-                          'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
-                        }`}>
-                          {order.estado === 'ingresado' ? 'Ingresado' :
-                           order.estado === 'en_diagnostico' ? 'En Diagnóstico' :
-                           order.estado === 'en_reparacion' ? 'En Reparación' :
-                           order.estado === 'finalizado' ? 'Finalizado' :
-                           order.estado === 'facturado' ? 'Facturado' :
-                           order.estado === 'entregado' ? 'Entregado' : order.estado}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colspan="5" class="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
-                      No hay órdenes recientes
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+        {recentOrders.length > 0 ? (
+          <Table headers={['ID', 'Cliente', 'Vehículo', 'Mecánico', 'Estado']}>
+            {recentOrders.map((order: any) => (
+              <tr class="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                <td class="px-6 py-4 font-medium text-gray-900 dark:text-white">OT-{order.id}</td>
+                <td class="px-6 py-4 text-gray-600 dark:text-gray-300">
+                  {order.cliente ? `${order.cliente.nombre} ${order.cliente.apellido}` : 'N/A'}
+                </td>
+                <td class="px-6 py-4 text-gray-600 dark:text-gray-300">
+                  {order.vehiculo ? `${order.vehiculo.marca} ${order.vehiculo.modelo}` : 'N/A'}
+                </td>
+                <td class="px-6 py-4 text-gray-600 dark:text-gray-300">
+                  {order.mecanico ? order.mecanico.nombre : 'Sin asignar'}
+                </td>
+                <td class="px-6 py-4">
+                  <Badge variant={getStatusVariant(order.estado)}>
+                    {formatStatus(order.estado)}
+                  </Badge>
+                </td>
+              </tr>
+            ))}
+          </Table>
+        ) : (
+          <EmptyState 
+            title="No hay órdenes recientes" 
+            description="Las órdenes de trabajo aparecerán aquí una vez creadas."
+            icon="assignment_late"
+          />
+        )}
       </div>
 
       <!-- Low Stock Alert -->
