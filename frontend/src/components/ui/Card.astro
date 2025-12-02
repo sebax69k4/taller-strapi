@@ -2,15 +2,21 @@
 interface Props {
   class?: string;
   noPadding?: boolean;
+  title?: string;
 }
 
-const { class: className, noPadding = false } = Astro.props;
+const { class: className, noPadding = false, title } = Astro.props;
 ---
 
 <div class:list={[
-  "bg-white rounded-xl shadow-card border border-gray-100 overflow-hidden transition-all duration-200 hover:shadow-lg",
+  "bg-white dark:bg-gray-800 rounded-xl shadow-card border border-gray-100 dark:border-gray-700 overflow-hidden transition-all duration-200 hover:shadow-lg dark:shadow-none",
   noPadding ? "" : "p-6",
   className
 ]}>
+  {title && (
+    <div class="mb-4 pb-4 border-b border-gray-100 dark:border-gray-700">
+      <h3 class="text-lg font-semibold text-gray-900 dark:text-white">{title}</h3>
+    </div>
+  )}
   <slot />
 </div>

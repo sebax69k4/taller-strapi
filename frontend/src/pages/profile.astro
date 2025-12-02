@@ -1,0 +1,84 @@
+---
+export const prerender = false;
+
+import DashboardLayout from '../layouts/DashboardLayout.astro';
+import Card from '../components/ui/Card.astro';
+import Button from '../components/ui/Button.astro';
+import Input from '../components/ui/Input.astro';
+import Badge from '../components/ui/Badge.astro';
+
+const userRole = Astro.cookies.get('user_role')?.value as 'recepcionista' | 'encargado' | 'mecanico' | 'admin' | undefined;
+const userName = Astro.cookies.get('user_name')?.value || 'Usuario';
+const userEmail = Astro.cookies.get('user_email')?.value || 'usuario@taller.com';
+
+if (!userRole) {
+  return Astro.redirect('/login');
+}
+
+const roleLabels: Record<string, string> = {
+  recepcionista: 'Recepcionista',
+  encargado: 'Encargado de Taller',
+  mecanico: 'Mecánico',
+  admin: 'Administrador'
+};
+
+const displayRole = roleLabels[userRole] || userRole;
+const initials = userName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+---
+
+<DashboardLayout title="Mi Perfil" role={userRole} currentPath="/profile" userName={userName}>
+  <div class="max-w-4xl mx-auto space-y-6">
+    <!-- Header -->
+    <div>
+      <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Mi Perfil</h1>
+      <p class="text-gray-500 dark:text-gray-400 mt-1">Gestiona tu información personal y seguridad</p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <!-- Sidebar / Info Card -->
+      <div class="md:col-span-1 space-y-6">
+        <Card class="text-center p-6">
+          <div class="w-24 h-24 mx-auto rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center text-white text-3xl font-bold mb-4 shadow-lg">
+            {initials}
+          </div>
+          <h2 class="text-xl font-bold text-gray-900 dark:text-white">{userName}</h2>
+          <p class="text-gray-500 dark:text-gray-400 text-sm mb-4">{userEmail}</p>
+          <Badge variant="purple" class="inline-flex">{displayRole}</Badge>
+        </Card>
+      </div>
+
+      <!-- Main Content -->
+      <div class="md:col-span-2 space-y-6">
+        <!-- Personal Info -->
+        <Card title="Información Personal">
+          <form class="space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Input label="Nombre Completo" value={userName} readonly />
+              <Input label="Rol" value={displayRole} readonly />
+            </div>
+            <Input label="Correo Electrónico" type="email" value={userEmail} readonly />
+            <div class="pt-2">
+              <p class="text-xs text-gray-500 dark:text-gray-400 italic">
+                * Para cambiar esta información, contacta al administrador.
+              </p>
+            </div>
+          </form>
+        </Card>
+
+        <!-- Security -->
+        <Card title="Seguridad">
+          <form class="space-y-4" onsubmit="event.preventDefault(); alert('Funcionalidad de cambio de contraseña simulada.');">
+            <Input label="Contraseña Actual" type="password" placeholder="••••••••" />
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Input label="Nueva Contraseña" type="password" placeholder="••••••••" />
+              <Input label="Confirmar Contraseña" type="password" placeholder="••••••••" />
+            </div>
+            <div class="flex justify-end pt-2">
+              <Button type="submit" variant="primary">Actualizar Contraseña</Button>
+            </div>
+          </form>
+        </Card>
+      </div>
+    </div>
+  </div>
+</DashboardLayout>

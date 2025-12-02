@@ -1,0 +1,202 @@
+---
+// Data Table with sorting, filtering and animations
+interface Column {
+  key: string;
+  label: string;
+  sortable?: boolean;
+  align?: 'left' | 'center' | 'right';
+  width?: string;
+}
+
+interface Props {
+  columns: Column[];
+  id?: string;
+  searchable?: boolean;
+  searchPlaceholder?: string;
+  emptyMessage?: string;
+  emptyIcon?: string;
+  striped?: boolean;
+  hoverable?: boolean;
+}
+
+const { 
+  columns, 
+  id = 'data-table',
+  searchable = false, 
+  searchPlaceholder = 'Buscar...',
+  emptyMessage = 'No hay datos disponibles',
+  emptyIcon = 'inbox',
+  striped = true,
+  hoverable = true
+} = Astro.props;
+---
+
+<div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+  {searchable && (
+    <div class="p-4 border-b border-gray-100 dark:border-gray-700">
+      <div class="relative">
+        <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">search</span>
+        <input 
+          type="text"
+          class="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-all"
+          placeholder={searchPlaceholder}
+          data-table-search={id}
+        />
+      </div>
+    </div>
+  )}
+  
+  <div class="overflow-x-auto">
+    <table class="w-full" id={id}>
+      <thead>
+        <tr class="bg-gray-50 dark:bg-gray-900/50">
+          {columns.map(col => (
+            <th 
+              class:list={[
+                "px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400",
+                col.align === 'center' && 'text-center',
+                col.align === 'right' && 'text-right',
+                col.align !== 'center' && col.align !== 'right' && 'text-left',
+                col.sortable && 'cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 select-none'
+              ]}
+              style={col.width ? `width: ${col.width}` : ''}
+              data-sort-key={col.sortable ? col.key : undefined}
+            >
+              <span class="inline-flex items-center gap-1">
+                {col.label}
+                {col.sortable && (
+                  <span class="material-symbols-outlined text-sm opacity-40">unfold_more</span>
+                )}
+              </span>
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody class:list={[
+        "divide-y divide-gray-100 dark:divide-gray-700",
+        striped && "[&>tr:nth-child(even)]:bg-gray-50 dark:[&>tr:nth-child(even)]:bg-gray-900/30"
+      ]}>
+        <slot />
+      </tbody>
+    </table>
+  </div>
+  
+  <!-- Empty State (hidden by default) -->
+  <div id={`${id}-empty`} class="hidden p-12 text-center">
+    <span class="material-symbols-outlined text-5xl text-gray-300 dark:text-gray-600 mb-3 block">{emptyIcon}</span>
+    <p class="text-gray-500 dark:text-gray-400">{emptyMessage}</p>
+  </div>
+</div>
+
+<script is:inline>
+(function() {
+  // Search functionality
+  document.querySelectorAll('[data-table-search]').forEach(function(input) {
+    var tableId = input.dataset.tableSearch;
+    var table = document.getElementById(tableId);
+    if (!table) return;
+    
+    input.addEventListener('input', function(e) {
+      var query = e.target.value.toLowerCase();
+      var rows = table.querySelectorAll('tbody tr');
+      var visibleCount = 0;
+      
+      rows.forEach(function(row) {
+        var text = row.textContent.toLowerCase();
+        var matches = text.includes(query);
+        row.style.display = matches ? '' : 'none';
+        if (matches) visibleCount++;
+      });
+      
+      // Show/hide empty state
+      var emptyState = document.getElementById(tableId + '-empty');
+      if (emptyState) {
+        emptyState.classList.toggle('hidden', visibleCount > 0);
+      }
+    });
+  });
+
+  // Sort functionality
+  document.querySelectorAll('[data-sort-key]').forEach(function(th) {
+    th.addEventListener('click', function() {
+      var key = th.dataset.sortKey;
+      var table = th.closest('table');
+      if (!table) return;
+      
+      var tbody = table.querySelector('tbody');
+      var rows = Array.from(tbody.querySelectorAll('tr'));
+      var colIndex = Array.from(th.parentNode.children).indexOf(th);
+      
+      // Toggle sort direction
+      var isAsc = th.dataset.sortDir !== 'asc';
+      
+      // Reset all headers
+      th.parentNode.querySelectorAll('[data-sort-key]').forEach(function(h) {
+        h.dataset.sortDir = '';
+        var icon = h.querySelector('.material-symbols-outlined');
+        if (icon) icon.textContent = 'unfold_more';
+      });
+      
+      // Set current header
+      th.dataset.sortDir = isAsc ? 'asc' : 'desc';
+      var icon = th.querySelector('.material-symbols-outlined');
+      if (icon) icon.textContent = isAsc ? 'expand_less' : 'expand_more';
+      
+      // Sort rows
+      rows.sort(function(a, b) {
+        var aVal = a.children[colIndex]?.textContent?.trim() || '';
+        var bVal = b.children[colIndex]?.textContent?.trim() || '';
+        
+        // Try numeric sort
+        var aNum = parseFloat(aVal.replace(/[^0-9.-]/g, ''));
+        var bNum = parseFloat(bVal.replace(/[^0-9.-]/g, ''));
+        
+        if (!isNaN(aNum) && !isNaN(bNum)) {
+          return isAsc ? aNum - bNum : bNum - aNum;
+        }
+        
+        // String sort
+        return isAsc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      });
+      
+      // Re-append sorted rows
+      rows.forEach(function(row) { tbody.appendChild(row); });
+    });
+  });
+})();
+</script>
+
+<style>
+/* Row animation on hover */
+tbody tr {
+  transition: background-color 0.15s ease;
+}
+
+/* Fade in animation for rows */
+tbody tr {
+  animation: fadeInRow 0.3s ease forwards;
+  opacity: 0;
+}
+
+tbody tr:nth-child(1) { animation-delay: 0.02s; }
+tbody tr:nth-child(2) { animation-delay: 0.04s; }
+tbody tr:nth-child(3) { animation-delay: 0.06s; }
+tbody tr:nth-child(4) { animation-delay: 0.08s; }
+tbody tr:nth-child(5) { animation-delay: 0.10s; }
+tbody tr:nth-child(6) { animation-delay: 0.12s; }
+tbody tr:nth-child(7) { animation-delay: 0.14s; }
+tbody tr:nth-child(8) { animation-delay: 0.16s; }
+tbody tr:nth-child(9) { animation-delay: 0.18s; }
+tbody tr:nth-child(10) { animation-delay: 0.20s; }
+
+@keyframes fadeInRow {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+</style>

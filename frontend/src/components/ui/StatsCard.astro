@@ -1,0 +1,123 @@
+---
+// Stats Card Component with animations
+interface Props {
+  title: string;
+  value: string | number;
+  subtitle?: string;
+  icon?: string;
+  trend?: {
+    value: number;
+    label?: string;
+    isPositive?: boolean;
+  };
+  color?: 'primary' | 'success' | 'warning' | 'error' | 'info';
+  href?: string;
+}
+
+const { 
+  title, 
+  value, 
+  subtitle, 
+  icon, 
+  trend, 
+  color = 'primary',
+  href 
+} = Astro.props;
+
+const colorClasses = {
+  primary: {
+    bg: 'bg-primary-50 dark:bg-primary-900/20',
+    icon: 'bg-primary-100 dark:bg-primary-800 text-primary-600 dark:text-primary-400',
+    accent: 'text-primary-600 dark:text-primary-400'
+  },
+  success: {
+    bg: 'bg-green-50 dark:bg-green-900/20',
+    icon: 'bg-green-100 dark:bg-green-800 text-green-600 dark:text-green-400',
+    accent: 'text-green-600 dark:text-green-400'
+  },
+  warning: {
+    bg: 'bg-amber-50 dark:bg-amber-900/20',
+    icon: 'bg-amber-100 dark:bg-amber-800 text-amber-600 dark:text-amber-400',
+    accent: 'text-amber-600 dark:text-amber-400'
+  },
+  error: {
+    bg: 'bg-red-50 dark:bg-red-900/20',
+    icon: 'bg-red-100 dark:bg-red-800 text-red-600 dark:text-red-400',
+    accent: 'text-red-600 dark:text-red-400'
+  },
+  info: {
+    bg: 'bg-blue-50 dark:bg-blue-900/20',
+    icon: 'bg-blue-100 dark:bg-blue-800 text-blue-600 dark:text-blue-400',
+    accent: 'text-blue-600 dark:text-blue-400'
+  }
+};
+
+const colors = colorClasses[color];
+const Tag = href ? 'a' : 'div';
+---
+
+<Tag 
+  href={href}
+  class:list={[
+    "block bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-100 dark:border-gray-700",
+    "transition-all duration-300 hover:shadow-md",
+    href && "cursor-pointer hover:-translate-y-0.5"
+  ]}
+>
+  <div class="flex items-start justify-between">
+    <div class="space-y-3 flex-1">
+      <p class="text-sm font-medium text-gray-500 dark:text-gray-400">{title}</p>
+      <div class="flex items-baseline gap-2">
+        <p class="text-3xl font-bold text-gray-900 dark:text-white tabular-nums stat-value" data-value={value}>
+          {value}
+        </p>
+        {trend && (
+          <span class:list={[
+            "inline-flex items-center gap-0.5 text-sm font-medium",
+            trend.isPositive ? "text-green-600" : "text-red-600"
+          ]}>
+            <span class="material-symbols-outlined text-sm">
+              {trend.isPositive ? 'trending_up' : 'trending_down'}
+            </span>
+            {trend.value}%
+          </span>
+        )}
+      </div>
+      {subtitle && (
+        <p class="text-sm text-gray-500 dark:text-gray-400">{subtitle}</p>
+      )}
+    </div>
+    
+    {icon && (
+      <div class:list={["w-12 h-12 rounded-xl flex items-center justify-center", colors.icon]}>
+        <span class="material-symbols-outlined text-2xl">{icon}</span>
+      </div>
+    )}
+  </div>
+  
+  {href && (
+    <div class="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+      <span class:list={["text-sm font-medium flex items-center gap-1", colors.accent]}>
+        Ver detalles
+        <span class="material-symbols-outlined text-sm">arrow_forward</span>
+      </span>
+    </div>
+  )}
+</Tag>
+
+<style>
+.stat-value {
+  animation: countUp 0.6s ease-out;
+}
+
+@keyframes countUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+</style>

@@ -3,30 +3,41 @@ import Layout from './Layout.astro';
 import Sidebar from '../components/Sidebar.astro';
 import Toast from '../components/ui/Toast.astro';
 import Breadcrumbs from '../components/ui/Breadcrumbs.astro';
+import Header from '../components/ui/Header.astro';
+import GlobalSearch from '../components/ui/GlobalSearch.astro';
+import NotificationCenter from '../components/ui/NotificationCenter.astro';
 
 interface Props {
   title: string;
   role: 'recepcionista' | 'encargado' | 'mecanico' | 'admin';
   currentPath: string;
   breadcrumbs?: { label: string; href?: string }[];
+  userName?: string;
 }
 
-const { title, role, currentPath, breadcrumbs } = Astro.props;
+const { title, role, currentPath, breadcrumbs, userName = 'Usuario' } = Astro.props;
+
+const roleLabels: Record<string, string> = {
+  recepcionista: 'Recepcionista',
+  encargado: 'Encargado',
+  mecanico: 'Mecánico',
+  admin: 'Administrador'
+};
 ---
 
 <Layout title={title}>
   <div class="flex min-h-screen bg-gray-50 dark:bg-gray-900 font-sans">
     <Sidebar role={role} currentPath={currentPath} />
     <main class="flex-1 flex flex-col h-screen overflow-hidden">
-      <!-- Top Header Area (Optional, for mobile menu or user profile) -->
-      <header class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 h-16 flex items-center px-8 justify-between shrink-0">
-        <div class="flex items-center gap-4">
-          {breadcrumbs && <Breadcrumbs items={breadcrumbs} />}
+      <!-- Header con búsqueda, notificaciones y usuario -->
+      <Header userName={userName} userRole={role} />
+
+      <!-- Breadcrumbs (si existen) -->
+      {breadcrumbs && breadcrumbs.length > 0 && (
+        <div class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-8 py-3">
+          <Breadcrumbs items={breadcrumbs} />
         </div>
-        <div class="flex items-center gap-4">
-           <!-- User profile or notifications could go here -->
-        </div>
-      </header>
+      )}
 
       <div class="flex-1 overflow-y-auto p-8">
         <div class="max-w-7xl mx-auto space-y-6 fade-in">
@@ -34,6 +45,110 @@ const { title, role, currentPath, breadcrumbs } = Astro.props;
         </div>
       </div>
     </main>
+    
+    <!-- Global Components -->
     <Toast />
+    <GlobalSearch />
+    <NotificationCenter />
   </div>
 </Layout>
+
+<style is:global>
+/* Smooth page transitions */
+.fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Button improvements */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-weight: 500;
+  border-radius: 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.btn:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px white, 0 0 0 4px rgb(79 70 229);
+}
+
+.btn-primary {
+  background-color: rgb(79 70 229);
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: rgb(67 56 202);
+}
+
+.btn-secondary {
+  background-color: rgb(243 244 246);
+  color: rgb(55 65 81);
+}
+
+.dark .btn-secondary {
+  background-color: rgb(55 65 81);
+  color: rgb(209 213 219);
+}
+
+.btn-secondary:hover {
+  background-color: rgb(229 231 235);
+}
+
+.dark .btn-secondary:hover {
+  background-color: rgb(75 85 99);
+}
+
+/* Table row hover animation */
+tr.hover-row {
+  transition: background-color 0.15s ease;
+}
+
+tr.hover-row:hover {
+  background-color: rgb(238 242 255 / 0.5);
+}
+
+.dark tr.hover-row:hover {
+  background-color: rgb(79 70 229 / 0.1);
+}
+
+/* Skeleton loading animation */
+.skeleton {
+  background-color: rgb(229 231 235);
+  border-radius: 0.25rem;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.dark .skeleton {
+  background-color: rgb(55 65 81);
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Focus visible improvements */
+*:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgb(79 70 229);
+}
+</style>

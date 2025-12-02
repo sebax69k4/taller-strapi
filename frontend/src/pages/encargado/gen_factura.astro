@@ -37,6 +37,26 @@ let successMessage = '';
 let errorMessage = '';
 
 try {
+  // Helper function to calculate totals
+  const calculateOrderTotals = (order: any) => {
+    let total = 0;
+    let subtotal = 0;
+    
+    // Calculate from budget or parts
+    if (order.presupuesto && order.presupuesto.monto_total) {
+        total = order.presupuesto.monto_total;
+        subtotal = Math.round(total / 1.19);
+    } else {
+        // Fallback calculation
+        const partsTotal = order.repuestos?.reduce((sum: number, r: any) => sum + r.precio, 0) || 0;
+        const labor = 75000; // Default labor cost
+        subtotal = partsTotal + labor;
+        total = Math.round(subtotal * 1.19);
+    }
+    const iva = total - subtotal;
+    return { subtotal, iva, total };
+  };
+
   // Handle POST request to mark as delivered
   if (Astro.request.method === 'POST') {
     const formData = await Astro.request.formData();
@@ -45,25 +65,20 @@ try {
 
     if (action === 'approveInvoice' && orderId) {
         try {
-            // 1. Fetch order details to calculate totals
+            // 1. Fetch order details to calculate totals AND validate status
             const orderRes = await strapiGet(`/api/orden-de-trabajos/${orderId}?populate=presupuesto&populate=repuestos`);
             const order = orderRes.data;
             
-            let total = 0;
-            let subtotal = 0;
-            
-            // Calculate from budget or parts
-            if (order.presupuesto && order.presupuesto.monto_total) {
-                total = order.presupuesto.monto_total;
-                subtotal = Math.round(total / 1.19);
-            } else {
-                // Fallback calculation
-                const partsTotal = order.repuestos?.reduce((sum: number, r: any) => sum + r.precio, 0) || 0;
-                const labor = 75000;
-                subtotal = partsTotal + labor;
-                total = Math.round(subtotal * 1.19);
+            if (!order) {
+                throw new Error('Orden no encontrada');
             }
-            const iva = total - subtotal;
+
+            // VALIDATION: Ensure order is in correct state
+            if (order.estado !== 'finalizado') {
+                throw new Error(`La orden no está en estado 'finalizado' (Estado actual: ${order.estado}). No se puede facturar.`);
+            }
+            
+            const { subtotal, iva, total } = calculateOrderTotals(order);
 
             // 2. Check if Factura already exists
             const existingInvoiceRes = await strapiGet(`/api/facturas?filters[orden_de_trabajo][documentId][$eq]=${orderId}`);
@@ -97,12 +112,17 @@ try {
 
   // Obtener órdenes finalizadas (pendientes de aprobación)
   const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=finalizado&populate[vehiculo][populate][cliente][fields][0]=nombre&populate[vehiculo][populate][cliente][fields][1]=apellido&populate[repuestos][fields][0]=nombre&populate[repuestos][fields][1]=precio&populate[presupuesto][fields][0]=monto_total&populate[factura][fields][0]=numero_factura&populate[factura][fields][1]=total&sort[0]=updatedAt:desc');
-  // Mapear las órdenes para tener cliente accesible directamente
-  completedOrders = (data.data || []).map((order: any) => ({
-    ...order,
-    cliente: order.vehiculo?.cliente || { nombre: 'N/A', apellido: '' },
-    vehiculo: order.vehiculo || { marca: 'N/A', modelo: '' }
-  }));
+  
+  // Mapear las órdenes y PRE-CALCULAR totales para el frontend
+  completedOrders = (data.data || []).map((order: any) => {
+    const totals = calculateOrderTotals(order);
+    return {
+        ...order,
+        cliente: order.vehiculo?.cliente || { nombre: 'N/A', apellido: '' },
+        vehiculo: order.vehiculo || { marca: 'N/A', modelo: '' },
+        calculatedTotals: totals // Pass calculated totals to frontend
+    };
+  });
 } catch (e) {
   console.error('Error fetching orders:', e);
 }
@@ -273,32 +293,28 @@ const breadcrumbs = [
         
         // Generate items
         const items = [];
-        let total = 0;
-
+        
         // Add parts
         if (order.repuestos && order.repuestos.length > 0) {
             order.repuestos.forEach(part => {
                 items.push({ desc: `Repuesto: ${part.nombre}`, price: part.precio });
-                total += part.precio;
             });
         }
 
         // Add labor/budget
-        if (order.presupuesto && order.presupuesto.monto_total) {
-            // If budget exists, we can either use it as the total or calculate labor from it
-            // For simplicity, let's assume budget total includes everything, so we might need to adjust logic
-            // Or we treat budget as "Mano de Obra" + "Repuestos".
-            // Let's calculate labor as Total - Parts
-            const partsTotal = items.reduce((sum, item) => sum + item.price, 0);
-            const labor = order.presupuesto.monto_total - partsTotal;
-            if (labor > 0) {
-                items.push({ desc: 'Mano de Obra / Servicios', price: labor });
-                total += labor;
-            }
-        } else {
-            // Fallback labor cost if no budget
-             items.push({ desc: 'Mano de Obra (Estimado)', price: 75000 });
-             total += 75000;
+        // Use the server-calculated total to derive the labor cost displayed
+        // Total = (Parts + Labor) * 1.19
+        // So Subtotal = Total / 1.19
+        // Labor = Subtotal - Parts
+        
+        const total = order.calculatedTotals.total;
+        const subtotal = order.calculatedTotals.subtotal;
+        const partsTotal = items.reduce((sum, item) => sum + item.price, 0);
+        
+        const labor = subtotal - partsTotal;
+        
+        if (labor > 0) {
+            items.push({ desc: 'Mano de Obra / Servicios', price: labor });
         }
         
         const tbody = document.getElementById('inv-items');
@@ -309,7 +325,22 @@ const breadcrumbs = [
             </tr>
         `).join('');
         
-        document.getElementById('inv-total').textContent = `$${total.toLocaleString('es-CL')}`;
+        // Add IVA and Total rows
+        const tfoot = document.querySelector('table tfoot');
+        tfoot.innerHTML = `
+            <tr class="border-t border-gray-300">
+                <td class="pt-4 text-right font-medium">Subtotal:</td>
+                <td class="pt-4 text-right">$${subtotal.toLocaleString('es-CL')}</td>
+            </tr>
+            <tr>
+                <td class="pt-1 text-right font-medium">IVA (19%):</td>
+                <td class="pt-1 text-right">$${order.calculatedTotals.iva.toLocaleString('es-CL')}</td>
+            </tr>
+            <tr class="border-t-2 border-gray-900 font-bold text-xl">
+                <td class="pt-2 text-right">Total:</td>
+                <td class="pt-2 text-right">$${total.toLocaleString('es-CL')}</td>
+            </tr>
+        `;
 
         window.print();
     };

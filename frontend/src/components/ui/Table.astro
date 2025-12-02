@@ -7,19 +7,19 @@ interface Props {
 const { headers, class: className } = Astro.props;
 ---
 
-<div class:list={["overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm", className]}>
+<div class:list={["overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm", className]}>
   <div class="overflow-x-auto">
-    <table class="w-full text-left text-sm text-gray-500">
-      <thead class="bg-gray-50 border-b border-gray-200">
+    <table class="w-full text-left text-sm text-gray-500 dark:text-gray-400">
+      <thead class="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700">
         <tr>
           {headers.map((header) => (
-            <th scope="col" class="px-6 py-3 font-semibold text-gray-900 uppercase tracking-wider text-xs">
+            <th scope="col" class="px-6 py-3 font-semibold text-gray-900 dark:text-gray-100 uppercase tracking-wider text-xs">
               {header}
             </th>
           ))}
         </tr>
       </thead>
-      <tbody class="divide-y divide-gray-200 bg-white">
+      <tbody class="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-800">
         <slot />
       </tbody>
     </table>

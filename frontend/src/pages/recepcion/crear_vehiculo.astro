@@ -62,19 +62,6 @@ if (Astro.request.method === 'POST') {
     const patenteVal = validatePatente(patente);
     if (!patenteVal.valid) validationErrors.push(patenteVal.message);
 
-    const marcaVal = validateRequired(marca, 'Marca');
-    if (!marcaVal.valid) validationErrors.push(marcaVal.message);
-
-    const modeloVal = validateRequired(modelo, 'Modelo');
-    if (!modeloVal.valid) validationErrors.push(modeloVal.message);
-
-    const anioVal = validateVehicleYear(anio);
-    if (!anioVal.valid) validationErrors.push(anioVal.message);
-
-    if (validationErrors.length > 0) {
-        return Astro.redirect(`/recepcion/crear_vehiculo?message=${encodeURIComponent(validationErrors.join('. '))}&type=error`);
-    }
-
     const result = await strapiPost('/api/vehiculos', {
       patente,
       marca,

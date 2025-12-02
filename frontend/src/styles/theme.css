@@ -1,3 +1,10 @@
+@import "tailwindcss/theme" layer(theme);
+@import "tailwindcss/preflight" layer(base);
+@import "tailwindcss/utilities" layer(utilities);
+
+/* Configurar dark mode con selector .dark en Tailwind v4 */
+@variant dark (&:where(.dark, .dark *));
+
 :root {
   --font-sans: 'Inter', sans-serif;
   --font-display: 'Outfit', sans-serif;

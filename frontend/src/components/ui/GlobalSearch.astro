@@ -1,0 +1,262 @@
+---
+// Global Search Component - Command Palette Style (Cmd/Ctrl + K)
+---
+
+<div 
+  id="global-search-modal"
+  class="fixed inset-0 z-[100] hidden"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="search-title"
+>
+  <!-- Backdrop -->
+  <div class="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" id="search-backdrop"></div>
+  
+  <!-- Modal -->
+  <div class="relative flex items-start justify-center pt-[15vh] px-4">
+    <div class="w-full max-w-2xl bg-white dark:bg-gray-800 rounded-2xl shadow-2xl overflow-hidden transform transition-all">
+      <!-- Search Input -->
+      <div class="flex items-center gap-3 px-4 py-4 border-b border-gray-200 dark:border-gray-700">
+        <span class="material-symbols-outlined text-gray-400 text-2xl">search</span>
+        <input 
+          type="text"
+          id="global-search-input"
+          class="flex-1 bg-transparent text-lg text-gray-900 dark:text-white placeholder-gray-400 outline-none"
+          placeholder="Buscar clientes, vehículos, órdenes..."
+          autocomplete="off"
+        />
+        <kbd class="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-600 text-gray-500 font-mono">ESC</kbd>
+      </div>
+
+      <!-- Quick Actions -->
+      <div class="p-2 border-b border-gray-200 dark:border-gray-700">
+        <div class="text-xs font-medium text-gray-500 dark:text-gray-400 px-3 py-2">Acciones Rápidas</div>
+        <div class="space-y-1">
+          <a href="/recepcion/crear_cliente" class="search-action flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors group">
+            <div class="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400">
+              <span class="material-symbols-outlined">person_add</span>
+            </div>
+            <div class="flex-1">
+              <div class="text-sm font-medium text-gray-900 dark:text-white">Nuevo Cliente</div>
+              <div class="text-xs text-gray-500 dark:text-gray-400">Registrar un nuevo cliente</div>
+            </div>
+            <span class="material-symbols-outlined text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity">arrow_forward</span>
+          </a>
+          <a href="/recepcion/crear_vehiculo" class="search-action flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors group">
+            <div class="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-green-600 dark:text-green-400">
+              <span class="material-symbols-outlined">directions_car</span>
+            </div>
+            <div class="flex-1">
+              <div class="text-sm font-medium text-gray-900 dark:text-white">Nuevo Vehículo</div>
+              <div class="text-xs text-gray-500 dark:text-gray-400">Agregar un vehículo al sistema</div>
+            </div>
+            <span class="material-symbols-outlined text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity">arrow_forward</span>
+          </a>
+          <a href="/recepcion/crear_orden" class="search-action flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors group">
+            <div class="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center text-purple-600 dark:text-purple-400">
+              <span class="material-symbols-outlined">add_task</span>
+            </div>
+            <div class="flex-1">
+              <div class="text-sm font-medium text-gray-900 dark:text-white">Nueva Orden de Trabajo</div>
+              <div class="text-xs text-gray-500 dark:text-gray-400">Crear una orden de trabajo</div>
+            </div>
+            <span class="material-symbols-outlined text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity">arrow_forward</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Search Results -->
+      <div id="search-results" class="max-h-80 overflow-y-auto">
+        <div class="p-8 text-center text-gray-500 dark:text-gray-400">
+          <span class="material-symbols-outlined text-4xl mb-2 block opacity-50">manage_search</span>
+          <p class="text-sm">Escribe para buscar...</p>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="px-4 py-3 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between text-xs text-gray-500">
+        <div class="flex items-center gap-4">
+          <span class="flex items-center gap-1">
+            <kbd class="px-1.5 py-0.5 bg-white dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-600">↑↓</kbd>
+            navegar
+          </span>
+          <span class="flex items-center gap-1">
+            <kbd class="px-1.5 py-0.5 bg-white dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-600">↵</kbd>
+            seleccionar
+          </span>
+        </div>
+        <span>Búsqueda Global</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script is:inline>
+(function() {
+  var modal = document.getElementById('global-search-modal');
+  var input = document.getElementById('global-search-input');
+  var backdrop = document.getElementById('search-backdrop');
+  var trigger = document.getElementById('global-search-trigger');
+  var resultsContainer = document.getElementById('search-results');
+  var searchTimeout = null;
+
+  function openSearch() {
+    if (modal) {
+      modal.classList.remove('hidden');
+      document.body.style.overflow = 'hidden';
+      if (input) {
+        setTimeout(function() { input.focus(); }, 100);
+      }
+    }
+  }
+
+  function closeSearch() {
+    if (modal) {
+      modal.classList.add('hidden');
+      document.body.style.overflow = '';
+      if (input) input.value = '';
+      resetResults();
+    }
+  }
+
+  function resetResults() {
+    if (resultsContainer) {
+      resultsContainer.innerHTML = '<div class="p-8 text-center text-gray-500 dark:text-gray-400"><span class="material-symbols-outlined text-4xl mb-2 block opacity-50">manage_search</span><p class="text-sm">Escribe para buscar...</p></div>';
+    }
+  }
+
+  function showLoading() {
+    if (resultsContainer) {
+      resultsContainer.innerHTML = '<div class="p-8 text-center"><div class="inline-block w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin"></div><p class="text-sm text-gray-500 mt-2">Buscando...</p></div>';
+    }
+  }
+
+  function renderResults(results) {
+    if (!resultsContainer) return;
+    
+    if (results.length === 0) {
+      resultsContainer.innerHTML = '<div class="p-8 text-center text-gray-500 dark:text-gray-400"><span class="material-symbols-outlined text-4xl mb-2 block opacity-50">search_off</span><p class="text-sm">No se encontraron resultados</p></div>';
+      return;
+    }
+
+    var html = '<div class="p-2">';
+    results.forEach(function(item) {
+      var icon = item.type === 'cliente' ? 'person' : item.type === 'vehiculo' ? 'directions_car' : 'assignment';
+      var color = item.type === 'cliente' ? 'blue' : item.type === 'vehiculo' ? 'green' : 'purple';
+      html += '<a href="' + item.url + '" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">';
+      html += '<div class="w-10 h-10 rounded-lg bg-' + color + '-100 dark:bg-' + color + '-900/30 flex items-center justify-center text-' + color + '-600 dark:text-' + color + '-400">';
+      html += '<span class="material-symbols-outlined">' + icon + '</span></div>';
+      html += '<div class="flex-1"><div class="text-sm font-medium text-gray-900 dark:text-white">' + item.title + '</div>';
+      html += '<div class="text-xs text-gray-500 dark:text-gray-400">' + item.subtitle + '</div></div></a>';
+    });
+    html += '</div>';
+    resultsContainer.innerHTML = html;
+  }
+
+  async function performSearch(query) {
+    if (query.length < 2) {
+      resetResults();
+      return;
+    }
+
+    showLoading();
+    var results = [];
+
+    try {
+      // Search clients
+      var clientesRes = await fetch('/api/strapi/clientes?filters[$or][0][nombre][$containsi]=' + encodeURIComponent(query) + '&filters[$or][1][apellido][$containsi]=' + encodeURIComponent(query) + '&filters[$or][2][rut][$containsi]=' + encodeURIComponent(query) + '&pagination[pageSize]=5');
+      if (clientesRes.ok) {
+        var clientesData = await clientesRes.json();
+        if (clientesData.data) {
+          clientesData.data.forEach(function(c) {
+            results.push({
+              type: 'cliente',
+              title: c.nombre + ' ' + c.apellido,
+              subtitle: 'RUT: ' + (c.rut || 'N/A'),
+              url: '/admin/clientes/ver/' + c.documentId
+            });
+          });
+        }
+      }
+
+      // Search vehicles
+      var vehiculosRes = await fetch('/api/strapi/vehiculos?filters[$or][0][patente][$containsi]=' + encodeURIComponent(query) + '&filters[$or][1][marca][$containsi]=' + encodeURIComponent(query) + '&populate=cliente&pagination[pageSize]=5');
+      if (vehiculosRes.ok) {
+        var vehiculosData = await vehiculosRes.json();
+        if (vehiculosData.data) {
+          vehiculosData.data.forEach(function(v) {
+            var owner = v.cliente ? v.cliente.nombre + ' ' + v.cliente.apellido : 'Sin dueño';
+            results.push({
+              type: 'vehiculo',
+              title: v.patente + ' - ' + v.marca + ' ' + v.modelo,
+              subtitle: 'Propietario: ' + owner,
+              url: '/admin/vehiculos/ver/' + v.documentId
+            });
+          });
+        }
+      }
+
+      // Search orders
+      var ordenesRes = await fetch('/api/strapi/orden-de-trabajos?filters[descripcion_problema][$containsi]=' + encodeURIComponent(query) + '&populate[vehiculo][populate]=cliente&pagination[pageSize]=5');
+      if (ordenesRes.ok) {
+        var ordenesData = await ordenesRes.json();
+        if (ordenesData.data) {
+          ordenesData.data.forEach(function(o) {
+            var patente = o.vehiculo ? o.vehiculo.patente : 'N/A';
+            results.push({
+              type: 'orden',
+              title: 'Orden #' + o.id + ' - ' + patente,
+              subtitle: (o.descripcion_problema || 'Sin descripción').substring(0, 50),
+              url: '/admin/ordenes/ver/' + o.documentId
+            });
+          });
+        }
+      }
+    } catch (e) {
+      console.error('Search error:', e);
+    }
+
+    renderResults(results);
+  }
+
+  // Event Listeners
+  if (trigger) {
+    trigger.addEventListener('click', openSearch);
+  }
+
+  if (backdrop) {
+    backdrop.addEventListener('click', closeSearch);
+  }
+
+  if (input) {
+    input.addEventListener('input', function(e) {
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(function() {
+        performSearch(e.target.value);
+      }, 300);
+    });
+  }
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', function(e) {
+    // Open with Ctrl/Cmd + K
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+      e.preventDefault();
+      openSearch();
+    }
+    // Close with Escape
+    if (e.key === 'Escape' && modal && !modal.classList.contains('hidden')) {
+      closeSearch();
+    }
+  });
+})();
+</script>
+
+<style>
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+</style>

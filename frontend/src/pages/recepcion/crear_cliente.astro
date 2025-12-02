@@ -51,19 +51,11 @@ if (Astro.request.method === 'POST') {
     const apellidoVal = validateRequired(apellido, 'Apellido');
     if (!apellidoVal.valid) validationErrors.push(apellidoVal.message);
 
-    const rutVal = validateRut(rut);
-    if (!rutVal.valid) validationErrors.push(rutVal.message);
-
-    const emailVal = validateEmail(email);
-    if (!emailVal.valid) validationErrors.push(emailVal.message);
-
-    const telefonoVal = validatePhone(telefono);
-    if (!telefonoVal.valid) validationErrors.push(telefonoVal.message);
-
+    // Si hay errores de validación, redirigir
     if (validationErrors.length > 0) {
-        const redirectUrl = idToUpdate ? `/recepcion/crear_cliente?id=${idToUpdate}` : '/recepcion/crear_cliente';
-        const separator = idToUpdate ? '&' : '?';
-        return Astro.redirect(`${redirectUrl}${separator}message=${encodeURIComponent(validationErrors.join('. '))}&type=error`);
+      const errorMsg = validationErrors.join(', ');
+      const redirectUrl = clientId ? `/recepcion/crear_cliente?id=${clientId}` : '/recepcion/crear_cliente';
+      return Astro.redirect(`${redirectUrl}?message=${encodeURIComponent(errorMsg)}&type=error`);
     }
 
     const clientData = { nombre, apellido, email, telefono, rut };

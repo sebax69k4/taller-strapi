@@ -1,6 +1,8 @@
 ---
 export const prerender = false;
 import DashboardLayout from '../../../../layouts/DashboardLayout.astro';
+import OrderStatusTimeline from '../../../../components/ui/OrderStatusTimeline.astro';
+import Badge from '../../../../components/ui/Badge.astro';
 import { strapiGet } from '../../../../lib/strapi';
 
 const id = Astro.params.id;
@@ -98,6 +100,11 @@ const formatMoney = (amount: number | null) => {
               </span>
             </div>
             
+            <!-- Timeline de estado visual -->
+            <div class="mb-6">
+              <OrderStatusTimeline currentStatus={orden.estado} size="md" />
+            </div>
+            
             <div class="grid grid-cols-3 gap-4">
               <div class="text-center p-4 bg-gray-50 rounded-lg">
                 <p class="text-sm text-gray-500">Ingreso</p>
@@ -110,21 +117,6 @@ const formatMoney = (amount: number | null) => {
               <div class="text-center p-4 bg-gray-50 rounded-lg">
                 <p class="text-sm text-gray-500">Entrega</p>
                 <p class="text-lg font-bold text-gray-800">{formatDate(orden.fecha_entrega)}</p>
-              </div>
-            </div>
-
-            <!-- Progress bar -->
-            <div class="mt-4">
-              <div class="flex justify-between text-xs text-gray-500 mb-1">
-                {['ingresado', 'en_diagnostico', 'en_reparacion', 'finalizado', 'facturado', 'entregado'].map((est, i) => (
-                  <span class={orden.estado === est ? 'font-bold text-blue-600' : ''}>{i + 1}</span>
-                ))}
-              </div>
-              <div class="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  class="bg-blue-600 h-2 rounded-full transition-all duration-500"
-                  style={`width: ${(['ingresado', 'en_diagnostico', 'en_reparacion', 'finalizado', 'facturado', 'entregado'].indexOf(orden.estado) + 1) / 6 * 100}%`}
-                ></div>
               </div>
             </div>
           </div>

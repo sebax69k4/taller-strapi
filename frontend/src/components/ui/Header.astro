@@ -1,0 +1,223 @@
+---
+interface Props {
+  userName?: string;
+  userRole?: string;
+  userAvatar?: string;
+}
+
+const { 
+  userName = 'Usuario', 
+  userRole = 'Operador',
+  userAvatar
+} = Astro.props;
+
+const roleLabels: Record<string, string> = {
+  recepcionista: 'Recepcionista',
+  encargado: 'Encargado de Taller',
+  mecanico: 'Mecánico',
+  admin: 'Administrador'
+};
+
+const displayRole = roleLabels[userRole] || userRole;
+const initials = userName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+---
+
+<header class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 h-16 flex items-center px-6 justify-between shrink-0 sticky top-0 z-40">
+  <!-- Left: Search -->
+  <div class="flex items-center gap-4 flex-1">
+    <button 
+      id="global-search-trigger"
+      class="flex items-center gap-3 px-4 py-2 bg-gray-100 dark:bg-gray-700 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors w-full max-w-md group"
+    >
+      <span class="material-symbols-outlined text-xl">search</span>
+      <span class="text-sm">Buscar clientes, vehículos, órdenes...</span>
+      <div class="ml-auto flex items-center gap-1">
+        <kbd class="px-2 py-0.5 text-xs bg-white dark:bg-gray-600 rounded border border-gray-300 dark:border-gray-500 font-mono shadow-sm">Ctrl</kbd>
+        <kbd class="px-2 py-0.5 text-xs bg-white dark:bg-gray-600 rounded border border-gray-300 dark:border-gray-500 font-mono shadow-sm">K</kbd>
+      </div>
+    </button>
+  </div>
+
+  <!-- Right: Actions -->
+  <div class="flex items-center gap-2">
+    <!-- Theme Toggle -->
+    <button 
+      id="theme-toggle"
+      class="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+      title="Cambiar tema"
+    >
+      <span class="material-symbols-outlined text-xl dark:hidden">dark_mode</span>
+      <span class="material-symbols-outlined text-xl hidden dark:block">light_mode</span>
+    </button>
+
+    <!-- Notifications -->
+    <div class="relative" x-data="{ open: false }">
+      <button 
+        class="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors relative"
+        x-on:click="open = !open"
+      >
+        <span class="material-symbols-outlined text-xl">notifications</span>
+        <span 
+          id="notification-badge"
+          class="absolute -top-0.5 -right-0.5 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-medium hidden"
+        >0</span>
+      </button>
+      
+      <!-- Notification Dropdown -->
+      <div 
+        x-show="open" 
+        x-on:click.outside="open = false"
+        x-transition:enter="transition ease-out duration-200"
+        x-transition:enter-start="opacity-0 scale-95"
+        x-transition:enter-end="opacity-100 scale-100"
+        x-transition:leave="transition ease-in duration-150"
+        x-transition:leave-start="opacity-100 scale-100"
+        x-transition:leave-end="opacity-0 scale-95"
+        class="absolute right-0 mt-2 w-80 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden z-50"
+        style="display: none;"
+      >
+        <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+          <h3 class="font-semibold text-gray-900 dark:text-white">Notificaciones</h3>
+          <button class="text-xs text-primary-600 hover:text-primary-700">Marcar todas como leídas</button>
+        </div>
+        <div id="notifications-list" class="max-h-96 overflow-y-auto">
+          <div class="p-8 text-center text-gray-500 dark:text-gray-400">
+            <span class="material-symbols-outlined text-4xl mb-2 block opacity-50">notifications_off</span>
+            <p class="text-sm">No hay notificaciones nuevas</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- User Menu -->
+    <div class="relative ml-2" x-data="{ open: false }">
+      <button 
+        class="flex items-center gap-3 px-3 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        x-on:click="open = !open"
+      >
+        {userAvatar ? (
+          <img src={userAvatar} alt={userName} class="w-8 h-8 rounded-full object-cover" />
+        ) : (
+          <div class="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center text-white text-sm font-medium">
+            {initials}
+          </div>
+        )}
+        <div class="text-left hidden sm:block">
+          <div class="text-sm font-medium text-gray-900 dark:text-white">{userName}</div>
+          <div class="text-xs text-gray-500 dark:text-gray-400">{displayRole}</div>
+        </div>
+        <span class="material-symbols-outlined text-gray-400 text-lg">expand_more</span>
+      </button>
+
+      <!-- User Dropdown -->
+      <div 
+        x-show="open" 
+        x-on:click.outside="open = false"
+        x-transition:enter="transition ease-out duration-200"
+        x-transition:enter-start="opacity-0 scale-95"
+        x-transition:enter-end="opacity-100 scale-100"
+        x-transition:leave="transition ease-in duration-150"
+        x-transition:leave-start="opacity-100 scale-100"
+        x-transition:leave-end="opacity-0 scale-95"
+        class="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden z-50"
+        style="display: none;"
+      >
+        <div class="p-3 border-b border-gray-200 dark:border-gray-700">
+          <div class="text-sm font-medium text-gray-900 dark:text-white">{userName}</div>
+          <div class="text-xs text-gray-500 dark:text-gray-400">{displayRole}</div>
+        </div>
+        <div class="py-1">
+          <a href="/profile" class="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+            <span class="material-symbols-outlined text-lg">person</span>
+            Mi Perfil
+          </a>
+          <a href="/settings" class="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+            <span class="material-symbols-outlined text-lg">settings</span>
+            Configuración
+          </a>
+        </div>
+        <div class="border-t border-gray-200 dark:border-gray-700 py-1">
+          <a href="/logout" class="flex items-center gap-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">
+            <span class="material-symbols-outlined text-lg">logout</span>
+            Cerrar Sesión
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<script is:inline>
+// Theme Toggle & Notifications
+(function initApp() {
+  function setupThemeToggle() {
+    var themeToggle = document.getElementById('theme-toggle');
+    if (!themeToggle) return;
+    
+    var newToggle = themeToggle.cloneNode(true);
+    themeToggle.parentNode.replaceChild(newToggle, themeToggle);
+    
+    newToggle.addEventListener('click', function(e) {
+      e.preventDefault();
+      var html = document.documentElement;
+      var isDark = html.classList.contains('dark');
+      
+      if (isDark) {
+        html.classList.remove('dark');
+        localStorage.setItem('theme', 'light');
+      } else {
+        html.classList.add('dark');
+        localStorage.setItem('theme', 'dark');
+      }
+      
+      window.dispatchEvent(new CustomEvent('theme-changed', { 
+        detail: { theme: html.classList.contains('dark') ? 'dark' : 'light' } 
+      }));
+    });
+  }
+
+  function setupNotifications() {
+    const badge = document.getElementById('notification-badge');
+    const list = document.getElementById('notifications-list');
+    
+    // Simulación de polling cada 30 segundos
+    setInterval(() => {
+        // En un caso real, aquí haríamos fetch('/api/notifications')
+        const hasNew = Math.random() > 0.7; // 30% de probabilidad de nueva notificación simulada
+        
+        if (hasNew) {
+            const count = parseInt(badge.innerText || '0') + 1;
+            badge.innerText = count;
+            badge.classList.remove('hidden');
+            
+            // Agregar notificación a la lista
+            const notifHtml = `
+                <div class="p-4 border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                    <p class="text-sm font-medium text-gray-900 dark:text-white">Nueva actualización del sistema</p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Hace un momento</p>
+                </div>
+            `;
+            
+            if (list.querySelector('.material-symbols-outlined')) {
+                list.innerHTML = notifHtml;
+            } else {
+                list.insertAdjacentHTML('afterbegin', notifHtml);
+            }
+        }
+    }, 30000);
+  }
+  
+  function init() {
+    setupThemeToggle();
+    setupNotifications();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+  
+  document.addEventListener('astro:page-load', init);
+})();
+</script>
