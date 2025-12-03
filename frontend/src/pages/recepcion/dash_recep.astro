@@ -3,6 +3,9 @@ export const prerender = false;
 
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
 import Card from '../../components/ui/Card.astro';
+import KPICard from '../../components/ui/KPICard.astro';
+import Table from '../../components/ui/Table.astro';
+import Badge from '../../components/ui/Badge.astro';
 import '../../styles/global.css';
 import { strapiGet } from '../../lib/strapi';
 
@@ -15,142 +18,186 @@ if (!userRole) {
 }
 
 // --- DATA FETCHING & STATE ---
+let ordersTodayCount = 0;
 let activeOrdersCount = 0;
-let vehiclesCount = 0;
-let pendingOrdersCount = 0;
+let readyForDeliveryCount = 0;
 let recentOrders: any[] = [];
 let error = '';
 
+const today = new Date().toISOString().split('T')[0];
+
 try {
-    const [activeOrdersData, vehiclesData, pendingOrdersData, recentOrdersData] = await Promise.all([
+    const [ordersTodayData, activeOrdersData, readyData, recentOrdersData] = await Promise.all([
+        // Órdenes creadas hoy
+        strapiGet(`/api/orden-de-trabajos?filters[createdAt][$gte]=${today}&pagination[pageSize]=1`),
+        // En Taller (No entregado ni facturado)
         strapiGet('/api/orden-de-trabajos?filters[estado][$notIn][0]=entregado&filters[estado][$notIn][1]=facturado&pagination[pageSize]=1'),
-        strapiGet('/api/vehiculos?pagination[pageSize]=1'),
-        strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=ingresado&pagination[pageSize]=1'),
-        strapiGet('/api/orden-de-trabajos?sort[0]=createdAt:desc&pagination[limit]=5&populate=vehiculo')
+        // Listas para Entrega (Finalizado)
+        strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=finalizado&pagination[pageSize]=1'),
+        // Recientes
+        strapiGet('/api/orden-de-trabajos?sort[0]=createdAt:desc&pagination[limit]=5&populate=vehiculo&populate=vehiculo.cliente')
     ]);
 
+    ordersTodayCount = ordersTodayData.meta?.pagination?.total || 0;
     activeOrdersCount = activeOrdersData.meta?.pagination?.total || 0;
-    vehiclesCount = vehiclesData.meta?.pagination?.total || 0;
-
-    pendingOrdersCount = pendingOrdersData.meta?.pagination?.total || 0;
+    readyForDeliveryCount = readyData.meta?.pagination?.total || 0;
     recentOrders = recentOrdersData.data || [];
 
 } catch (e: any) {
     console.error('Error fetching dashboard data:', e);
     error = e.message;
 }
+
+const getStatusVariant = (status: string) => {
+  switch (status) {
+    case 'entregado': return 'success';
+    case 'facturado': return 'info';
+    case 'finalizado': return 'success'; // Ready for pickup
+    case 'ingresado': return 'warning';
+    case 'en_diagnostico': return 'info';
+    case 'en_reparacion': return 'info';
+    default: return 'default';
+  }
+};
+
+const formatStatus = (status: string) => {
+  const map: Record<string, string> = {
+    ingresado: 'Ingresado',
+    en_diagnostico: 'En Diagnóstico',
+    en_reparacion: 'En Reparación',
+    finalizado: 'Listo para Entrega',
+    facturado: 'Facturado',
+    entregado: 'Entregado'
+  };
+  return map[status] || status;
+};
 ---
 
 <DashboardLayout title="Dashboard Recepción" role="recepcionista" currentPath={Astro.url.pathname}>
     {error && (
-        <div class="p-4 text-sm text-red-700 bg-red-50 rounded-lg border border-red-100 flex items-center gap-2" role="alert">
+        <div class="p-4 mb-6 text-sm text-red-700 bg-red-50 rounded-lg border border-red-100 flex items-center gap-2" role="alert">
             <span class="material-symbols-outlined text-lg">error</span>
             <span>Error cargando datos: {error}</span>
         </div>
     )}
     
-    <div class="flex flex-col gap-1">
-        <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">¡Bienvenido, {userName}!</h1>
-        <p class="text-gray-500 dark:text-gray-400">Aquí tienes un resumen de la actividad y accesos rápidos.</p>
-    </div>
-
-    <section>
-        <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            <span class="material-symbols-outlined text-primary-600">rocket_launch</span>
-                            <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Añade un vehículo a un cliente</p>
-                        </div>
-                    </div>
-                </Card>
-            </a>
-            <a href="/recepcion/crear_orden" class="group">
-                <Card class="h-full hover:border-primary-500 hover:shadow-md transition-all duration-200 group-hover:-translate-y-1">
-                    <div class="flex flex-col gap-3">
-                        <div class="w-10 h-10 rounded-lg bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 flex items-center justify-center group-hover:bg-orange-600 group-hover:text-white transition-colors">
-                            <span class="material-symbols-outlined">post_add</span>
-                        </div>
-                        <div>
-            Resumen General
-        </h2>
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            <Card class="relative overflow-hidden">
-                <div class="absolute top-0 right-0 p-4 opacity-10">
-                    <span class="material-symbols-outlined text-8xl text-blue-600">build_circle</span>
-                </div>
-                <div class="flex flex-col gap-1 relative z-10">
-                    <span class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Órdenes Activas</span>
-                    <p class="text-4xl font-black text-gray-900 dark:text-white font-display">{activeOrdersCount}</p>
-                </div>
-            </Card>
-            <Card class="relative overflow-hidden">
-                <div class="absolute top-0 right-0 p-4 opacity-10">
-                    <span class="material-symbols-outlined text-8xl text-purple-600">garage</span>
-                </div>
-                <div class="flex flex-col gap-1 relative z-10">
-                    <span class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Vehículos</span>
-                    <p class="text-4xl font-black text-gray-900 dark:text-white font-display">{vehiclesCount}</p>
-                </div>
-            </Card>
-            <Card class="relative overflow-hidden">
-                <div class="absolute top-0 right-0 p-4 opacity-10">
-                    <span class="material-symbols-outlined text-8xl text-orange-600">pending_actions</span>
-                </div>
-                <div class="flex flex-col gap-1 relative z-10">
-                    <span class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Pendientes</span>
-                    <p class="text-4xl font-black text-gray-900 dark:text-white font-display">{pendingOrdersCount}</p>
-                </div>
-            </Card>
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <div class="flex flex-col gap-1 mb-8">
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">¡Bienvenido, {userName}!</h1>
+            <p class="text-gray-500 dark:text-gray-400">Panel de control de recepción.</p>
         </div>
-    </section>
 
-    <section>
-        <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-            <span class="material-symbols-outlined text-primary-600">history</span>
-            Actividad Reciente
-        </h2>
-        <Card noPadding class="overflow-hidden">
-            <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse">
-                    <thead class="bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800">
-                        <tr>
-                            <th class="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Acción</th>
-                            <th class="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Detalle</th>
-                            <th class="px-6 py-4 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Fecha</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-                        {recentOrders.map((order: any) => (
-                          <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                            <td class="px-6 py-4">
-                                <span class="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-                                    Nueva Orden
-                                </span>
-                            </td>
-                            <td class="px-6 py-4">
-                                <div class="flex flex-col">
-                                    <span class="text-sm font-medium text-gray-900 dark:text-white">OT-{order.id}</span>
-                                    <span class="text-xs text-gray-500 dark:text-gray-400">
-                                        {order.vehiculo ? `${order.vehiculo.marca} ${order.vehiculo.modelo}` : 'Vehículo no asignado'}
-                                    </span>
-                                </div>
-                            </td>
-                            <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
-                              {new Date(order.createdAt).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' })}
-                            </td>
-                          </tr>
-                        ))}
-                        {recentOrders.length === 0 && (
-                          <tr>
-                            <td colspan="3" class="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
-                                <div class="flex flex-col items-center gap-2">
-                                    <span class="material-symbols-outlined text-4xl text-gray-300">inbox</span>
-                                    <p>No hay actividad reciente.</p>
-                                </div>
-                            </td>
-                          </tr>
-                        )}
-                    </tbody>
-                </table>
+        <!-- KPIs -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <KPICard 
+                title="Órdenes de Hoy" 
+                value={ordersTodayCount} 
+                icon="today" 
+                color="primary"
+            />
+            <KPICard 
+                title="Vehículos en Taller" 
+                value={activeOrdersCount} 
+                icon="garage" 
+                color="secondary"
+            />
+            <KPICard 
+                title="Listos para Entrega" 
+                value={readyForDeliveryCount} 
+                icon="key" 
+                color="secondary"
+                trend={readyForDeliveryCount > 0 ? { value: readyForDeliveryCount, label: 'vehículos esperando', direction: 'up' } : undefined}
+            />
+        </div>
+
+        <!-- Quick Actions -->
+        <section class="mb-8">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                <span class="material-symbols-outlined text-primary-600">rocket_launch</span>
+                Accesos Rápidos
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <a href="/recepcion/crear_cliente" class="group">
+                    <Card class="h-full hover:border-primary-500 hover:shadow-md transition-all duration-200 group-hover:-translate-y-1">
+                        <div class="flex flex-col gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                                <span class="material-symbols-outlined">person_add</span>
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-gray-900 dark:text-white group-hover:text-blue-600 transition-colors">Nuevo Cliente</h3>
+                                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Registrar cliente nuevo</p>
+                            </div>
+                        </div>
+                    </Card>
+                </a>
+                <a href="/recepcion/crear_vehiculo" class="group">
+                    <Card class="h-full hover:border-primary-500 hover:shadow-md transition-all duration-200 group-hover:-translate-y-1">
+                        <div class="flex flex-col gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 flex items-center justify-center group-hover:bg-purple-600 group-hover:text-white transition-colors">
+                                <span class="material-symbols-outlined">directions_car</span>
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-gray-900 dark:text-white group-hover:text-purple-600 transition-colors">Nuevo Vehículo</h3>
+                                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Asociar auto a cliente</p>
+                            </div>
+                        </div>
+                    </Card>
+                </a>
+                <a href="/recepcion/crear_orden" class="group">
+                    <Card class="h-full hover:border-primary-500 hover:shadow-md transition-all duration-200 group-hover:-translate-y-1">
+                        <div class="flex flex-col gap-3">
+                            <div class="w-10 h-10 rounded-lg bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 flex items-center justify-center group-hover:bg-orange-600 group-hover:text-white transition-colors">
+                                <span class="material-symbols-outlined">post_add</span>
+                            </div>
+                            <div>
+                                <h3 class="font-bold text-gray-900 dark:text-white group-hover:text-orange-600 transition-colors">Nueva Orden</h3>
+                                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Ingresar vehículo al taller</p>
+                            </div>
+                        </div>
+                    </Card>
+                </a>
             </div>
-        </Card>
-    </section>
+        </section>
+
+        <!-- Recent Activity -->
+        <section>
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                <span class="material-symbols-outlined text-primary-600">history</span>
+                Actividad Reciente
+            </h2>
+            <Card class="overflow-hidden">
+                {recentOrders.length > 0 ? (
+                    <Table headers={['Orden', 'Cliente', 'Vehículo', 'Fecha', 'Estado']}>
+                        {recentOrders.map((order: any) => (
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                                <td class="px-6 py-4 font-medium text-gray-900 dark:text-white">
+                                    OT-{order.id}
+                                </td>
+                                <td class="px-6 py-4 text-gray-600 dark:text-gray-300">
+                                    {order.vehiculo?.cliente ? `${order.vehiculo.cliente.nombre} ${order.vehiculo.cliente.apellido}` : 'N/A'}
+                                </td>
+                                <td class="px-6 py-4 text-gray-600 dark:text-gray-300">
+                                    {order.vehiculo ? `${order.vehiculo.marca} ${order.vehiculo.modelo}` : 'N/A'}
+                                </td>
+                                <td class="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
+                                    {new Date(order.createdAt).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                </td>
+                                <td class="px-6 py-4">
+                                    <Badge variant={getStatusVariant(order.estado)}>
+                                        {formatStatus(order.estado)}
+                                    </Badge>
+                                </td>
+                            </tr>
+                        ))}
+                    </Table>
+                ) : (
+                    <div class="p-8 text-center text-gray-500 dark:text-gray-400">
+                        <span class="material-symbols-outlined text-4xl mb-2 text-gray-300">inbox</span>
+                        <p>No hay actividad reciente.</p>
+                    </div>
+                )}
+            </Card>
+        </section>
+    </div>
 </DashboardLayout>

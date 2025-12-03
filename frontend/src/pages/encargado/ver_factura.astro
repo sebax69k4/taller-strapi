@@ -2,13 +2,38 @@
 export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
 import Sidebar from '../../components/Sidebar.astro';
-import { strapiGet } from '../../lib/strapi';
+import { strapiGet, strapiPut } from '../../lib/strapi';
 
 const facturaId = Astro.url.searchParams.get('id');
 let factura: any = null;
 let error = '';
 
 if (facturaId) {
+  // Handle Payment Submission
+  if (Astro.request.method === 'POST') {
+    try {
+      const formData = await Astro.request.formData();
+      const action = formData.get('action');
+
+      if (action === 'register_payment') {
+        const metodo_pago = formData.get('metodo_pago');
+        const referencia_pago = formData.get('referencia_pago');
+
+        await strapiPut(`/api/facturas/${facturaId}`, {
+          estado: 'pagado',
+          metodo_pago,
+          referencia_pago,
+          fecha_pago: new Date().toISOString()
+        });
+
+        // Redirect to refresh
+        return Astro.redirect(`/encargado/ver_factura?id=${facturaId}&success=true`);
+      }
+    } catch (e: any) {
+      error = 'Error al registrar el pago: ' + e.message;
+    }
+  }
+
   try {
     const response = await strapiGet(`/api/facturas/${facturaId}?populate[orden_de_trabajo][populate][vehiculo][populate][cliente]=*&populate[orden_de_trabajo][populate][mecanico]=*&populate[orden_de_trabajo][populate][repuestos]=*`);
     factura = response.data;
@@ -208,11 +233,107 @@ const formatDate = (date: string) => date ? new Date(date).toLocaleDateString('e
       </div>
     </main>
   </div>
+
+  <!-- Modal de Pago -->
+  {factura && factura.estado === 'pendiente' && (
+    <div x-data="{ open: false, metodo: 'efectivo', referencia: '', isSubmitting: false }" class="relative z-50">
+      <!-- Floating Action Button -->
+      <div class="fixed bottom-8 right-8 print:hidden">
+        <button 
+          @click="open = true"
+          class="flex items-center gap-2 px-6 py-4 bg-green-600 hover:bg-green-700 text-white rounded-full shadow-lg transition-all transform hover:scale-105 font-bold"
+        >
+          <span class="material-symbols-outlined">payments</span>
+          Registrar Pago
+        </button>
+      </div>
+
+      <!-- Backdrop -->
+      <div 
+        x-show="open" 
+        x-transition.opacity
+        class="fixed inset-0 bg-black/50 backdrop-blur-sm"
+        @click="open = false"
+      ></div>
+
+      <!-- Modal -->
+      <div 
+        x-show="open"
+        x-transition
+        class="fixed inset-0 flex items-center justify-center p-4 pointer-events-none"
+      >
+        <div 
+          class="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-md pointer-events-auto overflow-hidden"
+          @click.stop
+        >
+          <div class="p-6 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center">
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white">Registrar Pago</h3>
+            <button @click="open = false" class="text-gray-400 hover:text-gray-500">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+
+          <form 
+            method="POST" 
+            action={`/encargado/ver_factura?id=${facturaId}`}
+            class="p-6 space-y-4"
+            @submit="isSubmitting = true"
+          >
+            <input type="hidden" name="action" value="register_payment" />
+            
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Método de Pago</label>
+              <select 
+                name="metodo_pago" 
+                x-model="metodo"
+                class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-green-500 focus:border-green-500"
+              >
+                <option value="efectivo">Efectivo</option>
+                <option value="tarjeta_debito">Tarjeta Débito</option>
+                <option value="tarjeta_credito">Tarjeta Crédito</option>
+                <option value="transferencia">Transferencia</option>
+                <option value="cheque">Cheque</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Referencia / N° Operación</label>
+              <input 
+                type="text" 
+                name="referencia_pago" 
+                x-model="referencia"
+                placeholder="Ej: 123456"
+                class="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:ring-green-500 focus:border-green-500"
+              />
+            </div>
+
+            <div class="pt-4 flex gap-3">
+              <button 
+                type="button" 
+                @click="open = false"
+                class="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+              >
+                Cancelar
+              </button>
+              <button 
+                type="submit" 
+                class="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex justify-center items-center gap-2"
+                :disabled="isSubmitting"
+              >
+                <span x-show="isSubmitting" class="animate-spin material-symbols-outlined text-sm">progress_activity</span>
+                Confirmar Pago
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  )}
 </Layout>
 
 <style>
   @media print {
-    aside, button, .no-print {
+    aside, button, .no-print, .fixed {
       display: none !important;
     }
     main {

@@ -5,6 +5,7 @@ import DashboardLayout from '../layouts/DashboardLayout.astro';
 import Card from '../components/ui/Card.astro';
 import Button from '../components/ui/Button.astro';
 import Input from '../components/ui/Input.astro';
+import { strapiGet } from '../lib/strapi';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -24,7 +25,10 @@ let config = {
   companyName: 'Taller Veloz S.A.',
   companyAddress: 'Av. Principal 123',
   companyPhone: '+56 9 1234 5678',
-  hourlyRate: 25000
+  hourlyRate: 25000,
+  stockThreshold: 5,
+  warrantyText: '',
+  monthlyGoal: 0
 };
 
 let message = '';
@@ -39,25 +43,62 @@ try {
   // If file doesn't exist, we'll use defaults and try to create it later
 }
 
-// Handle Save
+// Handle Actions
 if (Astro.request.method === 'POST') {
   try {
     const formData = await Astro.request.formData();
-    const newConfig = {
-      iva: Number(formData.get('iva')),
-      companyName: String(formData.get('companyName')),
-      companyAddress: String(formData.get('companyAddress')),
-      companyPhone: String(formData.get('companyPhone')),
-      hourlyRate: Number(formData.get('hourlyRate'))
-    };
+    const action = formData.get('action');
 
-    await fs.writeFile(configPath, JSON.stringify(newConfig, null, 2), 'utf-8');
-    config = newConfig;
-    message = 'Configuración guardada exitosamente.';
-    messageType = 'success';
-  } catch (e) {
-    console.error('Error saving config:', e);
-    message = 'Error al guardar la configuración.';
+    if (action === 'backup') {
+        // Fetch all data for backup
+        const [clientes, vehiculos, ordenes, facturas, repuestos] = await Promise.all([
+            strapiGet('/api/clientes?pagination[limit]=-1'),
+            strapiGet('/api/vehiculos?pagination[limit]=-1'),
+            strapiGet('/api/orden-de-trabajos?pagination[limit]=-1'),
+            strapiGet('/api/facturas?pagination[limit]=-1'),
+            strapiGet('/api/repuestos?pagination[limit]=-1')
+        ]);
+
+        const backupData = {
+            timestamp: new Date().toISOString(),
+            config,
+            data: {
+                clientes: clientes.data,
+                vehiculos: vehiculos.data,
+                ordenes: ordenes.data,
+                facturas: facturas.data,
+                repuestos: repuestos.data
+            }
+        };
+
+        return new Response(JSON.stringify(backupData, null, 2), {
+            status: 200,
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Disposition': `attachment; filename="backup-taller-${new Date().toISOString().split('T')[0]}.json"`
+            }
+        });
+
+    } else if (action === 'save') {
+        const newConfig = {
+            iva: Number(formData.get('iva')),
+            companyName: String(formData.get('companyName')),
+            companyAddress: String(formData.get('companyAddress')),
+            companyPhone: String(formData.get('companyPhone')),
+            hourlyRate: Number(formData.get('hourlyRate')),
+            stockThreshold: Number(formData.get('stockThreshold')),
+            monthlyGoal: Number(formData.get('monthlyGoal')),
+            warrantyText: String(formData.get('warrantyText'))
+        };
+
+        await fs.writeFile(configPath, JSON.stringify(newConfig, null, 2), 'utf-8');
+        config = newConfig;
+        message = 'Configuración guardada exitosamente.';
+        messageType = 'success';
+    }
+  } catch (e: any) {
+    console.error('Error processing settings:', e);
+    message = 'Error al procesar la solicitud: ' + e.message;
     messageType = 'error';
   }
 }
@@ -66,9 +107,19 @@ if (Astro.request.method === 'POST') {
 <DashboardLayout title="Configuración" role={userRole} currentPath="/settings" userName={userName}>
   <div class="max-w-4xl mx-auto space-y-6">
     <!-- Header -->
-    <div>
-      <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Configuración</h1>
-      <p class="text-gray-500 dark:text-gray-400 mt-1">Personaliza el sistema y los datos de la empresa</p>
+    <div class="flex justify-between items-start">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Configuración</h1>
+            <p class="text-gray-500 dark:text-gray-400 mt-1">Personaliza el sistema y los datos de la empresa</p>
+        </div>
+        <div class="flex gap-2">
+            <form method="POST">
+                <input type="hidden" name="action" value="backup" />
+                <Button type="submit" variant="secondary" icon="download">
+                    Respaldo
+                </Button>
+            </form>
+        </div>
     </div>
 
     {message && (
@@ -79,79 +130,93 @@ if (Astro.request.method === 'POST') {
     )}
 
     <form method="POST" class="space-y-6">
-        <!-- Datos de la Empresa -->
-        <Card title="Datos de la Empresa">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Input label="Nombre de la Empresa" name="companyName" value={config.companyName} required />
-                <Input label="Dirección" name="companyAddress" value={config.companyAddress} required />
-                <Input label="Teléfono" name="companyPhone" value={config.companyPhone} required />
-            </div>
-        </Card>
+        <input type="hidden" name="action" value="save" />
+        
+        <!-- Tabs / Sections -->
+        <div class="grid grid-cols-1 gap-6">
+            
+            <!-- Datos de la Empresa -->
+            <Card title="🏢 Datos de la Empresa">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <Input label="Nombre de la Empresa" name="companyName" value={config.companyName} required />
+                    <Input label="Dirección" name="companyAddress" value={config.companyAddress} required />
+                    <Input label="Teléfono" name="companyPhone" value={config.companyPhone} required />
+                </div>
+            </Card>
 
-        <!-- Parámetros del Sistema -->
-        <Card title="Parámetros del Sistema">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Input label="IVA (%)" name="iva" type="number" value={config.iva} required min="0" max="100" />
-                <Input label="Valor Hora Hombre ($)" name="hourlyRate" type="number" value={config.hourlyRate} required min="0" />
-            </div>
-        </Card>
+            <!-- Operaciones -->
+            <Card title="⚙️ Operaciones">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <Input label="IVA (%)" name="iva" type="number" value={config.iva} required min="0" max="100" />
+                    <Input label="Valor Hora Hombre ($)" name="hourlyRate" type="number" value={config.hourlyRate} required min="0" />
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <Input label="Umbral de Stock Bajo (unidades)" name="stockThreshold" type="number" value={config.stockThreshold} required min="1" />
+                    <Input label="Meta Mensual de Ventas ($)" name="monthlyGoal" type="number" value={config.monthlyGoal} required min="0" />
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Texto de Garantía (Pie de página)</label>
+                    <textarea name="warrantyText" rows="3" class="w-full rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 focus:border-primary-500 focus:ring-primary-500 dark:text-white">{config.warrantyText}</textarea>
+                </div>
+            </Card>
 
-        <!-- Apariencia (Local) -->
-        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
-            <div class="p-6 border-b border-gray-100 dark:border-gray-700">
-                <h2 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                <span class="material-symbols-outlined text-primary-600">palette</span>
-                Apariencia (Local)
-                </h2>
-                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Personaliza cómo ves la aplicación en este dispositivo</p>
-            </div>
-            <div class="p-6">
-                <label class="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-3">Tema</label>
-                <div class="grid grid-cols-3 gap-4" x-data="{ theme: localStorage.getItem('theme') || 'system' }">
-                    <button 
-                    type="button"
-                    class="theme-option flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all"
-                    data-theme="light"
-                    x-on:click="theme = 'light'; document.documentElement.classList.remove('dark'); localStorage.setItem('theme', 'light')"
-                    x-bind:class="theme === 'light' ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'"
-                    >
-                    <div class="w-12 h-12 rounded-lg bg-white border border-gray-200 flex items-center justify-center shadow-sm">
-                        <span class="material-symbols-outlined text-yellow-500">light_mode</span>
+            <!-- Apariencia (Local) -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+                <div class="p-6 border-b border-gray-100 dark:border-gray-700">
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                    <span class="material-symbols-outlined text-primary-600">palette</span>
+                    Apariencia (Local)
+                    </h2>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Personaliza cómo ves la aplicación en este dispositivo</p>
+                </div>
+                <div class="p-6">
+                    <label class="text-sm font-medium text-gray-700 dark:text-gray-300 block mb-3">Tema</label>
+                    <div class="grid grid-cols-3 gap-4" x-data="{ theme: localStorage.getItem('theme') || 'system' }">
+                        <button 
+                        type="button"
+                        class="theme-option flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all"
+                        data-theme="light"
+                        x-on:click="theme = 'light'; document.documentElement.classList.remove('dark'); localStorage.setItem('theme', 'light')"
+                        x-bind:class="theme === 'light' ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'"
+                        >
+                        <div class="w-12 h-12 rounded-lg bg-white border border-gray-200 flex items-center justify-center shadow-sm">
+                            <span class="material-symbols-outlined text-yellow-500">light_mode</span>
+                        </div>
+                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Claro</span>
+                        </button>
+                        
+                        <button 
+                        type="button"
+                        class="theme-option flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all"
+                        data-theme="dark"
+                        x-on:click="theme = 'dark'; document.documentElement.classList.add('dark'); localStorage.setItem('theme', 'dark')"
+                        x-bind:class="theme === 'dark' ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'"
+                        >
+                        <div class="w-12 h-12 rounded-lg bg-gray-800 border border-gray-700 flex items-center justify-center shadow-sm">
+                            <span class="material-symbols-outlined text-blue-400">dark_mode</span>
+                        </div>
+                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Oscuro</span>
+                        </button>
+                        
+                        <button 
+                        type="button"
+                        class="theme-option flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all"
+                        data-theme="system"
+                        x-on:click="theme = 'system'; localStorage.removeItem('theme'); if (window.matchMedia('(prefers-color-scheme: dark)').matches) { document.documentElement.classList.add('dark') } else { document.documentElement.classList.remove('dark') }"
+                        x-bind:class="theme === 'system' ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'"
+                        >
+                        <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-white to-gray-800 border border-gray-300 flex items-center justify-center shadow-sm">
+                            <span class="material-symbols-outlined text-gray-600">computer</span>
+                        </div>
+                        <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Sistema</span>
+                        </button>
                     </div>
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Claro</span>
-                    </button>
-                    
-                    <button 
-                    type="button"
-                    class="theme-option flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all"
-                    data-theme="dark"
-                    x-on:click="theme = 'dark'; document.documentElement.classList.add('dark'); localStorage.setItem('theme', 'dark')"
-                    x-bind:class="theme === 'dark' ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'"
-                    >
-                    <div class="w-12 h-12 rounded-lg bg-gray-800 border border-gray-700 flex items-center justify-center shadow-sm">
-                        <span class="material-symbols-outlined text-blue-400">dark_mode</span>
-                    </div>
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Oscuro</span>
-                    </button>
-                    
-                    <button 
-                    type="button"
-                    class="theme-option flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all"
-                    data-theme="system"
-                    x-on:click="theme = 'system'; localStorage.removeItem('theme'); if (window.matchMedia('(prefers-color-scheme: dark)').matches) { document.documentElement.classList.add('dark') } else { document.documentElement.classList.remove('dark') }"
-                    x-bind:class="theme === 'system' ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'"
-                    >
-                    <div class="w-12 h-12 rounded-lg bg-gradient-to-br from-white to-gray-800 border border-gray-300 flex items-center justify-center shadow-sm">
-                        <span class="material-symbols-outlined text-gray-600">computer</span>
-                    </div>
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">Sistema</span>
-                    </button>
                 </div>
             </div>
         </div>
 
         <!-- Botones de Acción -->
-        <div class="flex justify-end gap-4">
+        <div class="flex justify-end gap-4 pb-8">
             <Button type="button" variant="outline" onclick="history.back()">Cancelar</Button>
             <Button type="submit" variant="primary" icon="save">Guardar Cambios</Button>
         </div>

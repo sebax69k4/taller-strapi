@@ -3,5 +3,8 @@
   "companyName": "Taller Veloz S.A.",
   "companyAddress": "Av. Principal 123",
   "companyPhone": "+56 9 1234 5678",
-  "hourlyRate": 25000
+  "hourlyRate": 25000,
+  "stockThreshold": 5,
+  "warrantyText": "Garantía de 3 meses por mano de obra. No cubre repuestos eléctricos.",
+  "monthlyGoal": 5000000
 }

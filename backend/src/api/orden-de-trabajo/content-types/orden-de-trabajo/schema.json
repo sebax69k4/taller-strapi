@@ -91,6 +91,15 @@
     },
     "fecha_fin_planificada": {
       "type": "datetime"
+    },
+    "hora_inicio_real": {
+      "type": "datetime"
+    },
+    "hora_fin_real": {
+      "type": "datetime"
+    },
+    "danos_previos": {
+      "type": "json"
     }
   }
 }

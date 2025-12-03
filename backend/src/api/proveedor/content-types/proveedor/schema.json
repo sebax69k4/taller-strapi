@@ -1,0 +1,46 @@
+{
+    "kind": "collectionType",
+    "collectionName": "proveedores",
+    "info": {
+        "singularName": "proveedor",
+        "pluralName": "proveedores",
+        "displayName": "Proveedor",
+        "description": ""
+    },
+    "options": {
+        "draftAndPublish": true
+    },
+    "pluginOptions": {},
+    "attributes": {
+        "nombre": {
+            "type": "string",
+            "required": true
+        },
+        "rut": {
+            "type": "string",
+            "unique": true
+        },
+        "contacto": {
+            "type": "string"
+        },
+        "telefono": {
+            "type": "string"
+        },
+        "email": {
+            "type": "email"
+        },
+        "direccion": {
+            "type": "text"
+        },
+        "rubro": {
+            "type": "enumeration",
+            "enum": [
+                "repuestos",
+                "insumos",
+                "servicios",
+                "otro"
+            ],
+            "default": "repuestos"
+        }
+    }
+}

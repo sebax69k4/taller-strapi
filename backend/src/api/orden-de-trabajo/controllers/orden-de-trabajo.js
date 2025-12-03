@@ -29,6 +29,28 @@ module.exports = createCoreController('api::orden-de-trabajo.orden-de-trabajo', 
                 return updatedOrder;
             }
 
+            // 2.1 Validate Stock Availability
+            if (order.repuestos && order.repuestos.length > 0) {
+                for (const repuesto of order.repuestos) {
+                    // Fetch current stock
+                    const item = await strapi.entityService.findOne('api::repuesto.repuesto', repuesto.id);
+
+                    if (!item) {
+                        return ctx.badRequest(`El repuesto con ID ${repuesto.id} no existe.`);
+                    }
+
+                    // Assuming 'cantidad' in the relation is not directly available, we might need a pivot table or logic.
+                    // However, in this simple schema, let's assume we are just checking if the item has stock > 0
+                    // OR if the order has a specific quantity requested (which might be in a component or pivot).
+                    // For now, let's assume we just check if stock > 0 for any part used.
+                    // A more robust implementation would need a 'cantidad_usada' field.
+
+                    if (item.stock < 1) { // Simplification: assume 1 unit per relation for now if no quantity field
+                        return ctx.badRequest(`No hay stock suficiente para el repuesto: ${item.nombre}`);
+                    }
+                }
+            }
+
             // 3. Calculate totals
             let total = 0;
             let subtotal = 0;

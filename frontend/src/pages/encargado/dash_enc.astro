@@ -116,7 +116,7 @@ const formatStatus = (status: string) => {
         <span class="material-symbols-outlined text-primary-600">rocket_launch</span>
         Accesos Rápidos
       </h2>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <a href="/encargado/inventario" class="group">
           <Card class="h-full hover:border-primary-500 hover:shadow-md transition-all duration-200 group-hover:-translate-y-1">
             <div class="flex flex-col gap-3">
@@ -152,6 +152,19 @@ const formatStatus = (status: string) => {
               <div>
                 <h3 class="font-bold text-gray-900 dark:text-white group-hover:text-purple-600 transition-colors">Asignar Orden</h3>
                 <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Distribuir trabajo</p>
+              </div>
+            </div>
+          </Card>
+        </a>
+        <a href="/encargado/reportes" class="group">
+          <Card class="h-full hover:border-primary-500 hover:shadow-md transition-all duration-200 group-hover:-translate-y-1">
+            <div class="flex flex-col gap-3">
+              <div class="w-10 h-10 rounded-lg bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 flex items-center justify-center group-hover:bg-orange-600 group-hover:text-white transition-colors">
+                <span class="material-symbols-outlined">analytics</span>
+              </div>
+              <div>
+                <h3 class="font-bold text-gray-900 dark:text-white group-hover:text-orange-600 transition-colors">Reportes</h3>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Exportar datos</p>
               </div>
             </div>
           </Card>

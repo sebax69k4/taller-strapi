@@ -1,0 +1,170 @@
+---
+export const prerender = false;
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import Card from '../../components/ui/Card.astro';
+import Button from '../../components/ui/Button.astro';
+import Table from '../../components/ui/Table.astro';
+import Input from '../../components/ui/Input.astro';
+import Badge from '../../components/ui/Badge.astro';
+import EmptyState from '../../components/ui/EmptyState.astro';
+import { strapiGet, strapiPost, strapiDelete } from '../../lib/strapi';
+
+const userRole = Astro.cookies.get('user_role')?.value;
+if (!userRole || userRole !== 'encargado') return Astro.redirect('/login');
+
+let proveedores: any[] = [];
+let error = '';
+let message = Astro.url.searchParams.get('message');
+let messageType = Astro.url.searchParams.get('type');
+
+try {
+    const res = await strapiGet('/api/proveedores?sort=nombre:asc');
+    proveedores = res.data || [];
+} catch (e: any) {
+    error = 'Error al cargar proveedores: ' + e.message;
+}
+
+// Handle Form Submission
+if (Astro.request.method === 'POST') {
+    try {
+        const formData = await Astro.request.formData();
+        const action = formData.get('action');
+
+        if (action === 'create') {
+            await strapiPost('/api/proveedores', {
+                nombre: formData.get('nombre'),
+                rut: formData.get('rut'),
+                contacto: formData.get('contacto'),
+                telefono: formData.get('telefono'),
+                email: formData.get('email'),
+                rubro: formData.get('rubro'),
+                direccion: formData.get('direccion')
+            });
+            return Astro.redirect('/encargado/proveedores?message=Proveedor creado exitosamente&type=success');
+        } else if (action === 'delete') {
+            const id = formData.get('id');
+            if (id) {
+                await strapiDelete(`/api/proveedores/${id}`);
+                return Astro.redirect('/encargado/proveedores?message=Proveedor eliminado&type=success');
+            }
+        }
+    } catch (e: any) {
+        message = 'Error al procesar: ' + e.message;
+        messageType = 'error';
+    }
+}
+---
+
+<DashboardLayout title="Gestión de Proveedores" role="encargado" currentPath="/encargado/proveedores">
+    <div class="max-w-7xl mx-auto" x-data="{ showModal: false }">
+        
+        <!-- Header -->
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Proveedores</h1>
+                <p class="text-gray-500 dark:text-gray-400 mt-1">Gestiona la lista de proveedores del taller</p>
+            </div>
+            <Button icon="add" @click="showModal = true">
+                Nuevo Proveedor
+            </Button>
+        </div>
+
+        {message && (
+            <div class={`p-4 mb-6 rounded-lg border flex items-center gap-3 ${messageType === 'success' ? 'bg-green-50 border-green-200 text-green-800 dark:bg-green-900/30 dark:border-green-800 dark:text-green-300' : 'bg-red-50 border-red-200 text-red-800 dark:bg-red-900/30 dark:border-red-800 dark:text-red-300'}`}>
+                <span class="material-symbols-outlined">{messageType === 'success' ? 'check_circle' : 'error'}</span>
+                <p class="text-sm font-medium">{message}</p>
+            </div>
+        )}
+
+        {error && (
+            <div class="p-4 mb-6 bg-red-50 border border-red-200 text-red-800 rounded-lg">
+                {error}
+            </div>
+        )}
+
+        <!-- List -->
+        <Card class="overflow-hidden">
+            {proveedores.length > 0 ? (
+                <Table headers={['Nombre', 'RUT', 'Contacto', 'Rubro', 'Acciones']}>
+                    {proveedores.map((prov: any) => (
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                            <td class="px-6 py-4">
+                                <div class="font-medium text-gray-900 dark:text-white">{prov.nombre}</div>
+                                <div class="text-xs text-gray-500">{prov.email}</div>
+                            </td>
+                            <td class="px-6 py-4 text-gray-600 dark:text-gray-300">{prov.rut}</td>
+                            <td class="px-6 py-4">
+                                <div class="text-sm text-gray-900 dark:text-white">{prov.contacto}</div>
+                                <div class="text-xs text-gray-500">{prov.telefono}</div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <Badge variant="info">{prov.rubro}</Badge>
+                            </td>
+                            <td class="px-6 py-4">
+                                <form method="POST" onsubmit="return confirm('¿Estás seguro de eliminar este proveedor?');">
+                                    <input type="hidden" name="action" value="delete" />
+                                    <input type="hidden" name="id" value={prov.documentId} />
+                                    <button type="submit" class="text-red-600 hover:text-red-800 p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" title="Eliminar">
+                                        <span class="material-symbols-outlined">delete</span>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    ))}
+                </Table>
+            ) : (
+                <EmptyState 
+                    title="No hay proveedores" 
+                    description="Comienza agregando los proveedores de repuestos e insumos."
+                    icon="local_shipping"
+                />
+            )}
+        </Card>
+
+        <!-- Modal Create -->
+        <div x-show="showModal" class="fixed inset-0 z-50 overflow-y-auto" style="display: none;">
+            <div class="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+                <div class="fixed inset-0 transition-opacity" aria-hidden="true" @click="showModal = false">
+                    <div class="absolute inset-0 bg-gray-500 opacity-75"></div>
+                </div>
+
+                <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+                <div class="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg w-full">
+                    <form method="POST">
+                        <input type="hidden" name="action" value="create" />
+                        <div class="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                            <h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white mb-4">Nuevo Proveedor</h3>
+                            <div class="grid grid-cols-1 gap-4">
+                                <Input label="Nombre Empresa" name="nombre" required />
+                                <div class="grid grid-cols-2 gap-4">
+                                    <Input label="RUT" name="rut" />
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Rubro</label>
+                                        <select name="rubro" class="form-select w-full rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 dark:text-white">
+                                            <option value="repuestos">Repuestos</option>
+                                            <option value="insumos">Insumos</option>
+                                            <option value="servicios">Servicios</option>
+                                            <option value="otro">Otro</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <Input label="Nombre Contacto" name="contacto" />
+                                <div class="grid grid-cols-2 gap-4">
+                                    <Input label="Teléfono" name="telefono" />
+                                    <Input label="Email" name="email" type="email" />
+                                </div>
+                                <Input label="Dirección" name="direccion" />
+                            </div>
+                        </div>
+                        <div class="bg-gray-50 dark:bg-gray-700/50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                            <Button type="submit" class="w-full sm:w-auto sm:ml-3">Guardar</Button>
+                            <Button type="button" variant="secondary" class="mt-3 w-full sm:mt-0 sm:w-auto" @click="showModal = false">Cancelar</Button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</DashboardLayout>

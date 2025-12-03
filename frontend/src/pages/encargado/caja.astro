@@ -1,0 +1,217 @@
+---
+export const prerender = false;
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import Card from '../../components/ui/Card.astro';
+import Button from '../../components/ui/Button.astro';
+import { strapiGet, strapiPost, strapiPut } from '../../lib/strapi';
+
+const userRole = Astro.cookies.get('user_role')?.value;
+if (!userRole) return Astro.redirect('/login');
+
+const today = new Date().toISOString().split('T')[0];
+let cajaDia: any = null;
+let movimientos: any[] = [];
+let error = '';
+let success = '';
+
+// 1. Fetch Caja del día
+try {
+    const res = await strapiGet(`/api/cajas?filters[fecha][$eq]=${today}`);
+    if (res.data && res.data.length > 0) {
+        cajaDia = res.data[0];
+    }
+} catch (e: any) {
+    console.error('Error fetching caja:', e);
+}
+
+// 2. Fetch Movimientos (Facturas pagadas hoy)
+try {
+    // Simplificación: Traemos facturas pagadas hoy. En un sistema real, filtraríamos por hora también.
+    const res = await strapiGet(`/api/facturas?filters[fecha_pago][$contains]=${today}&filters[estado][$eq]=pagado&populate[orden_de_trabajo][populate][vehiculo]=*`);
+    movimientos = res.data || [];
+} catch (e: any) {
+    console.error('Error fetching movimientos:', e);
+}
+
+// 3. Handle Actions
+if (Astro.request.method === 'POST') {
+    try {
+        const formData = await Astro.request.formData();
+        const action = formData.get('action');
+
+        if (action === 'abrir_caja') {
+            const monto_apertura = formData.get('monto_apertura');
+            await strapiPost('/api/cajas', {
+                fecha: today,
+                monto_apertura: Number(monto_apertura),
+                estado: 'abierta',
+                total_efectivo: 0,
+                total_tarjeta: 0
+            });
+            success = 'Caja abierta correctamente.';
+        } else if (action === 'cerrar_caja') {
+            const totalEfectivo = movimientos
+                .filter((m: any) => m.metodo_pago === 'efectivo')
+                .reduce((sum: number, m: any) => sum + Number(m.total), 0);
+            
+            const totalTarjeta = movimientos
+                .filter((m: any) => m.metodo_pago.includes('tarjeta'))
+                .reduce((sum: number, m: any) => sum + Number(m.total), 0);
+
+            await strapiPut(`/api/cajas/${cajaDia.documentId}`, {
+                estado: 'cerrada',
+                monto_cierre: Number(cajaDia.monto_apertura) + totalEfectivo, // Simplificado: solo suma efectivo al cierre
+                total_efectivo: totalEfectivo,
+                total_tarjeta: totalTarjeta
+            });
+            success = 'Caja cerrada correctamente.';
+        }
+        
+        return Astro.redirect('/encargado/caja?success=true');
+
+    } catch (e: any) {
+        error = 'Error al procesar la caja: ' + e.message;
+    }
+}
+
+const formatMoney = (amount: number) => `$${(amount || 0).toLocaleString('es-CL')}`;
+---
+
+<DashboardLayout title="Caja Diaria" role="encargado" currentPath={Astro.url.pathname}>
+    <div class="max-w-4xl mx-auto">
+        <div class="mb-8 flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Caja Diaria</h1>
+                <p class="text-gray-500 dark:text-gray-400">Gestión de apertura y cierre de caja para el día {today}.</p>
+            </div>
+            <div class="text-right">
+                <span class={`px-4 py-2 rounded-full text-sm font-bold ${
+                    cajaDia?.estado === 'abierta' ? 'bg-green-100 text-green-800' : 
+                    cajaDia?.estado === 'cerrada' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'
+                }`}>
+                    {cajaDia ? `CAJA ${cajaDia.estado.toUpperCase()}` : 'CAJA NO INICIADA'}
+                </span>
+            </div>
+        </div>
+
+        {error && (
+            <div class="p-4 mb-6 text-red-700 bg-red-100 rounded-lg border border-red-200">
+                {error}
+            </div>
+        )}
+
+        {!cajaDia ? (
+            <Card>
+                <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">Apertura de Caja</h2>
+                <form method="POST" class="space-y-4">
+                    <input type="hidden" name="action" value="abrir_caja" />
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Monto Inicial (Sencillo)</label>
+                        <div class="relative">
+                            <span class="absolute left-3 top-2 text-gray-500">$</span>
+                            <input 
+                                type="number" 
+                                name="monto_apertura" 
+                                required 
+                                min="0"
+                                placeholder="0"
+                                class="pl-8 w-full rounded-lg border-gray-300 dark:bg-gray-800 dark:border-gray-600 dark:text-white"
+                            />
+                        </div>
+                    </div>
+                    <Button variant="primary" type="submit">Abrir Caja</Button>
+                </form>
+            </Card>
+        ) : (
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <Card>
+                    <p class="text-sm text-gray-500">Monto Apertura</p>
+                    <p class="text-2xl font-bold text-gray-900 dark:text-white">{formatMoney(cajaDia.monto_apertura)}</p>
+                </Card>
+                <Card>
+                    <p class="text-sm text-gray-500">Ventas Efectivo (Hoy)</p>
+                    <p class="text-2xl font-bold text-green-600">
+                        {formatMoney(movimientos.filter(m => m.metodo_pago === 'efectivo').reduce((sum, m) => sum + Number(m.total), 0))}
+                    </p>
+                </Card>
+                <Card>
+                    <p class="text-sm text-gray-500">Ventas Tarjeta (Hoy)</p>
+                    <p class="text-2xl font-bold text-blue-600">
+                        {formatMoney(movimientos.filter(m => m.metodo_pago.includes('tarjeta')).reduce((sum, m) => sum + Number(m.total), 0))}
+                    </p>
+                </Card>
+            </div>
+        )}
+
+        {cajaDia && (
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <!-- Listado de Movimientos -->
+                <div class="lg:col-span-2">
+                    <Card title="Movimientos del Día">
+                        {movimientos.length > 0 ? (
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm text-left">
+                                    <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
+                                        <tr>
+                                            <th class="px-4 py-3">Hora</th>
+                                            <th class="px-4 py-3">Factura</th>
+                                            <th class="px-4 py-3">Método</th>
+                                            <th class="px-4 py-3 text-right">Monto</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {movimientos.map((mov: any) => (
+                                            <tr class="border-b dark:border-gray-700">
+                                                <td class="px-4 py-3">{new Date(mov.fecha_pago).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</td>
+                                                <td class="px-4 py-3 font-medium">#{mov.numero_factura || mov.id}</td>
+                                                <td class="px-4 py-3 capitalize">{mov.metodo_pago.replace('_', ' ')}</td>
+                                                <td class="px-4 py-3 text-right font-bold">{formatMoney(mov.total)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : (
+                            <p class="text-gray-500 text-center py-8">No hay movimientos registrados hoy.</p>
+                        )}
+                    </Card>
+                </div>
+
+                <!-- Cierre de Caja -->
+                <div>
+                    {cajaDia.estado === 'abierta' ? (
+                        <Card title="Cierre de Caja">
+                            <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                                Al cerrar la caja, se calcularán los totales finales y no se podrán registrar más movimientos por hoy.
+                            </p>
+                            <form method="POST">
+                                <input type="hidden" name="action" value="cerrar_caja" />
+                                <Button variant="danger" type="submit" block>
+                                    Cerrar Caja
+                                </Button>
+                            </form>
+                        </Card>
+                    ) : (
+                        <Card class="bg-gray-50 dark:bg-gray-800/50 border-green-200">
+                            <div class="text-center py-4">
+                                <span class="material-symbols-outlined text-4xl text-green-600 mb-2">lock_clock</span>
+                                <h3 class="text-lg font-bold text-gray-900 dark:text-white">Caja Cerrada</h3>
+                                <p class="text-sm text-gray-500">Resumen final generado.</p>
+                                <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                                    <div class="flex justify-between text-sm mb-2">
+                                        <span>Total Efectivo:</span>
+                                        <span class="font-bold">{formatMoney(cajaDia.total_efectivo)}</span>
+                                    </div>
+                                    <div class="flex justify-between text-sm">
+                                        <span>Total Tarjeta:</span>
+                                        <span class="font-bold">{formatMoney(cajaDia.total_tarjeta)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </Card>
+                    )}
+                </div>
+            </div>
+        )}
+    </div>
+</DashboardLayout>

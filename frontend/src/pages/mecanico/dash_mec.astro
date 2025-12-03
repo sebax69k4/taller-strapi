@@ -3,7 +3,7 @@ export const prerender = false;
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
 import Card from '../../components/ui/Card.astro';
 import Button from '../../components/ui/Button.astro';
-import { strapiGet } from '../../lib/strapi';
+import { strapiGet, strapiPut } from '../../lib/strapi';
 
 const userRole = Astro.cookies.get('user_role')?.value;
 const mecanicoId = Astro.cookies.get('mecanico_id')?.value;
@@ -59,23 +59,20 @@ try {
   
   if (ordersRes && ordersRes.data) {
     assignedOrders = ordersRes.data;
-    console.log(`✅ Órdenes cargadas: ${assignedOrders.length}`);
-  } else {
-    console.log('⚠️ No data in response:', ordersRes);
-    error = 'No se recibieron datos del servidor';
   }
-
 } catch (e: any) {
-  console.error('❌ Error en el dashboard del mecánico:', e);
-  error = `Error de conexión: ${e.message || 'Error desconocido'}`;
+  console.error('Error fetching orders:', e);
+  error = e.message || 'Error al cargar órdenes';
 }
 
-// 3. Filter orders based on query param
-const statusFilter = Astro.url.searchParams.get('status');
-if (statusFilter && statusFilter !== 'Todas') {
-  filteredOrders = assignedOrders.filter((order: Order) => order.estado === statusFilter);
-} else {
+// Obtener el filtro de estado desde la URL
+const statusFilter = Astro.url.searchParams.get('status') || 'Todas';
+
+// Filtrar órdenes según el estado seleccionado
+if (!statusFilter || statusFilter === 'Todas') {
   filteredOrders = assignedOrders;
+} else {
+  filteredOrders = assignedOrders.filter((order: Order) => order.estado === statusFilter);
 }
 ---
 
@@ -136,27 +133,20 @@ if (statusFilter && statusFilter !== 'Todas') {
                         <div class="p-5 flex flex-col flex-1 gap-4">
                             <div>
                                 <h3 class="text-lg font-bold text-gray-900 dark:text-white leading-tight">OT-{order.id} - {vehicleName}</h3>
-                                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-1">
-                                    <span class="material-symbols-outlined text-sm">calendar_today</span>
-                                    {order.fecha_ingreso ? new Date(order.fecha_ingreso).toLocaleDateString() : (order.createdAt ? new Date(order.createdAt).toLocaleDateString() : 'Sin fecha')}
-                                </p>
+                                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">{order.descripcion || 'Sin descripción'}</p>
                             </div>
-                            
-                            <p class="text-sm text-gray-600 dark:text-gray-300 line-clamp-2 flex-1">
-                                {order.descripcion || 'Sin descripción.'}
-                            </p>
-                            
-                            <a href={`/mecanico/detalle_orden_trabajo?id=${order.documentId}`} class="mt-auto">
-                                <Button variant="primary" block>
-                                    Ver Detalles
-                                </Button>
-                            </a>
+                            <div class="mt-auto pt-4 border-t border-gray-100 dark:border-gray-700">
+                                <a href={`/mecanico/detalle_orden_trabajo?id=${order.documentId}`} class="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium">
+                                    <span class="material-symbols-outlined text-lg">visibility</span>
+                                    Ver Detalle
+                                </a>
+                            </div>
                         </div>
                     </Card>
-                )
+                );
             })
         ) : (
-            <div class="col-span-full py-12 flex flex-col items-center justify-center text-center">
+            <div class="col-span-full flex flex-col items-center justify-center py-12 text-center">
                 <div class="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
                     <span class="material-symbols-outlined text-3xl text-gray-400">assignment_late</span>
                 </div>

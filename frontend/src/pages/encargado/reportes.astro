@@ -2,12 +2,67 @@
 export const prerender = false;
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
 import Card from '../../components/ui/Card.astro';
+import Button from '../../components/ui/Button.astro';
 import { strapiGet } from '../../lib/strapi';
 import '../../styles/global.css';
 
 const userRole = Astro.cookies.get('user_role')?.value;
 if (!userRole) {
   return Astro.redirect('/login');
+}
+
+// Handle Export Actions
+if (Astro.request.method === 'POST') {
+    try {
+        const formData = await Astro.request.formData();
+        const reportType = formData.get('type');
+        
+        let data: any[] = [];
+        let filename = '';
+        let headers: string[] = [];
+
+        if (reportType === 'ventas') {
+            const res = await strapiGet('/api/facturas?populate=*&pagination[limit]=-1');
+            data = res.data.map((f: any) => ({
+                id: f.id,
+                fecha: f.fecha_emision,
+                cliente: f.orden_de_trabajo?.vehiculo?.cliente?.nombre || 'N/A',
+                monto: f.monto_total,
+                metodo: f.metodo_pago,
+                estado: f.estado
+            }));
+            headers = ['ID', 'Fecha', 'Cliente', 'Monto', 'Método', 'Estado'];
+            filename = `reporte-ventas-${new Date().toISOString().split('T')[0]}.csv`;
+        } else if (reportType === 'inventario') {
+            const res = await strapiGet('/api/repuestos?pagination[limit]=-1');
+            data = res.data.map((r: any) => ({
+                nombre: r.nombre,
+                sku: r.sku,
+                stock: r.stock,
+                precio: r.precio,
+                ubicacion: r.ubicacion
+            }));
+            headers = ['Nombre', 'SKU', 'Stock', 'Precio', 'Ubicación'];
+            filename = `reporte-inventario-${new Date().toISOString().split('T')[0]}.csv`;
+        }
+
+        // Convert to CSV
+        const csvContent = [
+            headers.join(','),
+            ...data.map((row: any) => Object.values(row).map(v => `"${v}"`).join(','))
+        ].join('\n');
+
+        return new Response(csvContent, {
+            status: 200,
+            headers: {
+                'Content-Type': 'text/csv',
+                'Content-Disposition': `attachment; filename="${filename}"`
+            }
+        });
+
+    } catch (e) {
+        console.error('Error generating report:', e);
+    }
 }
 
 // Fechas para filtros
@@ -169,10 +224,26 @@ const totalOrdenes = Object.values(estadoDistribucion).reduce((a, b) => a + b, 0
           <span class="material-symbols-outlined text-sm">print</span>
           Imprimir
         </button>
-        <button class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2">
-          <span class="material-symbols-outlined text-sm">download</span>
-          Exportar
-        </button>
+        <div class="relative" x-data="{ open: false }">
+            <button @click="open = !open" @click.outside="open = false" class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2">
+                <span class="material-symbols-outlined text-sm">download</span>
+                Exportar
+            </button>
+            <div x-show="open" class="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg py-1 z-10 border border-gray-100 dark:border-gray-700" style="display: none;">
+                <form method="POST" class="block">
+                    <input type="hidden" name="type" value="ventas" />
+                    <button type="submit" class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+                        Reporte de Ventas
+                    </button>
+                </form>
+                <form method="POST" class="block">
+                    <input type="hidden" name="type" value="inventario" />
+                    <button type="submit" class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+                        Inventario Actual
+                    </button>
+                </form>
+            </div>
+        </div>
       </div>
     </div>
 
@@ -360,6 +431,63 @@ const totalOrdenes = Object.values(estadoDistribucion).reduce((a, b) => a + b, 0
         <p class="text-center text-gray-500 dark:text-gray-400 py-8">No hay transacciones recientes</p>
       )}
     </Card>
+
+    <!-- Export Zone -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
+        <!-- Ventas -->
+        <Card>
+            <div class="flex flex-col h-full">
+                <div class="w-12 h-12 rounded-lg bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 flex items-center justify-center mb-4">
+                    <span class="material-symbols-outlined text-2xl">payments</span>
+                </div>
+                <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-2">Reporte de Ventas</h3>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-6 flex-1">
+                    Exporta el historial completo de facturas emitidas, incluyendo montos y métodos de pago.
+                </p>
+                <form method="POST">
+                    <input type="hidden" name="type" value="ventas" />
+                    <Button type="submit" variant="outline" class="w-full" icon="download">
+                        Descargar CSV
+                    </Button>
+                </form>
+            </div>
+        </Card>
+
+        <!-- Inventario -->
+        <Card>
+            <div class="flex flex-col h-full">
+                <div class="w-12 h-12 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-4">
+                    <span class="material-symbols-outlined text-2xl">inventory_2</span>
+                </div>
+                <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-2">Inventario Actual</h3>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-6 flex-1">
+                    Descarga la lista completa de repuestos con sus niveles de stock y precios actuales.
+                </p>
+                <form method="POST">
+                    <input type="hidden" name="type" value="inventario" />
+                    <Button type="submit" variant="outline" class="w-full" icon="download">
+                        Descargar CSV
+                    </Button>
+                </form>
+            </div>
+        </Card>
+
+        <!-- Mecánicos (Placeholder) -->
+        <Card>
+            <div class="flex flex-col h-full opacity-60">
+                <div class="w-12 h-12 rounded-lg bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 flex items-center justify-center mb-4">
+                    <span class="material-symbols-outlined text-2xl">engineering</span>
+                </div>
+                <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-2">Productividad (Pronto)</h3>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-6 flex-1">
+                    Próximamente: Reporte detallado de horas trabajadas por cada mecánico.
+                </p>
+                <Button type="button" variant="secondary" class="w-full" disabled>
+                    No disponible
+                </Button>
+            </div>
+        </Card>
+    </div>
   </div>
 </DashboardLayout>
 

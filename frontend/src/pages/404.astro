@@ -1,0 +1,22 @@
+---
+import DashboardLayout from '../layouts/DashboardLayout.astro';
+import Button from '../components/ui/Button.astro';
+---
+
+<DashboardLayout title="Página no encontrada" role="recepcionista" currentPath="/404">
+    <div class="min-h-[60vh] flex flex-col items-center justify-center text-center">
+        <div class="w-24 h-24 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-6">
+            <span class="material-symbols-outlined text-5xl text-gray-400">sentiment_dissatisfied</span>
+        </div>
+        <h1 class="text-4xl font-bold text-gray-900 dark:text-white font-display mb-2">404</h1>
+        <h2 class="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-4">Página no encontrada</h2>
+        <p class="text-gray-500 dark:text-gray-400 max-w-md mb-8">
+            Lo sentimos, la página que estás buscando no existe o ha sido movida.
+        </p>
+        <a href="/">
+            <Button variant="primary" icon="home">
+                Volver al Inicio
+            </Button>
+        </a>
+    </div>
+</DashboardLayout>

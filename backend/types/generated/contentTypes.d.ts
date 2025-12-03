@@ -466,6 +466,43 @@ export interface ApiBitacoraBitacora extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiCajaCaja extends Struct.CollectionTypeSchema {
+  collectionName: 'cajas';
+  info: {
+    displayName: 'Caja';
+    pluralName: 'cajas';
+    singularName: 'caja';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    estado: Schema.Attribute.Enumeration<['abierta', 'cerrada']> &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'abierta'>;
+    fecha: Schema.Attribute.Date &
+      Schema.Attribute.Required &
+      Schema.Attribute.Unique;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<'oneToMany', 'api::caja.caja'> &
+      Schema.Attribute.Private;
+    monto_apertura: Schema.Attribute.Decimal &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<0>;
+    monto_cierre: Schema.Attribute.Decimal;
+    observaciones: Schema.Attribute.Text;
+    publishedAt: Schema.Attribute.DateTime;
+    total_efectivo: Schema.Attribute.Decimal & Schema.Attribute.DefaultTo<0>;
+    total_tarjeta: Schema.Attribute.Decimal & Schema.Attribute.DefaultTo<0>;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiClienteCliente extends Struct.CollectionTypeSchema {
   collectionName: 'clientes';
   info: {
@@ -613,6 +650,7 @@ export interface ApiOrdenDeTrabajoOrdenDeTrabajo
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    danos_previos: Schema.Attribute.JSON;
     descripcion: Schema.Attribute.Text;
     diagnostico: Schema.Attribute.Text;
     estado: Schema.Attribute.Enumeration<
@@ -631,6 +669,8 @@ export interface ApiOrdenDeTrabajoOrdenDeTrabajo
     fecha_fin_planificada: Schema.Attribute.DateTime;
     fecha_ingreso: Schema.Attribute.Date & Schema.Attribute.Required;
     fecha_inicio_planificada: Schema.Attribute.DateTime;
+    hora_fin_real: Schema.Attribute.DateTime;
+    hora_inicio_real: Schema.Attribute.DateTime;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
       'oneToMany',
@@ -690,6 +730,44 @@ export interface ApiPresupuestoPresupuesto extends Struct.CollectionTypeSchema {
       'api::orden-de-trabajo.orden-de-trabajo'
     >;
     publishedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
+export interface ApiProveedorProveedor extends Struct.CollectionTypeSchema {
+  collectionName: 'proveedores';
+  info: {
+    description: '';
+    displayName: 'Proveedor';
+    pluralName: 'proveedores';
+    singularName: 'proveedor';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    contacto: Schema.Attribute.String;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    direccion: Schema.Attribute.Text;
+    email: Schema.Attribute.Email;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::proveedor.proveedor'
+    > &
+      Schema.Attribute.Private;
+    nombre: Schema.Attribute.String & Schema.Attribute.Required;
+    publishedAt: Schema.Attribute.DateTime;
+    rubro: Schema.Attribute.Enumeration<
+      ['repuestos', 'insumos', 'servicios', 'otro']
+    > &
+      Schema.Attribute.DefaultTo<'repuestos'>;
+    rut: Schema.Attribute.String & Schema.Attribute.Unique;
+    telefono: Schema.Attribute.String;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
@@ -1436,11 +1514,13 @@ declare module '@strapi/strapi' {
       'admin::transfer-token-permission': AdminTransferTokenPermission;
       'admin::user': AdminUser;
       'api::bitacora.bitacora': ApiBitacoraBitacora;
+      'api::caja.caja': ApiCajaCaja;
       'api::cliente.cliente': ApiClienteCliente;
       'api::factura.factura': ApiFacturaFactura;
       'api::mecenico.mecenico': ApiMecenicoMecenico;
       'api::orden-de-trabajo.orden-de-trabajo': ApiOrdenDeTrabajoOrdenDeTrabajo;
       'api::presupuesto.presupuesto': ApiPresupuestoPresupuesto;
+      'api::proveedor.proveedor': ApiProveedorProveedor;
       'api::repuesto.repuesto': ApiRepuestoRepuesto;
       'api::servicio.servicio': ApiServicioServicio;
       'api::solicitud-de-repuesto.solicitud-de-repuesto': ApiSolicitudDeRepuestoSolicitudDeRepuesto;
