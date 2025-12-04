@@ -14,6 +14,11 @@ export default defineConfig({
     plugins: [tailwindcss()]
   },
 
+  server: {
+    host: true, // <--- ESTO ES LO IMPORTANTE
+    port: Number(process.env.PORT) || 4321 // Opcional, pero recomendado
+  },
+  
   adapter: node({
     mode: 'standalone'
   })
