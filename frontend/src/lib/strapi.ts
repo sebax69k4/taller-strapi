@@ -1,5 +1,5 @@
 // Configuración de Strapi
-export const STRAPI_URL = 'https://engaging-bubble-5a6bf0674c.strapiapp.com:1337'; // Reemplaza con tu URL de Strapi
+export const STRAPI_URL = import.meta.env.PUBLIC_STRAPI_URL || 'https://engaging-bubble-5a6bf0674c.strapiapp.com';
 
 // Helper para hacer peticiones a Strapi (sin autenticación - APIs públicas)
 export async function fetchStrapi(endpoint: string, options: RequestInit = {}) {
