@@ -15,5 +15,11 @@
     "astro": "^5.15.9",
     "tailwindcss": "^4.1.17",
     "typescript": "^5.9.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp"
+    ]
   }
 }
