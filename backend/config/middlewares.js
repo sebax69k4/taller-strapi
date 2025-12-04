@@ -1,7 +1,7 @@
 module.exports = [
   'strapi::logger',
   'strapi::errors',
-    {
+  {
     name: 'strapi::security',
     config: {
       contentSecurityPolicy: {
@@ -21,15 +21,14 @@ module.exports = [
       origin: [
         'http://localhost:4321',
         'http://localhost:4322',
-        'https://taller-strapi-front.onrender.com'  // ← Agrega tu URL de Render aquí
+        'http://localhost:3000',
+        'https://taller-strapi-front.onrender.com'
       ],
-      methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'],
       headers: ['Content-Type', 'Authorization', 'Origin', 'Accept'],
       keepHeaderOnError: true,
     },
   },
-  'strapi::security',
-  'strapi::cors',
   'strapi::poweredBy',
   'strapi::query',
   'strapi::body',
