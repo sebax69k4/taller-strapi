@@ -178,23 +178,44 @@ const getInitialOpenSections = () => {
 const initialOpen = getInitialOpenSections();
 ---
 
+<!-- Mobile Overlay -->
+<div 
+  id="sidebar-overlay"
+  class="fixed inset-0 bg-black/50 z-40 lg:hidden hidden"
+  x-data
+  @click="window.dispatchEvent(new CustomEvent('toggle-sidebar'))"
+></div>
+
+<!-- Sidebar -->
 <aside 
-  class="flex w-72 flex-col gap-4 p-5 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 h-screen sticky top-0 overflow-y-auto shadow-sm z-20"
+  id="sidebar"
+  class="fixed lg:sticky top-0 left-0 h-screen w-72 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 z-50 transform -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out flex flex-col"
   x-data={`{ openSections: ${JSON.stringify(initialOpen)} }`}
 >
-    <!-- Brand -->
-    <div class="flex gap-3 items-center px-2 py-1 mb-4">
-        <div class="bg-gradient-to-br from-primary-600 to-primary-700 text-white rounded-xl p-2.5 shadow-lg shadow-primary-500/30 flex items-center justify-center">
-             <span class="material-symbols-outlined text-2xl">garage</span>
+    <!-- Header con botón cerrar (solo móvil) -->
+    <div class="flex items-center justify-between p-5 lg:p-5">
+        <!-- Brand -->
+        <div class="flex gap-3 items-center">
+            <div class="bg-gradient-to-br from-primary-600 to-primary-700 text-white rounded-xl p-2.5 shadow-lg shadow-primary-500/30 flex items-center justify-center">
+                 <span class="material-symbols-outlined text-2xl">garage</span>
+            </div>
+            <div class="flex flex-col">
+                <h1 class="text-gray-900 dark:text-white text-lg font-bold font-display tracking-tight leading-tight">Taller Veloz</h1>
+                <p class="text-gray-500 dark:text-gray-400 text-xs font-medium uppercase tracking-wider">{role}</p>
+            </div>
         </div>
-        <div class="flex flex-col">
-            <h1 class="text-gray-900 dark:text-white text-lg font-bold font-display tracking-tight leading-tight">Taller Veloz</h1>
-            <p class="text-gray-500 dark:text-gray-400 text-xs font-medium uppercase tracking-wider">{role}</p>
-        </div>
+        
+        <!-- Botón cerrar (solo móvil) -->
+        <button 
+          id="sidebar-close"
+          class="lg:hidden p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        >
+            <span class="material-symbols-outlined">close</span>
+        </button>
     </div>
     
-    <!-- Navigation -->
-    <nav class="flex flex-col gap-2 flex-1">
+    <!-- Navigation (scrollable) -->
+    <nav class="flex flex-col gap-2 flex-1 overflow-y-auto px-5 pb-4">
         {currentSections.map((section) => {
             const sectionId = section.title;
             const hasActiveItem = section.items.some(
@@ -252,7 +273,7 @@ const initialOpen = getInitialOpenSections();
     </nav>
 
     <!-- Footer Actions -->
-    <div class="mt-auto flex flex-col gap-1 pt-4 border-t border-gray-200 dark:border-gray-800">
+    <div class="mt-auto flex flex-col gap-1 p-5 pt-4 border-t border-gray-200 dark:border-gray-800">
         <a href="/settings" class="flex items-center gap-3 px-3 py-2.5 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-gray-900 dark:hover:text-gray-200 rounded-xl text-sm font-medium transition-colors">
             <span class="material-symbols-outlined text-[20px] text-gray-400">settings</span>
             Configuración
@@ -263,3 +284,66 @@ const initialOpen = getInitialOpenSections();
         </a>
     </div>
 </aside>
+
+<script>
+  // Sidebar toggle functionality
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
+  const closeBtn = document.getElementById('sidebar-close');
+  
+  function openSidebar() {
+    sidebar?.classList.remove('-translate-x-full');
+    sidebar?.classList.add('translate-x-0');
+    overlay?.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+  }
+  
+  function closeSidebar() {
+    sidebar?.classList.add('-translate-x-full');
+    sidebar?.classList.remove('translate-x-0');
+    overlay?.classList.add('hidden');
+    document.body.style.overflow = '';
+  }
+  
+  // Listen for toggle event from header
+  window.addEventListener('toggle-sidebar', () => {
+    if (sidebar?.classList.contains('-translate-x-full')) {
+      openSidebar();
+    } else {
+      closeSidebar();
+    }
+  });
+  
+  // Close button click
+  closeBtn?.addEventListener('click', closeSidebar);
+  
+  // Close on ESC key
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !sidebar?.classList.contains('-translate-x-full')) {
+      closeSidebar();
+    }
+  });
+  
+  // Close sidebar when clicking a link (on mobile)
+  const sidebarLinks = sidebar?.querySelectorAll('a');
+  sidebarLinks?.forEach(link => {
+    link.addEventListener('click', () => {
+      if (window.innerWidth < 1024) {
+        closeSidebar();
+      }
+    });
+  });
+  
+  // Handle resize - reset sidebar state on desktop
+  window.addEventListener('resize', () => {
+    if (window.innerWidth >= 1024) {
+      sidebar?.classList.remove('-translate-x-full');
+      sidebar?.classList.add('translate-x-0');
+      overlay?.classList.add('hidden');
+      document.body.style.overflow = '';
+    } else {
+      sidebar?.classList.add('-translate-x-full');
+      sidebar?.classList.remove('translate-x-0');
+    }
+  });
+</script>
