@@ -3,7 +3,7 @@
  * Funciones genéricas para operaciones CRUD en todas las entidades
  */
 
-const STRAPI_URL = import.meta.env.STRAPI_URL || 'http://localhost:1337';
+const STRAPI_URL = import.meta.env.STRAPI_URL || 'https://engaging-bubble-5a6bf0674c.strapiapp.com:1337'; /*http://localhost:1337*/
 const STRAPI_TOKEN = import.meta.env.STRAPI_TOKEN || '';
 
 export interface StrapiResponse<T> {
