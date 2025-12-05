@@ -2,7 +2,6 @@
 export const prerender = false;
 import { strapiGet, strapiPut } from '../../lib/strapi';
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
-import Button from '../../components/ui/Button.astro';
 import { validateCanDeliverVehicle } from '../../lib/validations';
 
 const userRole = Astro.cookies.get('user_role')?.value as 'recepcionista' | 'encargado' | 'mecanico' | undefined;
@@ -14,12 +13,20 @@ interface Order {
   id: number;
   documentId: string;
   estado: string;
-  cliente: { nombre: string; apellido: string };
-  vehiculo: { marca: string; modelo: string; patente: string };
-  factura?: { total: number; numero_factura: string; estado: string; metodo_pago: string };
+  descripcion?: string;
+  fecha_ingreso: string;
+  fecha_entrega?: string;
+  cliente: { nombre: string; apellido: string; telefono?: string };
+  vehiculo: { marca: string; modelo: string; patente: string; color?: string };
+  mecanico?: { nombre: string; apellido: string };
+  factura?: { total: number; numero_factura: string; estado: string; metodo_pago: string; fecha_emision: string };
+  createdAt: string;
+  updatedAt: string;
 }
 
 let readyOrders: Order[] = [];
+let recentDeliveries: Order[] = [];
+let pendingPayment: Order[] = [];
 let successMessage = '';
 let errorMessage = '';
 
@@ -32,14 +39,12 @@ try {
 
     if (action === 'confirmDelivery' && orderId) {
         try {
-            // Verificar que la orden existe y tiene factura pagada antes de entregar
             const orderData = await strapiGet(`/api/orden-de-trabajos/${orderId}?populate=factura`);
             const order = orderData.data;
             
             if (!order) {
                 errorMessage = 'Orden no encontrada.';
             } else {
-                // Validar que se puede entregar
                 const deliveryValidation = validateCanDeliverVehicle(order.estado, order.factura?.estado || null);
                 
                 if (!deliveryValidation.valid) {
@@ -49,7 +54,7 @@ try {
                         estado: 'entregado',
                         fecha_entrega: new Date().toISOString().split('T')[0]
                     });
-                    successMessage = 'Vehículo entregado exitosamente. Orden cerrada.';
+                    successMessage = '¡Vehículo entregado exitosamente! La orden ha sido cerrada.';
                 }
             }
         } catch (err: any) {
@@ -59,11 +64,28 @@ try {
     }
   }
 
-  // Fetch orders with status 'facturado' AND factura.estado = 'pagado'
-  // Solo mostrar vehículos cuyo pago ya fue confirmado
-  const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=facturado&filters[factura][estado][$eq]=pagado&populate[vehiculo][populate][cliente][fields][0]=nombre&populate[vehiculo][populate][cliente][fields][1]=apellido&populate[factura][fields][0]=total&populate[factura][fields][1]=numero_factura&populate[factura][fields][2]=estado&populate[factura][fields][3]=metodo_pago&sort[0]=updatedAt:desc');
-  // Mapear para tener cliente accesible directamente
-  readyOrders = (data.data || []).map((order: any) => ({
+  // Fetch orders ready for delivery (facturado + pagado)
+  const readyData = await strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=facturado&filters[factura][estado][$eq]=pagado&populate[vehiculo][populate]=cliente&populate=mecanico&populate=factura&sort=updatedAt:desc');
+  readyOrders = (readyData.data || []).map((order: any) => ({
+    ...order,
+    cliente: order.vehiculo?.cliente || { nombre: 'N/A', apellido: '' },
+    vehiculo: order.vehiculo || { marca: 'N/A', modelo: '', patente: '' },
+    mecanico: order.mecanico,
+    factura: order.factura
+  }));
+
+  // Fetch recent deliveries (last 5)
+  const deliveredData = await strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=entregado&populate[vehiculo][populate]=cliente&populate=factura&sort=fecha_entrega:desc&pagination[limit]=5');
+  recentDeliveries = (deliveredData.data || []).map((order: any) => ({
+    ...order,
+    cliente: order.vehiculo?.cliente || { nombre: 'N/A', apellido: '' },
+    vehiculo: order.vehiculo || { marca: 'N/A', modelo: '', patente: '' },
+    factura: order.factura
+  }));
+
+  // Fetch pending payment (facturado but not paid)
+  const pendingData = await strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=facturado&filters[$or][0][factura][estado][$ne]=pagado&filters[$or][1][factura][$null]=true&populate[vehiculo][populate]=cliente&populate=factura&sort=updatedAt:desc&pagination[limit]=5');
+  pendingPayment = (pendingData.data || []).map((order: any) => ({
     ...order,
     cliente: order.vehiculo?.cliente || { nombre: 'N/A', apellido: '' },
     vehiculo: order.vehiculo || { marca: 'N/A', modelo: '', patente: '' },
@@ -73,83 +95,314 @@ try {
   console.error('Error fetching orders:', e);
   errorMessage = 'Error al cargar las órdenes.';
 }
+
+const formatCurrency = (amount: number) => {
+  return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(amount);
+};
+
+const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+
+const getTimeAgo = (dateString: string) => {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+  
+  if (diffMins < 60) return `hace ${diffMins} min`;
+  if (diffHours < 24) return `hace ${diffHours}h`;
+  if (diffDays === 1) return 'ayer';
+  return `hace ${diffDays} días`;
+};
+
+// Stats
+const todayDeliveries = recentDeliveries.filter(o => {
+  const today = new Date().toISOString().split('T')[0];
+  return o.fecha_entrega === today;
+}).length;
+
+const totalPending = readyOrders.length;
+const totalDeliveredThisWeek = recentDeliveries.length;
 ---
 
 <DashboardLayout title="Entrega de Vehículos" role={userRole} currentPath="/recepcion/entrega_vehiculo">
-    <div class="max-w-5xl mx-auto">
-        <div class="flex flex-col gap-2 mb-8">
-            <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Entrega de Vehículos</h1>
-            <p class="text-gray-500 dark:text-gray-400">Vehículos con pago confirmado, listos para entregar al cliente.</p>
-        </div>
-        
-        {successMessage && <div class="p-4 mb-6 text-sm text-green-700 bg-green-100 rounded-lg dark:bg-green-200 dark:text-green-800 flex items-center gap-2" role="alert"><span class="material-symbols-outlined">check_circle</span>{successMessage}</div>}
-        {errorMessage && <div class="p-4 mb-6 text-sm text-red-700 bg-red-100 rounded-lg dark:bg-red-200 dark:text-red-800 flex items-center gap-2" role="alert"><span class="material-symbols-outlined">error</span>{errorMessage}</div>}
-
-        <div class="grid gap-6">
-            {readyOrders.map((order: Order) => (
-                <div class="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 flex flex-col md:flex-row justify-between items-center gap-6">
-                    <div class="flex-1">
-                        <div class="flex items-center gap-3 mb-2">
-                            <h3 class="font-bold text-xl text-gray-900 dark:text-white">Orden #{order.documentId.slice(0, 6)}</h3>
-                            <span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 border border-green-200 dark:border-green-800">
-                                ✓ Pagado
-                            </span>
-                        </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm">
-                            <div>
-                                <p class="text-gray-500 dark:text-gray-400">Cliente</p>
-                                <p class="font-medium text-gray-900 dark:text-white">{order.cliente.nombre} {order.cliente.apellido}</p>
-                            </div>
-                            <div>
-                                <p class="text-gray-500 dark:text-gray-400">Vehículo</p>
-                                <p class="font-medium text-gray-900 dark:text-white">{order.vehiculo.marca} {order.vehiculo.modelo} <span class="text-gray-500">({order.vehiculo.patente})</span></p>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="flex items-center gap-4">
-                        <div class="text-right mr-4 hidden md:block">
-                            <p class="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Pagado</p>
-                            <p class="text-2xl font-bold text-green-600">
-                                {order.factura?.total 
-                                    ? new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(order.factura.total)
-                                    : 'Por calcular'}
-                            </p>
-                            {order.factura?.numero_factura && (
-                                <p class="text-xs text-gray-500 dark:text-gray-400">{order.factura.numero_factura}</p>
-                            )}
-                            {order.factura?.metodo_pago && (
-                                <p class="text-xs text-green-600 dark:text-green-400 mt-1">
-                                    Método: {order.factura.metodo_pago.replace('_', ' ')}
-                                </p>
-                            )}
-                        </div>
-
-                        <form method="POST" onsubmit="return confirm('¿Confirmar que el cliente ha pagado y se entrega el vehículo?');">
-                            <input type="hidden" name="orderId" value={order.documentId} />
-                            <input type="hidden" name="action" value="confirmDelivery" />
-                            <button type="submit" class="px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2 font-medium shadow-sm hover:shadow-md">
-                                <span class="material-symbols-outlined">key</span>
-                                Confirmar Entrega
-                            </button>
-                        </form>
-                    </div>
-                </div>
-            ))}
-
-            {readyOrders.length === 0 && (
-                <div class="text-center py-16 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 border-dashed">
-                    <div class="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <span class="material-symbols-outlined text-3xl text-gray-400">no_crash</span>
-                    </div>
-                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">No hay vehículos para entrega</h3>
-                    <p class="text-gray-500 dark:text-gray-400 mt-1">Los vehículos aparecen aquí cuando el cliente ha pagado la factura.</p>
-                    <a href="/recepcion/confirmar_pago" class="inline-flex items-center gap-2 mt-4 text-primary-600 hover:text-primary-700 font-medium">
-                        <span class="material-symbols-outlined text-sm">payments</span>
-                        Ir a Confirmar Pagos
-                    </a>
-                </div>
-            )}
-        </div>
+  <div class="max-w-6xl mx-auto" x-data="{ showChecklist: false, selectedOrder: null }">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+      <div>
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Entrega de Vehículos</h1>
+        <p class="text-gray-500 dark:text-gray-400 mt-1">Procesa la entrega de vehículos con pago confirmado</p>
+      </div>
+      <div class="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">
+        <span class="material-symbols-outlined">calendar_today</span>
+        {new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}
+      </div>
     </div>
+    
+    {successMessage && (
+      <div class="p-4 mb-6 bg-green-100 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-xl text-green-800 dark:text-green-200 flex items-center gap-3">
+        <div class="w-10 h-10 bg-green-200 dark:bg-green-800 rounded-full flex items-center justify-center">
+          <span class="material-symbols-outlined text-green-700 dark:text-green-300">check_circle</span>
+        </div>
+        <div>
+          <p class="font-medium">{successMessage}</p>
+          <a href="/recepcion/comprobante" class="text-sm text-green-600 dark:text-green-400 hover:underline">Imprimir comprobante de entrega →</a>
+        </div>
+      </div>
+    )}
+    
+    {errorMessage && (
+      <div class="p-4 mb-6 bg-red-100 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-xl text-red-800 dark:text-red-200 flex items-center gap-2">
+        <span class="material-symbols-outlined">error</span>
+        <p>{errorMessage}</p>
+      </div>
+    )}
+
+    <!-- Stats -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+      <div class="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl p-5 text-white shadow-lg">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-green-100 text-sm">Entregas Hoy</p>
+            <p class="text-3xl font-bold">{todayDeliveries}</p>
+          </div>
+          <div class="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+            <span class="material-symbols-outlined text-2xl">today</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl p-5 text-white shadow-lg">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-amber-100 text-sm">Listos para Entregar</p>
+            <p class="text-3xl font-bold">{totalPending}</p>
+          </div>
+          <div class="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+            <span class="material-symbols-outlined text-2xl">key</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl p-5 text-white shadow-lg">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-blue-100 text-sm">Pendientes de Pago</p>
+            <p class="text-3xl font-bold">{pendingPayment.length}</p>
+          </div>
+          <div class="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+            <span class="material-symbols-outlined text-2xl">payments</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="bg-gradient-to-br from-purple-500 to-pink-600 rounded-2xl p-5 text-white shadow-lg">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-purple-100 text-sm">Esta Semana</p>
+            <p class="text-3xl font-bold">{totalDeliveredThisWeek}</p>
+          </div>
+          <div class="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+            <span class="material-symbols-outlined text-2xl">trending_up</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Ready for Delivery -->
+    <div class="mb-8">
+      <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+        <span class="material-symbols-outlined text-green-600">key</span>
+        Listos para Entregar
+        {readyOrders.length > 0 && (
+          <span class="px-2 py-0.5 bg-green-100 text-green-700 text-sm rounded-full">{readyOrders.length}</span>
+        )}
+      </h2>
+      
+      {readyOrders.length > 0 ? (
+        <div class="grid gap-4">
+          {readyOrders.map((order: Order) => (
+            <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-lg transition-shadow">
+              <div class="p-5 flex flex-col lg:flex-row lg:items-center gap-4">
+                <!-- Vehicle Icon -->
+                <div class="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center shrink-0">
+                  <span class="material-symbols-outlined text-3xl text-green-600 dark:text-green-400">directions_car</span>
+                </div>
+                
+                <!-- Info -->
+                <div class="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <div class="flex items-center gap-2 mb-1">
+                      <span class="font-bold text-lg text-gray-900 dark:text-white">OT-{order.id}</span>
+                      <span class="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full font-medium">
+                        ✓ Pagado
+                      </span>
+                    </div>
+                    <p class="text-gray-600 dark:text-gray-400 font-medium">
+                      {order.vehiculo.marca} {order.vehiculo.modelo}
+                    </p>
+                    <p class="text-gray-500 dark:text-gray-400 text-sm font-mono">{order.vehiculo.patente}</p>
+                  </div>
+                  
+                  <div>
+                    <p class="text-xs text-gray-400 uppercase tracking-wide">Cliente</p>
+                    <p class="font-medium text-gray-900 dark:text-white">{order.cliente.nombre} {order.cliente.apellido}</p>
+                    {order.cliente.telefono && (
+                      <a href={`tel:${order.cliente.telefono}`} class="text-sm text-primary-600 hover:underline flex items-center gap-1">
+                        <span class="material-symbols-outlined text-sm">call</span>
+                        {order.cliente.telefono}
+                      </a>
+                    )}
+                  </div>
+                  
+                  <div>
+                    <p class="text-xs text-gray-400 uppercase tracking-wide">Total Pagado</p>
+                    <p class="text-2xl font-bold text-green-600">{order.factura?.total ? formatCurrency(order.factura.total) : 'N/A'}</p>
+                    <p class="text-xs text-gray-500">{order.factura?.numero_factura} • {order.factura?.metodo_pago?.replace('_', ' ')}</p>
+                  </div>
+                </div>
+                
+                <!-- Actions -->
+                <div class="flex items-center gap-3 shrink-0">
+                  <a 
+                    href={`/recepcion/comprobante?id=${order.documentId}&tipo=entrega`}
+                    class="px-4 py-2 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-2"
+                  >
+                    <span class="material-symbols-outlined text-sm">print</span>
+                    Comprobante
+                  </a>
+                  
+                  <form method="POST" onsubmit="return confirm('¿Confirmar entrega del vehículo al cliente?');">
+                    <input type="hidden" name="orderId" value={order.documentId} />
+                    <input type="hidden" name="action" value="confirmDelivery" />
+                    <button type="submit" class="px-5 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 font-medium shadow-lg shadow-green-600/20">
+                      <span class="material-symbols-outlined">key</span>
+                      Entregar Vehículo
+                    </button>
+                  </form>
+                </div>
+              </div>
+              
+              <!-- Checklist hint -->
+              <div class="px-5 py-3 bg-green-50 dark:bg-green-900/10 border-t border-green-100 dark:border-green-800 flex items-center justify-between">
+                <div class="flex items-center gap-2 text-sm text-green-700 dark:text-green-300">
+                  <span class="material-symbols-outlined text-sm">checklist</span>
+                  <span>Verifica: llaves entregadas, documentos firmados, estado del vehículo</span>
+                </div>
+                <span class="text-xs text-green-600">Ingresó {formatDate(order.fecha_ingreso)}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div class="text-center py-12 bg-white dark:bg-gray-800 rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-700">
+          <div class="w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span class="material-symbols-outlined text-3xl text-gray-400">no_crash</span>
+          </div>
+          <h3 class="text-lg font-medium text-gray-900 dark:text-white">No hay vehículos listos para entrega</h3>
+          <p class="text-gray-500 dark:text-gray-400 mt-1 max-w-md mx-auto">
+            Los vehículos aparecen aquí cuando tienen su factura pagada y están listos para ser retirados por el cliente.
+          </p>
+          {pendingPayment.length > 0 && (
+            <a href="/recepcion/confirmar_pago" class="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors">
+              <span class="material-symbols-outlined">payments</span>
+              Confirmar Pagos Pendientes ({pendingPayment.length})
+            </a>
+          )}
+        </div>
+      )}
+    </div>
+
+    <!-- Two columns: Pending Payment & Recent Deliveries -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- Pending Payment -->
+      {pendingPayment.length > 0 && (
+        <div>
+          <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <span class="material-symbols-outlined text-amber-600">pending</span>
+            Pendientes de Pago
+          </h2>
+          <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
+            {pendingPayment.map((order) => (
+              <div class="p-4 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 bg-amber-100 dark:bg-amber-900/30 rounded-lg flex items-center justify-center">
+                    <span class="material-symbols-outlined text-amber-600">hourglass_top</span>
+                  </div>
+                  <div>
+                    <p class="font-medium text-gray-900 dark:text-white">
+                      {order.vehiculo.marca} {order.vehiculo.modelo}
+                    </p>
+                    <p class="text-sm text-gray-500">{order.cliente.nombre} • {order.vehiculo.patente}</p>
+                  </div>
+                </div>
+                <a 
+                  href="/recepcion/confirmar_pago"
+                  class="text-sm text-primary-600 hover:underline"
+                >
+                  Confirmar →
+                </a>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <!-- Recent Deliveries -->
+      {recentDeliveries.length > 0 && (
+        <div>
+          <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <span class="material-symbols-outlined text-gray-600">history</span>
+            Entregas Recientes
+          </h2>
+          <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 divide-y divide-gray-100 dark:divide-gray-700">
+            {recentDeliveries.map((order) => (
+              <div class="p-4 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                    <span class="material-symbols-outlined text-green-600">check_circle</span>
+                  </div>
+                  <div>
+                    <p class="font-medium text-gray-900 dark:text-white">
+                      {order.vehiculo.marca} {order.vehiculo.modelo}
+                    </p>
+                    <p class="text-sm text-gray-500">{order.cliente.nombre} • {order.vehiculo.patente}</p>
+                  </div>
+                </div>
+                <div class="text-right">
+                  <p class="text-sm font-medium text-green-600">{order.factura?.total ? formatCurrency(order.factura.total) : ''}</p>
+                  <p class="text-xs text-gray-400">{order.fecha_entrega ? formatDate(order.fecha_entrega) : getTimeAgo(order.updatedAt)}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="mt-8 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
+      <div class="flex flex-wrap items-center justify-center gap-4">
+        <a href="/recepcion/confirmar_pago" class="inline-flex items-center gap-2 px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+          <span class="material-symbols-outlined">payments</span>
+          Confirmar Pagos
+        </a>
+        <a href="/recepcion/ver_estado_orden" class="inline-flex items-center gap-2 px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+          <span class="material-symbols-outlined">search</span>
+          Buscar Orden
+        </a>
+        <a href="/recepcion/comprobante" class="inline-flex items-center gap-2 px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+          <span class="material-symbols-outlined">print</span>
+          Imprimir Comprobante
+        </a>
+        <a href="/recepcion/dash_recep" class="inline-flex items-center gap-2 px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+          <span class="material-symbols-outlined">dashboard</span>
+          Dashboard
+        </a>
+      </div>
+    </div>
+  </div>
 </DashboardLayout>

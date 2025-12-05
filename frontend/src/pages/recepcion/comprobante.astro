@@ -16,38 +16,62 @@ interface Order {
   descripcion: string;
   fecha_ingreso: string;
   fecha_entrega: string | null;
+  prioridad?: string;
+  kilometraje_ingreso?: number;
+  nivel_combustible?: string;
   vehiculo: {
     marca: string;
     modelo: string;
     patente: string;
+    ano?: number;
+    color?: string;
     cliente: {
       nombre: string;
       apellido: string;
+      rut?: string;
       telefono: string;
       email: string;
+      direccion?: string;
+      comuna?: string;
     } | null;
+  } | null;
+  mecanico: {
+    nombre: string;
+    apellido: string;
   } | null;
   factura: {
     numero_factura: string;
     total: number;
     fecha_emision: string;
   } | null;
+  servicios?: Array<{
+    nombre: string;
+    precio_base: number;
+  }>;
+  createdAt: string;
 }
 
 const orderId = Astro.url.searchParams.get('id');
+const tipoComprobante = Astro.url.searchParams.get('tipo') || 'auto';
 let order: Order | null = null;
+let recentOrders: Order[] = [];
 let error = '';
+
+// Cargar órdenes recientes para mostrar cuando no hay búsqueda
+try {
+  const recentData = await strapiGet('/api/orden-de-trabajos?sort=updatedAt:desc&pagination[limit]=8&populate[vehiculo][populate]=cliente&populate=mecanico&populate=factura');
+  recentOrders = recentData.data || [];
+} catch (e) {
+  console.error('Error loading recent orders:', e);
+}
 
 if (orderId) {
   try {
-    const data = await strapiGet(`/api/orden-de-trabajos/${orderId}?populate[vehiculo][populate][cliente][fields][0]=nombre&populate[vehiculo][populate][cliente][fields][1]=apellido&populate[vehiculo][populate][cliente][fields][2]=telefono&populate[vehiculo][populate][cliente][fields][3]=email&populate[factura][fields][0]=numero_factura&populate[factura][fields][1]=total&populate[factura][fields][2]=fecha_emision`);
+    const data = await strapiGet(`/api/orden-de-trabajos/${orderId}?populate[vehiculo][populate]=cliente&populate=mecanico&populate=factura&populate=servicios`);
     order = data.data;
-    if (order && order.vehiculo?.cliente) {
-      // Cliente ya viene mapeado correctamente
-    }
   } catch (e: any) {
     console.error('Error fetching order:', e);
-    error = 'Error al obtener la orden';
+    error = 'Error al obtener la orden. Verifica el ID ingresado.';
   }
 }
 
@@ -59,205 +83,415 @@ const formatDate = (dateString: string) => {
   });
 };
 
+const formatDateTime = (dateString: string) => {
+  return new Date(dateString).toLocaleString('es-CL', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
+
 const getComprobanteType = () => {
+  if (tipoComprobante !== 'auto') return tipoComprobante;
   if (!order) return 'recepcion';
   if (order.estado === 'entregado' || order.estado === 'facturado') return 'entrega';
   return 'recepcion';
 };
 
 const comprobanteType = getComprobanteType();
+
+const getNivelCombustibleLabel = (nivel: string) => {
+  const niveles: Record<string, string> = {
+    vacio: 'Vacío (E)',
+    cuarto: '1/4',
+    medio: '1/2',
+    tres_cuartos: '3/4',
+    lleno: 'Lleno (F)'
+  };
+  return niveles[nivel] || nivel;
+};
+
+const getEstadoInfo = (estado: string) => {
+  const estados: Record<string, { label: string; color: string; bgColor: string }> = {
+    ingresado: { label: 'Ingresado', color: 'text-gray-700', bgColor: 'bg-gray-100' },
+    en_diagnostico: { label: 'En Diagnóstico', color: 'text-amber-700', bgColor: 'bg-amber-100' },
+    en_reparacion: { label: 'En Reparación', color: 'text-blue-700', bgColor: 'bg-blue-100' },
+    finalizado: { label: 'Finalizado', color: 'text-purple-700', bgColor: 'bg-purple-100' },
+    facturado: { label: 'Facturado', color: 'text-green-700', bgColor: 'bg-green-100' },
+    entregado: { label: 'Entregado', color: 'text-emerald-700', bgColor: 'bg-emerald-100' }
+  };
+  return estados[estado] || { label: estado, color: 'text-gray-700', bgColor: 'bg-gray-100' };
+};
 ---
 
 <DashboardLayout title="Imprimir Comprobante" role="recepcionista" currentPath="/recepcion/comprobante">
-  <div class="max-w-4xl mx-auto">
+  <div class="max-w-5xl mx-auto">
     <!-- Header - Hidden on print -->
     <div class="mb-8 print:hidden">
-      <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Imprimir Comprobante</h1>
-      <p class="text-gray-500 dark:text-gray-400 mt-2">Genera comprobantes de recepción o entrega de vehículos.</p>
+      <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Imprimir Comprobante</h1>
+          <p class="text-gray-500 dark:text-gray-400 mt-1">Genera comprobantes de recepción o entrega de vehículos</p>
+        </div>
+        {order && (
+          <button 
+            onclick="window.print()"
+            class="inline-flex items-center gap-2 px-5 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors shadow-lg shadow-primary-600/20"
+          >
+            <span class="material-symbols-outlined">print</span>
+            Imprimir
+          </button>
+        )}
+      </div>
     </div>
 
     {!orderId && (
-      <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 print:hidden">
-        <form method="GET" class="space-y-4">
+      <div class="space-y-6">
+        <!-- Search Form -->
+        <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
+          <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary-600">search</span>
+            Buscar Orden
+          </h2>
+          <form method="GET" class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div class="md:col-span-2">
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">ID de la Orden</label>
+                <input 
+                  type="text" 
+                  name="id" 
+                  placeholder="Ingresa el documentId o busca en las órdenes recientes"
+                  class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+                  required
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tipo de Comprobante</label>
+                <select 
+                  name="tipo"
+                  class="w-full px-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="auto">🔄 Automático (según estado)</option>
+                  <option value="recepcion">📥 Comprobante de Recepción</option>
+                  <option value="entrega">📤 Comprobante de Entrega</option>
+                </select>
+              </div>
+            </div>
+            <button 
+              type="submit"
+              class="w-full md:w-auto px-6 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center justify-center gap-2"
+            >
+              <span class="material-symbols-outlined">search</span>
+              Buscar Orden
+            </button>
+          </form>
+        </div>
+
+        <!-- Recent Orders -->
+        {recentOrders.length > 0 && (
           <div>
-            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">N° de Orden</label>
-            <div class="flex gap-4">
-              <input 
-                type="text" 
-                name="id" 
-                placeholder="Ingresa el documentId de la orden"
-                class="flex-1 px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
-                required
-              />
-              <button 
-                type="submit"
-                class="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2"
-              >
-                <span class="material-symbols-outlined">search</span>
-                Buscar
-              </button>
+            <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+              <span class="material-symbols-outlined text-primary-600">history</span>
+              Órdenes Recientes
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {recentOrders.map((o) => {
+                const estadoInfo = getEstadoInfo(o.estado);
+                return (
+                  <a 
+                    href={`?id=${o.documentId}`}
+                    class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 hover:shadow-lg hover:border-primary-300 transition-all group"
+                  >
+                    <div class="flex items-center justify-between mb-3">
+                      <div class="flex items-center gap-3">
+                        <div class="w-12 h-12 rounded-lg bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
+                          <span class="material-symbols-outlined text-primary-600 dark:text-primary-400">receipt_long</span>
+                        </div>
+                        <div>
+                          <p class="font-bold text-gray-900 dark:text-white group-hover:text-primary-600">OT-{o.id}</p>
+                          <p class="text-xs text-gray-500 dark:text-gray-400">
+                            {o.vehiculo?.patente} • {o.vehiculo?.marca} {o.vehiculo?.modelo}
+                          </p>
+                        </div>
+                      </div>
+                      <span class={`text-xs px-2 py-1 rounded-full font-medium ${estadoInfo.bgColor} ${estadoInfo.color}`}>
+                        {estadoInfo.label}
+                      </span>
+                    </div>
+                    <div class="flex items-center justify-between text-sm">
+                      <span class="text-gray-500 dark:text-gray-400">
+                        {o.vehiculo?.cliente?.nombre} {o.vehiculo?.cliente?.apellido}
+                      </span>
+                      <span class="text-gray-400 text-xs">
+                        {new Date(o.createdAt).toLocaleDateString('es-CL', { day: '2-digit', month: 'short' })}
+                      </span>
+                    </div>
+                  </a>
+                );
+              })}
             </div>
           </div>
-        </form>
-        
-        <div class="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-          <p class="text-sm text-blue-700 dark:text-blue-300">
-            <strong>Tip:</strong> Puedes acceder a esta página desde "Ver Estado de Orden" o desde "Entrega de Vehículo" para reimprimir comprobantes.
-          </p>
+        )}
+
+        <!-- Tips -->
+        <div class="bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800 p-4">
+          <div class="flex gap-3">
+            <span class="material-symbols-outlined text-blue-600 dark:text-blue-400">lightbulb</span>
+            <div class="text-sm text-blue-700 dark:text-blue-300">
+              <p class="font-medium mb-1">Tips:</p>
+              <ul class="space-y-1 text-blue-600 dark:text-blue-400">
+                <li>• Puedes acceder directamente desde "Consultar Estado" o "Entrega de Vehículo"</li>
+                <li>• El tipo de comprobante se detecta automáticamente según el estado de la orden</li>
+                <li>• Los comprobantes están optimizados para impresión en formato A4</li>
+              </ul>
+            </div>
+          </div>
         </div>
       </div>
     )}
 
     {error && (
-      <div class="p-4 mb-6 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg text-red-800 dark:text-red-200 flex items-center gap-2 print:hidden">
+      <div class="p-4 mb-6 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-xl text-red-800 dark:text-red-200 flex items-center gap-2 print:hidden">
         <span class="material-symbols-outlined">error</span>
         <p>{error}</p>
+        <a href="/recepcion/comprobante" class="ml-auto text-sm underline">Volver a buscar</a>
       </div>
     )}
 
     {order && (
-      <>
+      <div>
         <!-- Print Actions - Hidden on print -->
-        <div class="flex gap-4 mb-6 print:hidden">
+        <div class="flex flex-wrap gap-3 mb-6 print:hidden">
           <button 
             onclick="window.print()"
-            class="px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2"
+            class="px-5 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2 shadow-lg shadow-primary-600/20"
           >
             <span class="material-symbols-outlined">print</span>
             Imprimir Comprobante
           </button>
+          
+          <div class="flex rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <a 
+              href={`?id=${orderId}&tipo=recepcion`}
+              class={`px-4 py-2.5 flex items-center gap-2 text-sm font-medium transition-colors ${tipoComprobante === 'recepcion' || (tipoComprobante === 'auto' && comprobanteType === 'recepcion') ? 'bg-primary-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+            >
+              <span class="material-symbols-outlined text-sm">download</span>
+              Recepción
+            </a>
+            <a 
+              href={`?id=${orderId}&tipo=entrega`}
+              class={`px-4 py-2.5 flex items-center gap-2 text-sm font-medium transition-colors ${tipoComprobante === 'entrega' || (tipoComprobante === 'auto' && comprobanteType === 'entrega') ? 'bg-primary-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+            >
+              <span class="material-symbols-outlined text-sm">upload</span>
+              Entrega
+            </a>
+          </div>
+          
           <a 
-            href="/recepcion/ver_estado_orden"
-            class="px-6 py-3 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
+            href="/recepcion/comprobante"
+            class="px-4 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
           >
             <span class="material-symbols-outlined">arrow_back</span>
-            Volver
+            Buscar otra orden
           </a>
         </div>
 
         <!-- Comprobante - Printable -->
-        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-8 print:border-none print:shadow-none print:p-0">
+        <div class="bg-white rounded-2xl border border-gray-200 p-8 print:border-none print:shadow-none print:p-0 print:rounded-none" id="comprobante">
           <!-- Header -->
-          <div class="flex justify-between items-start border-b-2 border-gray-900 dark:border-white pb-6 mb-6">
+          <div class="flex justify-between items-start border-b-2 border-gray-900 pb-6 mb-6">
             <div>
-              <h1 class="text-3xl font-bold text-gray-900 dark:text-white">TALLER VELOZ</h1>
-              <p class="text-gray-600 dark:text-gray-400 mt-1">Servicio Automotriz Profesional</p>
-              <div class="mt-4 text-sm text-gray-600 dark:text-gray-400 space-y-1">
+              <h1 class="text-3xl font-bold text-gray-900">TALLER VELOZ</h1>
+              <p class="text-gray-600 mt-1">Servicio Automotriz Profesional</p>
+              <div class="mt-4 text-sm text-gray-600 space-y-0.5">
                 <p>Av. Principal 123, Santiago</p>
                 <p>Teléfono: +56 2 1234 5678</p>
                 <p>Email: contacto@tallerveloz.cl</p>
+                <p>RUT: 76.XXX.XXX-X</p>
               </div>
             </div>
             <div class="text-right">
-              <h2 class="text-xl font-bold text-gray-900 dark:text-white uppercase">
-                Comprobante de {comprobanteType === 'recepcion' ? 'Recepción' : 'Entrega'}
-              </h2>
-              <p class="text-2xl font-mono font-bold text-primary-600 dark:text-primary-400 mt-2">
+              <div class={`inline-block px-4 py-2 rounded-lg ${comprobanteType === 'recepcion' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>
+                <h2 class="text-lg font-bold uppercase">
+                  Comprobante de {comprobanteType === 'recepcion' ? 'Recepción' : 'Entrega'}
+                </h2>
+              </div>
+              <p class="text-3xl font-mono font-bold text-gray-900 mt-3">
                 OT-{order.id}
               </p>
-              <p class="text-sm text-gray-600 dark:text-gray-400 mt-2">
+              <p class="text-sm text-gray-600 mt-2">
                 Fecha: {formatDate(comprobanteType === 'entrega' && order.fecha_entrega ? order.fecha_entrega : order.fecha_ingreso)}
               </p>
             </div>
           </div>
 
           <!-- Client & Vehicle Info -->
-          <div class="grid grid-cols-2 gap-8 mb-8">
-            <div>
-              <h3 class="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Datos del Cliente</h3>
-              <div class="space-y-2">
-                <p class="font-bold text-lg text-gray-900 dark:text-white">
+          <div class="grid grid-cols-2 gap-8 mb-6">
+            <div class="border border-gray-200 rounded-lg p-4">
+              <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-1">
+                <span class="material-symbols-outlined text-sm print:hidden">person</span>
+                Datos del Cliente
+              </h3>
+              <div class="space-y-1.5">
+                <p class="font-bold text-lg text-gray-900">
                   {order.vehiculo?.cliente?.nombre} {order.vehiculo?.cliente?.apellido}
                 </p>
+                {order.vehiculo?.cliente?.rut && (
+                  <p class="text-gray-600 text-sm">RUT: {order.vehiculo.cliente.rut}</p>
+                )}
                 {order.vehiculo?.cliente?.telefono && (
-                  <p class="text-gray-600 dark:text-gray-400">Tel: {order.vehiculo.cliente.telefono}</p>
+                  <p class="text-gray-600 text-sm">Tel: {order.vehiculo.cliente.telefono}</p>
                 )}
                 {order.vehiculo?.cliente?.email && (
-                  <p class="text-gray-600 dark:text-gray-400">Email: {order.vehiculo.cliente.email}</p>
+                  <p class="text-gray-600 text-sm">Email: {order.vehiculo.cliente.email}</p>
+                )}
+                {order.vehiculo?.cliente?.direccion && (
+                  <p class="text-gray-600 text-sm">
+                    {order.vehiculo.cliente.direccion}
+                    {order.vehiculo?.cliente?.comuna && `, ${order.vehiculo.cliente.comuna}`}
+                  </p>
                 )}
               </div>
             </div>
-            <div>
-              <h3 class="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Datos del Vehículo</h3>
-              <div class="space-y-2">
-                <p class="font-bold text-lg text-gray-900 dark:text-white">
+            <div class="border border-gray-200 rounded-lg p-4">
+              <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-1">
+                <span class="material-symbols-outlined text-sm print:hidden">directions_car</span>
+                Datos del Vehículo
+              </h3>
+              <div class="space-y-1.5">
+                <p class="font-bold text-lg text-gray-900">
                   {order.vehiculo?.marca} {order.vehiculo?.modelo}
                 </p>
-                <p class="text-gray-600 dark:text-gray-400">
-                  Patente: <span class="font-mono font-bold">{order.vehiculo?.patente}</span>
+                <p class="text-gray-600 text-sm">
+                  Patente: <span class="font-mono font-bold text-gray-900">{order.vehiculo?.patente}</span>
                 </p>
+                {order.vehiculo?.ano && (
+                  <p class="text-gray-600 text-sm">Año: {order.vehiculo.ano}</p>
+                )}
+                {order.vehiculo?.color && (
+                  <p class="text-gray-600 text-sm">Color: {order.vehiculo.color}</p>
+                )}
               </div>
             </div>
           </div>
 
+          <!-- Reception specific info -->
+          {comprobanteType === 'recepcion' && (
+            <div class="grid grid-cols-3 gap-4 mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <div>
+                <p class="text-xs text-gray-500 uppercase">Kilometraje</p>
+                <p class="font-bold text-gray-900">{order.kilometraje_ingreso ? `${order.kilometraje_ingreso.toLocaleString()} km` : 'No registrado'}</p>
+              </div>
+              <div>
+                <p class="text-xs text-gray-500 uppercase">Combustible</p>
+                <p class="font-bold text-gray-900">{order.nivel_combustible ? getNivelCombustibleLabel(order.nivel_combustible) : 'No registrado'}</p>
+              </div>
+              <div>
+                <p class="text-xs text-gray-500 uppercase">Mecánico Asignado</p>
+                <p class="font-bold text-gray-900">{order.mecanico ? `${order.mecanico.nombre} ${order.mecanico.apellido}` : 'Por asignar'}</p>
+              </div>
+            </div>
+          )}
+
           <!-- Work Description -->
-          <div class="mb-8">
-            <h3 class="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">
-              {comprobanteType === 'recepcion' ? 'Motivo de Ingreso' : 'Trabajo Realizado'}
+          <div class="mb-6">
+            <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">
+              {comprobanteType === 'recepcion' ? 'Motivo de Ingreso / Trabajos Solicitados' : 'Trabajos Realizados'}
             </h3>
-            <div class="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-200 dark:border-gray-700">
-              <p class="text-gray-900 dark:text-white">{order.descripcion}</p>
+            <div class="p-4 bg-gray-50 rounded-lg border border-gray-200">
+              <p class="text-gray-900 whitespace-pre-line">{order.descripcion}</p>
             </div>
           </div>
+
+          <!-- Services (if any) -->
+          {order.servicios && order.servicios.length > 0 && (
+            <div class="mb-6">
+              <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Servicios</h3>
+              <table class="w-full border border-gray-200 rounded-lg overflow-hidden">
+                <thead class="bg-gray-100">
+                  <tr>
+                    <th class="text-left px-4 py-2 text-xs font-bold text-gray-600 uppercase">Servicio</th>
+                    <th class="text-right px-4 py-2 text-xs font-bold text-gray-600 uppercase">Precio</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {order.servicios.map((s) => (
+                    <tr class="border-t border-gray-200">
+                      <td class="px-4 py-2 text-gray-900">{s.nombre}</td>
+                      <td class="px-4 py-2 text-right font-mono text-gray-900">${s.precio_base?.toLocaleString('es-CL')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           <!-- Invoice Info (only for delivery) -->
           {comprobanteType === 'entrega' && order.factura && (
-            <div class="mb-8 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-              <h3 class="text-sm font-bold text-green-800 dark:text-green-200 uppercase tracking-wide mb-3">Información de Factura</h3>
+            <div class="mb-6 p-4 bg-green-50 rounded-lg border border-green-200">
+              <h3 class="text-xs font-bold text-green-800 uppercase tracking-wide mb-3">Información de Factura</h3>
               <div class="grid grid-cols-3 gap-4">
                 <div>
-                  <p class="text-sm text-green-600 dark:text-green-400">N° Factura</p>
-                  <p class="font-bold text-green-900 dark:text-green-100">{order.factura.numero_factura}</p>
+                  <p class="text-xs text-green-600">N° Factura</p>
+                  <p class="font-bold text-green-900">{order.factura.numero_factura}</p>
                 </div>
                 <div>
-                  <p class="text-sm text-green-600 dark:text-green-400">Fecha Emisión</p>
-                  <p class="font-bold text-green-900 dark:text-green-100">{formatDate(order.factura.fecha_emision)}</p>
+                  <p class="text-xs text-green-600">Fecha Emisión</p>
+                  <p class="font-bold text-green-900">{formatDate(order.factura.fecha_emision)}</p>
                 </div>
                 <div>
-                  <p class="text-sm text-green-600 dark:text-green-400">Total</p>
-                  <p class="font-bold text-2xl text-green-900 dark:text-green-100">${order.factura.total?.toLocaleString('es-CL')}</p>
+                  <p class="text-xs text-green-600">Total</p>
+                  <p class="font-bold text-2xl text-green-900">${order.factura.total?.toLocaleString('es-CL')}</p>
                 </div>
               </div>
             </div>
           )}
 
           <!-- Terms -->
-          <div class="mb-8 text-xs text-gray-500 dark:text-gray-400 space-y-1">
+          <div class="mb-6 text-xs text-gray-500 space-y-0.5 border-t border-gray-200 pt-4">
             {comprobanteType === 'recepcion' ? (
-              <>
-                <p>• El vehículo queda bajo custodia del taller hasta su retiro.</p>
+              <div>
+                <p>• El vehículo queda bajo custodia del taller hasta su retiro formal.</p>
                 <p>• Los trabajos adicionales serán comunicados y aprobados antes de realizarse.</p>
                 <p>• El presupuesto final puede variar según hallazgos durante el diagnóstico.</p>
-                <p>• El retiro del vehículo debe realizarse con este comprobante.</p>
-              </>
+                <p>• El retiro del vehículo debe realizarse presentando este comprobante.</p>
+                <p>• Objetos de valor deben ser retirados. El taller no se responsabiliza por objetos personales.</p>
+              </div>
             ) : (
-              <>
-                <p>• El cliente declara recibir el vehículo en conformidad.</p>
-                <p>• Los trabajos realizados tienen garantía de 3 meses o 5.000 km.</p>
-                <p>• Conserve este comprobante para futuras referencias.</p>
-              </>
+              <div>
+                <p>• El cliente declara recibir el vehículo en conformidad con los trabajos realizados.</p>
+                <p>• Los trabajos realizados tienen garantía de 3 meses o 5.000 km (lo que ocurra primero).</p>
+                <p>• La garantía no cubre daños por mal uso o falta de mantenimiento.</p>
+                <p>• Conserve este comprobante para hacer válida su garantía.</p>
+              </div>
             )}
           </div>
 
           <!-- Signatures -->
-          <div class="grid grid-cols-2 gap-8 pt-8 border-t border-gray-200 dark:border-gray-700">
+          <div class="grid grid-cols-2 gap-12 pt-6 border-t border-gray-300">
             <div class="text-center">
-              <div class="h-16 border-b border-gray-400 dark:border-gray-500 mb-2"></div>
-              <p class="text-sm text-gray-600 dark:text-gray-400">Firma del Cliente</p>
+              <div class="h-20 border-b-2 border-gray-400 mb-2"></div>
+              <p class="text-sm font-medium text-gray-700">Firma del Cliente</p>
+              <p class="text-xs text-gray-500">
+                {order.vehiculo?.cliente?.nombre} {order.vehiculo?.cliente?.apellido}
+              </p>
             </div>
             <div class="text-center">
-              <div class="h-16 border-b border-gray-400 dark:border-gray-500 mb-2"></div>
-              <p class="text-sm text-gray-600 dark:text-gray-400">Firma Recepcionista</p>
+              <div class="h-20 border-b-2 border-gray-400 mb-2"></div>
+              <p class="text-sm font-medium text-gray-700">Firma Recepcionista</p>
+              <p class="text-xs text-gray-500">Taller Veloz</p>
             </div>
           </div>
 
           <!-- Footer -->
-          <div class="mt-8 pt-4 border-t border-gray-200 dark:border-gray-700 text-center text-xs text-gray-400">
-            <p>Documento generado el {new Date().toLocaleString('es-CL')}</p>
-            <p class="mt-1">Taller Veloz - Sistema de Gestión v1.0</p>
+          <div class="mt-8 pt-4 border-t border-gray-200 text-center text-xs text-gray-400">
+            <p>Documento generado el {formatDateTime(new Date().toISOString())}</p>
+            <p class="mt-1">Taller Veloz - Sistema de Gestión Automotriz</p>
           </div>
         </div>
-      </>
+      </div>
     )}
   </div>
 </DashboardLayout>
@@ -272,6 +506,10 @@ const comprobanteType = getComprobanteType();
     body {
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
+    }
+    
+    .print\:hidden {
+      display: none !important;
     }
   }
 </style>
