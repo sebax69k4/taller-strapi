@@ -11,64 +11,86 @@ module.exports = createCoreController('api::orden-de-trabajo.orden-de-trabajo', 
         const { id } = ctx.params;
 
         try {
-            // 1. Fetch the order with necessary relations
+            // 1. Fetch the order with items_detalle
             const order = await strapi.entityService.findOne('api::orden-de-trabajo.orden-de-trabajo', id, {
-                populate: ['presupuesto', 'repuestos', 'factura']
+                populate: ['presupuesto', 'factura', 'items_detalle', 'items_detalle.repuesto', 'items_detalle.servicio']
             });
 
             if (!order) {
                 return ctx.notFound('Orden no encontrada');
             }
 
-            // 2. Check if already finalized or has invoice
+            // 2. Check if already has invoice
             if (order.factura) {
-                // Just update status if needed
                 const updatedOrder = await strapi.entityService.update('api::orden-de-trabajo.orden-de-trabajo', id, {
                     data: { estado: 'finalizado' }
                 });
                 return updatedOrder;
             }
 
-            // 2.1 Validate Stock Availability
-            if (order.repuestos && order.repuestos.length > 0) {
-                for (const repuesto of order.repuestos) {
-                    // Fetch current stock
-                    const item = await strapi.entityService.findOne('api::repuesto.repuesto', repuesto.id);
+            // 3. Calculate totals from items_detalle
+            let subtotal = 0;
+            const desglose = {
+                servicios: [],
+                repuestos: [],
+                mano_obra: [],
+                otros: []
+            };
 
-                    if (!item) {
-                        return ctx.badRequest(`El repuesto con ID ${repuesto.id} no existe.`);
-                    }
+            if (order.items_detalle && order.items_detalle.length > 0) {
+                for (const item of order.items_detalle) {
+                    const itemSubtotal = Number(item.subtotal) || (Number(item.precio_unitario) * Number(item.cantidad));
+                    subtotal += itemSubtotal;
 
-                    // Assuming 'cantidad' in the relation is not directly available, we might need a pivot table or logic.
-                    // However, in this simple schema, let's assume we are just checking if the item has stock > 0
-                    // OR if the order has a specific quantity requested (which might be in a component or pivot).
-                    // For now, let's assume we just check if stock > 0 for any part used.
-                    // A more robust implementation would need a 'cantidad_usada' field.
+                    const desgloseItem = {
+                        descripcion: item.descripcion,
+                        cantidad: item.cantidad,
+                        precio_unitario: Number(item.precio_unitario),
+                        subtotal: itemSubtotal
+                    };
 
-                    if (item.stock < 1) { // Simplification: assume 1 unit per relation for now if no quantity field
-                        return ctx.badRequest(`No hay stock suficiente para el repuesto: ${item.nombre}`);
+                    // Categorize by type
+                    switch (item.tipo) {
+                        case 'servicio':
+                            desglose.servicios.push(desgloseItem);
+                            break;
+                        case 'repuesto':
+                            desglose.repuestos.push(desgloseItem);
+                            // Decrease stock for parts
+                            if (item.repuesto?.id) {
+                                const currentStock = item.repuesto.stock || 0;
+                                const newStock = Math.max(0, currentStock - item.cantidad);
+                                await strapi.entityService.update('api::repuesto.repuesto', item.repuesto.id, {
+                                    data: { stock: newStock }
+                                });
+                            }
+                            break;
+                        case 'mano_obra':
+                            desglose.mano_obra.push(desgloseItem);
+                            break;
+                        default:
+                            desglose.otros.push(desgloseItem);
                     }
                 }
-            }
-
-            // 3. Calculate totals
-            let total = 0;
-            let subtotal = 0;
-
-            if (order.presupuesto && order.presupuesto.monto_total) {
-                total = Number(order.presupuesto.monto_total);
-                subtotal = Math.round(total / 1.19);
+            } else if (order.presupuesto?.monto_total) {
+                // Fallback to budget if no items
+                subtotal = Math.round(Number(order.presupuesto.monto_total) / 1.19);
             } else {
-                const partsTotal = order.repuestos?.reduce((sum, r) => sum + (Number(r.precio) || 0), 0) || 0;
-                const labor = 75000;
-                subtotal = partsTotal + labor;
-                total = Math.round(subtotal * 1.19);
+                // Fallback default labor
+                subtotal = 75000;
+                desglose.mano_obra.push({
+                    descripcion: 'Mano de obra general',
+                    cantidad: 1,
+                    precio_unitario: 75000,
+                    subtotal: 75000
+                });
             }
 
-            const iva = total - subtotal;
+            const iva = Math.round(subtotal * 0.19);
+            const total = subtotal + iva;
             const invoiceNumber = `FACT-${Date.now()}-${order.id}`;
 
-            // 4. Create Invoice
+            // 4. Create Invoice with desglose
             const invoice = await strapi.entityService.create('api::factura.factura', {
                 data: {
                     numero_factura: invoiceNumber,
@@ -77,6 +99,7 @@ module.exports = createCoreController('api::orden-de-trabajo.orden-de-trabajo', 
                     iva: iva,
                     total: total,
                     orden_de_trabajo: id,
+                    desglose: desglose,
                     publishedAt: new Date()
                 }
             });
@@ -97,3 +120,4 @@ module.exports = createCoreController('api::orden-de-trabajo.orden-de-trabajo', 
         }
     }
 }));
+

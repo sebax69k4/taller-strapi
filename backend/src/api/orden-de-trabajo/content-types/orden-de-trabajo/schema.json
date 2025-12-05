@@ -123,6 +123,12 @@
         "tres_cuartos",
         "lleno"
       ]
+    },
+    "items_detalle": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::detalle-orden-item.detalle-orden-item",
+      "mappedBy": "orden_de_trabajo"
     }
   }
 }

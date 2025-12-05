@@ -23,6 +23,7 @@ const linkSections: Record<string, LinkSection[]> = {
       title: 'Principal',
       items: [
         { href: '/recepcion/dash_recep', icon: 'dashboard', label: 'Dashboard' },
+        { href: '/recepcion/agenda', icon: 'calendar_month', label: 'Agenda Citas' },
       ]
     },
     {
@@ -108,9 +109,7 @@ const linkSections: Record<string, LinkSection[]> = {
     {
       title: 'Trabajo',
       items: [
-        { href: '/mecanico/detalle_orden_trabajo', icon: 'build', label: 'Detalle Orden' },
-        { href: '/mecanico/bitacora_repuestos', icon: 'edit_note', label: 'Bitácora' },
-        { href: '/mecanico/pausar_trabajo', icon: 'pause_circle', label: 'Pausar Trabajo' },
+        { href: '/mecanico/detalle_orden_trabajo', icon: 'build', label: 'Espacio de Trabajo' },
         { href: '/mecanico/checklist_entrega', icon: 'checklist', label: 'Checklist Entrega' },
       ]
     },
@@ -118,6 +117,7 @@ const linkSections: Record<string, LinkSection[]> = {
       title: 'Repuestos',
       items: [
         { href: '/mecanico/solicitar_repuesto', icon: 'shopping_cart', label: 'Solicitar' },
+        { href: '/mecanico/mis_solicitudes', icon: 'inventory_2', label: 'Mis Solicitudes' },
         { href: '/mecanico/historial_vehiculo', icon: 'history', label: 'Historial Vehículo' },
       ]
     },

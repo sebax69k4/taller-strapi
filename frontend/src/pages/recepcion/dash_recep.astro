@@ -283,7 +283,7 @@ const getStatusColor = (status: string) => {
                                 <p class="text-sm text-green-700 dark:text-green-400 mt-1">
                                     {readyForDeliveryCount} vehículo{readyForDeliveryCount > 1 ? 's' : ''} listo{readyForDeliveryCount > 1 ? 's' : ''} para entregar
                                 </p>
-                                <a href="/recepcion/entregas" class="inline-flex items-center gap-1 text-sm font-medium text-green-700 dark:text-green-400 hover:text-green-800 mt-2">
+                                <a href="/recepcion/entrega_vehiculo" class="inline-flex items-center gap-1 text-sm font-medium text-green-700 dark:text-green-400 hover:text-green-800 mt-2">
                                     Ver entregas <span class="material-symbols-outlined text-sm">arrow_forward</span>
                                 </a>
                             </div>
@@ -343,7 +343,7 @@ const getStatusColor = (status: string) => {
                         <span class="material-symbols-outlined text-primary-600">history</span>
                         Actividad Reciente
                     </h2>
-                    <a href="/recepcion/ordenes" class="text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1">
+                    <a href="/recepcion/ver_estado_orden" class="text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1">
                         Ver todo <span class="material-symbols-outlined text-sm">arrow_forward</span>
                     </a>
                 </div>
@@ -368,9 +368,22 @@ const getStatusColor = (status: string) => {
                                             <Badge variant={getStatusVariant(order.estado)}>
                                                 {formatStatus(order.estado)}
                                             </Badge>
-                                            <p class="text-xs text-gray-400 mt-1">
-                                                {new Date(order.createdAt).toLocaleDateString('es-CL', { day: '2-digit', month: 'short' })}
-                                            </p>
+                                            <div class="flex items-center justify-end gap-2 mt-1">
+                                                {order.vehiculo?.cliente?.telefono && (
+                                                    <a 
+                                                        href={`https://wa.me/${order.vehiculo.cliente.telefono.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola ${order.vehiculo.cliente.nombre}, su vehículo ${order.vehiculo.marca} ${order.vehiculo.modelo} ha ingresado a taller con la orden OT-${order.id}. Le mantendremos informado.`)}`}
+                                                        target="_blank"
+                                                        class="text-green-600 hover:text-green-700 p-1 rounded-full hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors"
+                                                        title="Enviar WhatsApp"
+                                                        @click.stop
+                                                    >
+                                                        <span class="material-symbols-outlined text-[18px]">chat</span>
+                                                    </a>
+                                                )}
+                                                <p class="text-xs text-gray-400">
+                                                    {new Date(order.createdAt).toLocaleDateString('es-CL', { day: '2-digit', month: 'short' })}
+                                                </p>
+                                            </div>
                                         </div>
                                     </div>
                                 </a>
@@ -421,9 +434,20 @@ const getStatusColor = (status: string) => {
                                             <p class="text-sm font-medium text-gray-900 dark:text-white">
                                                 {order.vehiculo?.cliente ? `${order.vehiculo.cliente.nombre}` : 'N/A'}
                                             </p>
-                                            <a href={`/recepcion/entrega_vehiculo?orden=${order.documentId}`} class="text-xs text-green-600 hover:text-green-700 font-medium">
-                                                Procesar entrega →
-                                            </a>
+                                            <div class="flex items-center justify-end gap-3 mt-1">
+                                                {order.vehiculo?.cliente?.telefono && (
+                                                    <a 
+                                                        href={`https://wa.me/${order.vehiculo.cliente.telefono.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola ${order.vehiculo.cliente.nombre}, su vehículo ${order.vehiculo.marca} ${order.vehiculo.modelo} está listo para retiro. ¡Le esperamos!`)}`}
+                                                        target="_blank"
+                                                        class="text-green-600 hover:text-green-700 flex items-center gap-1 text-xs font-medium"
+                                                    >
+                                                        <span class="material-symbols-outlined text-[16px]">chat</span> Notificar
+                                                    </a>
+                                                )}
+                                                <a href={`/recepcion/entrega_vehiculo?orden=${order.documentId}`} class="text-xs text-green-600 hover:text-green-700 font-medium flex items-center gap-1">
+                                                    Procesar entrega <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+                                                </a>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

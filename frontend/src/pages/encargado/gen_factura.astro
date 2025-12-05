@@ -37,24 +37,27 @@ let successMessage = '';
 let errorMessage = '';
 
 try {
-  // Helper function to calculate totals
+  // Helper function to calculate totals from items_detalle
   const calculateOrderTotals = (order: any) => {
-    let total = 0;
     let subtotal = 0;
+    const itemsDetalle = order.items_detalle || [];
     
-    // Calculate from budget or parts
-    if (order.presupuesto && order.presupuesto.monto_total) {
-        total = order.presupuesto.monto_total;
-        subtotal = Math.round(total / 1.19);
+    // Calculate from items_detalle
+    if (itemsDetalle.length > 0) {
+      for (const item of itemsDetalle) {
+        subtotal += Number(item.subtotal) || (Number(item.precio_unitario) * Number(item.cantidad));
+      }
+    } else if (order.presupuesto?.monto_total) {
+      // Fallback to budget
+      subtotal = Math.round(Number(order.presupuesto.monto_total) / 1.19);
     } else {
-        // Fallback calculation
-        const partsTotal = order.repuestos?.reduce((sum: number, r: any) => sum + r.precio, 0) || 0;
-        const labor = 75000; // Default labor cost
-        subtotal = partsTotal + labor;
-        total = Math.round(subtotal * 1.19);
+      // Fallback default
+      subtotal = 75000;
     }
-    const iva = total - subtotal;
-    return { subtotal, iva, total };
+    
+    const iva = Math.round(subtotal * 0.19);
+    const total = subtotal + iva;
+    return { subtotal, iva, total, items: itemsDetalle };
   };
 
   // Handle POST request to mark as delivered
@@ -65,8 +68,8 @@ try {
 
     if (action === 'approveInvoice' && orderId) {
         try {
-            // 1. Fetch order details to calculate totals AND validate status
-            const orderRes = await strapiGet(`/api/orden-de-trabajos/${orderId}?populate=presupuesto&populate=repuestos`);
+            // 1. Fetch order details with items_detalle
+            const orderRes = await strapiGet(`/api/orden-de-trabajos/${orderId}?populate=presupuesto&populate=items_detalle&populate=factura`);
             const order = orderRes.data;
             
             if (!order) {
@@ -78,7 +81,29 @@ try {
                 throw new Error(`La orden no está en estado 'finalizado' (Estado actual: ${order.estado}). No se puede facturar.`);
             }
             
-            const { subtotal, iva, total } = calculateOrderTotals(order);
+            const { subtotal, iva, total, items } = calculateOrderTotals(order);
+            
+            // Build desglose
+            const desglose = {
+              servicios: items.filter((i: any) => i.tipo === 'servicio').map((i: any) => ({
+                descripcion: i.descripcion,
+                cantidad: i.cantidad,
+                precio_unitario: i.precio_unitario,
+                subtotal: i.subtotal
+              })),
+              repuestos: items.filter((i: any) => i.tipo === 'repuesto').map((i: any) => ({
+                descripcion: i.descripcion,
+                cantidad: i.cantidad,
+                precio_unitario: i.precio_unitario,
+                subtotal: i.subtotal
+              })),
+              mano_obra: items.filter((i: any) => i.tipo === 'mano_obra').map((i: any) => ({
+                descripcion: i.descripcion,
+                cantidad: i.cantidad,
+                precio_unitario: i.precio_unitario,
+                subtotal: i.subtotal
+              }))
+            };
 
             // 2. Check if Factura already exists
             const existingInvoiceRes = await strapiGet(`/api/facturas?filters[orden_de_trabajo][documentId][$eq]=${orderId}`);
@@ -94,7 +119,8 @@ try {
                     iva: iva,
                     total: total,
                     orden_de_trabajo: orderId,
-                    estado: 'pendiente'
+                    estado: 'pendiente',
+                    desglose: desglose
                 });
             }
 
@@ -102,7 +128,7 @@ try {
             await strapiPut(`/api/orden-de-trabajos/${orderId}`, {
                 estado: 'facturado'
             });
-            successMessage = 'Factura aprobada y generada. La orden ha sido enviada a recepción.';
+            successMessage = 'Factura aprobada con desglose detallado. La orden ha sido enviada a recepción.';
         } catch (err: any) {
             console.error('Error updating order:', err);
             errorMessage = 'Error al actualizar la orden: ' + (err.message || 'Error desconocido');
@@ -110,8 +136,8 @@ try {
     }
   }
 
-  // Obtener órdenes finalizadas (pendientes de aprobación)
-  const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=finalizado&populate[vehiculo][populate][cliente][fields][0]=nombre&populate[vehiculo][populate][cliente][fields][1]=apellido&populate[repuestos][fields][0]=nombre&populate[repuestos][fields][1]=precio&populate[presupuesto][fields][0]=monto_total&populate[factura][fields][0]=numero_factura&populate[factura][fields][1]=total&sort[0]=updatedAt:desc');
+  // Obtener órdenes finalizadas con items_detalle
+  const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=finalizado&populate[vehiculo][populate][cliente][fields][0]=nombre&populate[vehiculo][populate][cliente][fields][1]=apellido&populate[items_detalle][fields][0]=tipo&populate[items_detalle][fields][1]=descripcion&populate[items_detalle][fields][2]=cantidad&populate[items_detalle][fields][3]=precio_unitario&populate[items_detalle][fields][4]=subtotal&populate[presupuesto][fields][0]=monto_total&populate[factura][fields][0]=numero_factura&populate[factura][fields][1]=total&sort[0]=updatedAt:desc');
   
   // Mapear las órdenes y PRE-CALCULAR totales para el frontend
   completedOrders = (data.data || []).map((order: any) => {
@@ -120,7 +146,7 @@ try {
         ...order,
         cliente: order.vehiculo?.cliente || { nombre: 'N/A', apellido: '' },
         vehiculo: order.vehiculo || { marca: 'N/A', modelo: '' },
-        calculatedTotals: totals // Pass calculated totals to frontend
+        calculatedTotals: totals
     };
   });
 } catch (e) {
@@ -290,7 +316,9 @@ const breadcrumbs = [
                 <thead>
                     <tr class="border-b-2 border-gray-900">
                         <th class="text-left py-2">Descripción</th>
-                        <th class="text-right py-2">Precio</th>
+                        <th class="text-center py-2 w-20">Cant.</th>
+                        <th class="text-right py-2 w-28">P. Unit.</th>
+                        <th class="text-right py-2 w-28">Subtotal</th>
                     </tr>
                 </thead>
                 <tbody id="inv-items">
@@ -298,7 +326,7 @@ const breadcrumbs = [
                 </tbody>
                 <tfoot>
                     <tr class="border-t-2 border-gray-900 font-bold text-xl">
-                        <td class="pt-4 text-right">Total:</td>
+                        <td colspan="3" class="pt-4 text-right">Total:</td>
                         <td class="pt-4 text-right" id="inv-total">$0</td>
                     </tr>
                 </tfoot>
@@ -318,57 +346,81 @@ const breadcrumbs = [
 
         // Populate invoice
         document.getElementById('inv-id').textContent = `FACT-${order.documentId.slice(0, 6).toUpperCase()}`;
-        document.getElementById('inv-date').textContent = new Date().toLocaleDateString();
+        document.getElementById('inv-date').textContent = new Date().toLocaleDateString('es-CL');
         document.getElementById('inv-customer').textContent = `${order.cliente.nombre} ${order.cliente.apellido}`;
         document.getElementById('inv-vehicle').textContent = `${order.vehiculo.marca} ${order.vehiculo.modelo}`;
         
-        // Generate items
-        const items = [];
+        // Generate items from items_detalle
+        const items = order.calculatedTotals.items || [];
+        const tbody = document.getElementById('inv-items');
         
-        // Add parts
-        if (order.repuestos && order.repuestos.length > 0) {
-            order.repuestos.forEach(part => {
-                items.push({ desc: `Repuesto: ${part.nombre}`, price: part.precio });
+        // Build table rows grouped by type
+        let html = '';
+        
+        // Servicios
+        const servicios = items.filter(i => i.tipo === 'servicio');
+        if (servicios.length > 0) {
+            html += `<tr class="bg-gray-50"><td colspan="4" class="py-2 font-bold text-gray-700">SERVICIOS</td></tr>`;
+            servicios.forEach(item => {
+                html += `
+                    <tr class="border-b border-gray-100">
+                        <td class="py-2">${item.descripcion}</td>
+                        <td class="py-2 text-center">${item.cantidad}</td>
+                        <td class="py-2 text-right">$${Number(item.precio_unitario).toLocaleString('es-CL')}</td>
+                        <td class="py-2 text-right">$${Number(item.subtotal).toLocaleString('es-CL')}</td>
+                    </tr>`;
             });
         }
-
-        // Add labor/budget
-        // Use the server-calculated total to derive the labor cost displayed
-        // Total = (Parts + Labor) * 1.19
-        // So Subtotal = Total / 1.19
-        // Labor = Subtotal - Parts
         
-        const total = order.calculatedTotals.total;
-        const subtotal = order.calculatedTotals.subtotal;
-        const partsTotal = items.reduce((sum, item) => sum + item.price, 0);
-        
-        const labor = subtotal - partsTotal;
-        
-        if (labor > 0) {
-            items.push({ desc: 'Mano de Obra / Servicios', price: labor });
+        // Repuestos
+        const repuestos = items.filter(i => i.tipo === 'repuesto');
+        if (repuestos.length > 0) {
+            html += `<tr class="bg-gray-50"><td colspan="4" class="py-2 font-bold text-gray-700">REPUESTOS</td></tr>`;
+            repuestos.forEach(item => {
+                html += `
+                    <tr class="border-b border-gray-100">
+                        <td class="py-2">${item.descripcion}</td>
+                        <td class="py-2 text-center">${item.cantidad}</td>
+                        <td class="py-2 text-right">$${Number(item.precio_unitario).toLocaleString('es-CL')}</td>
+                        <td class="py-2 text-right">$${Number(item.subtotal).toLocaleString('es-CL')}</td>
+                    </tr>`;
+            });
         }
         
-        const tbody = document.getElementById('inv-items');
-        tbody.innerHTML = items.map(item => `
-            <tr class="border-b border-gray-200">
-                <td class="py-2">${item.desc}</td>
-                <td class="py-2 text-right">$${item.price.toLocaleString('es-CL')}</td>
-            </tr>
-        `).join('');
+        // Mano de obra
+        const manoObra = items.filter(i => i.tipo === 'mano_obra');
+        if (manoObra.length > 0) {
+            html += `<tr class="bg-gray-50"><td colspan="4" class="py-2 font-bold text-gray-700">MANO DE OBRA</td></tr>`;
+            manoObra.forEach(item => {
+                html += `
+                    <tr class="border-b border-gray-100">
+                        <td class="py-2">${item.descripcion}</td>
+                        <td class="py-2 text-center">${item.cantidad}</td>
+                        <td class="py-2 text-right">$${Number(item.precio_unitario).toLocaleString('es-CL')}</td>
+                        <td class="py-2 text-right">$${Number(item.subtotal).toLocaleString('es-CL')}</td>
+                    </tr>`;
+            });
+        }
         
-        // Add IVA and Total rows
+        tbody.innerHTML = html;
+        
+        const subtotal = order.calculatedTotals.subtotal;
+        const iva = order.calculatedTotals.iva;
+        const total = order.calculatedTotals.total;
+        
+        // Update totals in footer
         const tfoot = document.querySelector('table tfoot');
         tfoot.innerHTML = `
             <tr class="border-t border-gray-300">
-                <td class="pt-4 text-right font-medium">Subtotal:</td>
+                <td colspan="3" class="pt-4 text-right font-medium">Subtotal:</td>
                 <td class="pt-4 text-right">$${subtotal.toLocaleString('es-CL')}</td>
             </tr>
             <tr>
-                <td class="pt-1 text-right font-medium">IVA (19%):</td>
-                <td class="pt-1 text-right">$${order.calculatedTotals.iva.toLocaleString('es-CL')}</td>
+                <td colspan="3" class="pt-1 text-right font-medium">IVA (19%):</td>
+                <td class="pt-1 text-right">$${iva.toLocaleString('es-CL')}</td>
             </tr>
             <tr class="border-t-2 border-gray-900 font-bold text-xl">
-                <td class="pt-2 text-right">Total:</td>
+                <td colspan="3" class="pt-2 text-right">Total:</td>
                 <td class="pt-2 text-right">$${total.toLocaleString('es-CL')}</td>
             </tr>
         `;

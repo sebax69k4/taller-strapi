@@ -503,6 +503,40 @@ export interface ApiCajaCaja extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiCitaCita extends Struct.CollectionTypeSchema {
+  collectionName: 'citas';
+  info: {
+    description: 'Agendamiento de visitas al taller';
+    displayName: 'Cita';
+    pluralName: 'citas';
+    singularName: 'cita';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    cliente: Schema.Attribute.Relation<'manyToOne', 'api::cliente.cliente'>;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    estado: Schema.Attribute.Enumeration<
+      ['pendiente', 'confirmada', 'cancelada', 'completada']
+    > &
+      Schema.Attribute.DefaultTo<'pendiente'>;
+    fecha: Schema.Attribute.Date & Schema.Attribute.Required;
+    hora: Schema.Attribute.Time & Schema.Attribute.Required;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<'oneToMany', 'api::cita.cita'> &
+      Schema.Attribute.Private;
+    motivo: Schema.Attribute.Text & Schema.Attribute.Required;
+    publishedAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    vehiculo: Schema.Attribute.Relation<'manyToOne', 'api::vehiculo.vehiculo'>;
+  };
+}
+
 export interface ApiClienteCliente extends Struct.CollectionTypeSchema {
   collectionName: 'clientes';
   info: {
@@ -515,6 +549,7 @@ export interface ApiClienteCliente extends Struct.CollectionTypeSchema {
   };
   attributes: {
     apellido: Schema.Attribute.String;
+    citas: Schema.Attribute.Relation<'oneToMany', 'api::cita.cita'>;
     comuna: Schema.Attribute.String;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
@@ -542,6 +577,57 @@ export interface ApiClienteCliente extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiDetalleOrdenItemDetalleOrdenItem
+  extends Struct.CollectionTypeSchema {
+  collectionName: 'detalle_orden_items';
+  info: {
+    description: 'Items detallados de una orden de trabajo (servicios, repuestos, mano de obra)';
+    displayName: 'Detalle Orden Item';
+    pluralName: 'detalle-orden-items';
+    singularName: 'detalle-orden-item';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    cantidad: Schema.Attribute.Integer &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 1;
+        },
+        number
+      > &
+      Schema.Attribute.DefaultTo<1>;
+    createdAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    descripcion: Schema.Attribute.String & Schema.Attribute.Required;
+    locale: Schema.Attribute.String & Schema.Attribute.Private;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::detalle-orden-item.detalle-orden-item'
+    > &
+      Schema.Attribute.Private;
+    orden_de_trabajo: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::orden-de-trabajo.orden-de-trabajo'
+    >;
+    precio_unitario: Schema.Attribute.Decimal & Schema.Attribute.Required;
+    publishedAt: Schema.Attribute.DateTime;
+    repuesto: Schema.Attribute.Relation<'manyToOne', 'api::repuesto.repuesto'>;
+    servicio: Schema.Attribute.Relation<'manyToOne', 'api::servicio.servicio'>;
+    subtotal: Schema.Attribute.Decimal & Schema.Attribute.Required;
+    tipo: Schema.Attribute.Enumeration<
+      ['servicio', 'repuesto', 'mano_obra', 'otro']
+    > &
+      Schema.Attribute.Required;
+    updatedAt: Schema.Attribute.DateTime;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+  };
+}
+
 export interface ApiFacturaFactura extends Struct.CollectionTypeSchema {
   collectionName: 'facturas';
   info: {
@@ -556,6 +642,7 @@ export interface ApiFacturaFactura extends Struct.CollectionTypeSchema {
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    desglose: Schema.Attribute.JSON;
     estado: Schema.Attribute.Enumeration<['pendiente', 'pagado']> &
       Schema.Attribute.DefaultTo<'pendiente'>;
     fecha_emision: Schema.Attribute.Date & Schema.Attribute.Required;
@@ -625,14 +712,12 @@ export interface ApiMecenicoMecenico extends Struct.CollectionTypeSchema {
     >;
     ordenes_activas: Schema.Attribute.Integer;
     publishedAt: Schema.Attribute.DateTime;
-    servicios: Schema.Attribute.Relation<'oneToMany', 'api::servicio.servicio'>;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
     vehiculos: Schema.Attribute.Relation<'oneToMany', 'api::vehiculo.vehiculo'>;
     zona: Schema.Attribute.Relation<'manyToOne', 'api::zona.zona'>;
     zona_asignada: Schema.Attribute.String;
-    zonas: Schema.Attribute.Relation<'oneToMany', 'api::zona.zona'>;
   };
 }
 
@@ -673,6 +758,10 @@ export interface ApiOrdenDeTrabajoOrdenDeTrabajo
     fecha_inicio_planificada: Schema.Attribute.DateTime;
     hora_fin_real: Schema.Attribute.DateTime;
     hora_inicio_real: Schema.Attribute.DateTime;
+    items_detalle: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::detalle-orden-item.detalle-orden-item'
+    >;
     kilometraje_ingreso: Schema.Attribute.Integer;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
@@ -725,8 +814,9 @@ export interface ApiPresupuestoPresupuesto extends Struct.CollectionTypeSchema {
       Schema.Attribute.Private;
     descripcion: Schema.Attribute.String;
     estado_aprobacion: Schema.Attribute.Enumeration<
-      ['pendiente', 'aprobado', 'rechazado', 'default:pendiente']
-    >;
+      ['pendiente', 'aprobado', 'rechazado']
+    > &
+      Schema.Attribute.DefaultTo<'pendiente'>;
     fecha_generacion: Schema.Attribute.DateTime;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
@@ -954,6 +1044,7 @@ export interface ApiVehiculoVehiculo extends Struct.CollectionTypeSchema {
   };
   attributes: {
     ano: Schema.Attribute.Integer;
+    citas: Schema.Attribute.Relation<'oneToMany', 'api::cita.cita'>;
     cliente: Schema.Attribute.Relation<'manyToOne', 'api::cliente.cliente'>;
     color: Schema.Attribute.String;
     createdAt: Schema.Attribute.DateTime;
@@ -1005,7 +1096,6 @@ export interface ApiZonaZona extends Struct.CollectionTypeSchema {
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<'oneToMany', 'api::zona.zona'> &
       Schema.Attribute.Private;
-    mecanico: Schema.Attribute.Relation<'manyToOne', 'api::mecenico.mecenico'>;
     mecanicos: Schema.Attribute.Relation<'oneToMany', 'api::mecenico.mecenico'>;
     nombre: Schema.Attribute.String;
     orden_de_trabajos: Schema.Attribute.Relation<
@@ -1531,7 +1621,9 @@ declare module '@strapi/strapi' {
       'admin::user': AdminUser;
       'api::bitacora.bitacora': ApiBitacoraBitacora;
       'api::caja.caja': ApiCajaCaja;
+      'api::cita.cita': ApiCitaCita;
       'api::cliente.cliente': ApiClienteCliente;
+      'api::detalle-orden-item.detalle-orden-item': ApiDetalleOrdenItemDetalleOrdenItem;
       'api::factura.factura': ApiFacturaFactura;
       'api::mecenico.mecenico': ApiMecenicoMecenico;
       'api::orden-de-trabajo.orden-de-trabajo': ApiOrdenDeTrabajoOrdenDeTrabajo;

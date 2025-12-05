@@ -1,0 +1,134 @@
+---
+interface Props {
+  initialDamages?: string[];
+}
+
+const { initialDamages = [] } = Astro.props;
+---
+
+<div x-data={`vehicleInspection(${JSON.stringify(initialDamages)})`} class="w-full">
+    <div class="mb-4 flex justify-between items-center">
+        <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300">Inspección Visual</h3>
+        <button type="button" @click="clearDamages()" class="text-xs text-red-600 hover:text-red-700" x-show="damages.length > 0">
+            Limpiar todo
+        </button>
+    </div>
+
+    <div class="relative w-full aspect-[16/9] bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-700 p-4 flex items-center justify-center overflow-hidden">
+        <!-- Car SVG Diagram -->
+        <svg viewBox="0 0 800 400" class="w-full h-full drop-shadow-sm">
+            <!-- Styles -->
+            <defs>
+                <style>
+                    .car-part { fill: #e5e7eb; stroke: #9ca3af; stroke-width: 2; transition: all 0.2s; cursor: pointer; }
+                    .car-part:hover { fill: #d1d5db; }
+                    .car-part.damaged { fill: #fca5a5; stroke: #ef4444; }
+                    .dark .car-part { fill: #374151; stroke: #4b5563; }
+                    .dark .car-part:hover { fill: #4b5563; }
+                    .dark .car-part.damaged { fill: #7f1d1d; stroke: #ef4444; }
+                    .label { font-size: 12px; fill: #6b7280; text-anchor: middle; pointer-events: none; }
+                    .dark .label { fill: #9ca3af; }
+                </style>
+            </defs>
+
+            <!-- Top View Layout -->
+            
+            <!-- Front Bumper -->
+            <path d="M 250,100 Q 280,80 310,100 L 310,300 Q 280,320 250,300 Q 220,200 250,100" 
+                  class="car-part" :class="hasDamage('parachoques_delantero') ? 'damaged' : ''" 
+                  @click="toggleDamage('parachoques_delantero', 'Parachoques Delantero')" />
+            
+            <!-- Hood -->
+            <rect x="310" y="100" width="100" height="200" 
+                  class="car-part" :class="hasDamage('capot') ? 'damaged' : ''" 
+                  @click="toggleDamage('capot', 'Capot')" />
+            
+            <!-- Windshield -->
+            <rect x="410" y="100" width="60" height="200" 
+                  class="car-part" :class="hasDamage('parabrisas') ? 'damaged' : ''" 
+                  @click="toggleDamage('parabrisas', 'Parabrisas')" />
+            
+            <!-- Roof -->
+            <rect x="470" y="100" width="120" height="200" 
+                  class="car-part" :class="hasDamage('techo') ? 'damaged' : ''" 
+                  @click="toggleDamage('techo', 'Techo')" />
+            
+            <!-- Trunk -->
+            <rect x="590" y="100" width="80" height="200" 
+                  class="car-part" :class="hasDamage('maletero') ? 'damaged' : ''" 
+                  @click="toggleDamage('maletero', 'Maletero')" />
+            
+            <!-- Rear Bumper -->
+            <path d="M 670,100 Q 700,80 730,100 Q 760,200 730,300 Q 700,320 670,300 L 670,100" 
+                  class="car-part" :class="hasDamage('parachoques_trasero') ? 'damaged' : ''" 
+                  @click="toggleDamage('parachoques_trasero', 'Parachoques Trasero')" />
+
+            <!-- Left Side (Top in SVG) -->
+            <rect x="310" y="50" width="360" height="50" 
+                  class="car-part" :class="hasDamage('costado_izquierdo') ? 'damaged' : ''" 
+                  @click="toggleDamage('costado_izquierdo', 'Costado Izquierdo')" />
+            
+            <!-- Right Side (Bottom in SVG) -->
+            <rect x="310" y="300" width="360" height="50" 
+                  class="car-part" :class="hasDamage('costado_derecho') ? 'damaged' : ''" 
+                  @click="toggleDamage('costado_derecho', 'Costado Derecho')" />
+
+            <!-- Labels -->
+            <text x="280" y="200" class="label">Frente</text>
+            <text x="700" y="200" class="label">Atrás</text>
+            <text x="490" y="80" class="label">Izquierda</text>
+            <text x="490" y="340" class="label">Derecha</text>
+        </svg>
+
+        <!-- Tooltip/Helper -->
+        <div class="absolute bottom-4 left-4 bg-white/90 dark:bg-gray-800/90 backdrop-blur px-3 py-1.5 rounded-lg shadow-sm text-xs text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700">
+            Haz clic en las zonas dañadas
+        </div>
+    </div>
+
+    <!-- Selected Damages List -->
+    <div class="mt-4 flex flex-wrap gap-2">
+        <template x-for="damage in damages" :key="damage.id">
+            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300 border border-red-200 dark:border-red-800">
+                <span x-text="damage.label"></span>
+                <button type="button" @click="toggleDamage(damage.id, damage.label)" class="hover:text-red-900 dark:hover:text-red-100">
+                    <span class="material-symbols-outlined text-[14px]">close</span>
+                </button>
+            </span>
+        </template>
+        <span x-show="damages.length === 0" class="text-xs text-gray-500 italic py-1">Sin daños registrados</span>
+    </div>
+
+    <!-- Hidden Input for Form Submission -->
+    <input type="hidden" name="danos_previos" :value="JSON.stringify(damages.map(d => d.id))">
+</div>
+
+<script>
+    document.addEventListener('alpine:init', () => {
+        Alpine.data('vehicleInspection', (initial = []) => ({
+            damages: [], // Array of objects { id, label }
+
+            init() {
+                // Initialize with props if any (convert simple strings to objects if needed)
+                // For simplicity assuming initial is empty for new orders
+            },
+
+            hasDamage(id) {
+                return this.damages.some(d => d.id === id);
+            },
+
+            toggleDamage(id, label) {
+                const index = this.damages.findIndex(d => d.id === id);
+                if (index > -1) {
+                    this.damages.splice(index, 1);
+                } else {
+                    this.damages.push({ id, label });
+                }
+            },
+
+            clearDamages() {
+                this.damages = [];
+            }
+        }));
+    });
+</script>

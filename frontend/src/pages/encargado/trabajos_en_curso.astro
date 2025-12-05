@@ -1,7 +1,7 @@
 ---
 export const prerender = false;
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
-import { strapiGet } from '../../lib/strapi';
+import { strapiGet, strapiPut } from '../../lib/strapi';
 import '../../styles/global.css';
 
 const userRole = Astro.cookies.get('user_role')?.value;
@@ -27,210 +27,204 @@ interface Order {
 }
 
 let activeOrders: Order[] = [];
-let stats = { total: 0, ingresados: 0, enDiagnostico: 0, enReparacion: 0, finalizados: 0, facturados: 0, urgentes: 0, sinAsignar: 0 };
+let error = '';
 
-try {
-  // Solo excluir 'entregado'
-  const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$ne]=entregado&populate[vehiculo][populate]=cliente&populate=mecanico&sort=prioridad:asc,updatedAt:desc');
-  activeOrders = data.data || [];
-  stats.total = activeOrders.length;
-  stats.ingresados = activeOrders.filter(o => o.estado === 'ingresado').length;
-  stats.enDiagnostico = activeOrders.filter(o => o.estado === 'en_diagnostico').length;
-  stats.enReparacion = activeOrders.filter(o => o.estado === 'en_reparacion').length;
-  stats.finalizados = activeOrders.filter(o => o.estado === 'finalizado').length;
-  stats.facturados = activeOrders.filter(o => o.estado === 'facturado').length;
-  stats.urgentes = activeOrders.filter(o => o.prioridad === 'urgente').length;
-  stats.sinAsignar = activeOrders.filter(o => !o.mecanico).length;
-} catch (e) {
-  console.error('Error fetching active orders:', e);
+// Handle Status Update via POST (fallback for no-js or initial load actions)
+if (Astro.request.method === 'POST') {
+  try {
+    const formData = await Astro.request.formData();
+    const orderId = formData.get('orderId');
+    const newStatus = formData.get('newStatus');
+    
+    if (orderId && newStatus) {
+      await strapiPut(`/api/orden-de-trabajos/${orderId}`, { estado: newStatus });
+    }
+  } catch (e) {
+    console.error('Error updating order:', e);
+    error = 'Error al actualizar el estado de la orden';
+  }
 }
 
-const getProgress = (s: string) => ({ ingresado: 15, en_diagnostico: 35, en_reparacion: 65, finalizado: 85, facturado: 95 }[s] || 0);
-const getStatusColor = (s: string) => ({
-  ingresado: 'bg-red-100 text-red-700',
-  en_diagnostico: 'bg-purple-100 text-purple-700',
-  en_reparacion: 'bg-amber-100 text-amber-700',
-  finalizado: 'bg-green-100 text-green-700',
-  facturado: 'bg-blue-100 text-blue-700'
-}[s] || 'bg-gray-100 text-gray-700');
-const getStatusLabel = (s: string) => ({ ingresado: 'Ingresado', en_diagnostico: 'Diagnóstico', en_reparacion: 'Reparación', finalizado: 'Finalizado', facturado: 'Facturado' }[s] || s);
-const getProgressColor = (s: string) => ({ ingresado: 'bg-red-500', en_diagnostico: 'bg-purple-500', en_reparacion: 'bg-amber-500', finalizado: 'bg-green-500', facturado: 'bg-blue-500' }[s] || 'bg-gray-500');
+try {
+  const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$ne]=entregado&filters[estado][$ne]=facturado&populate[vehiculo][populate]=cliente&populate=mecanico&sort=prioridad:asc,updatedAt:desc');
+  activeOrders = data.data || [];
+} catch (e) {
+  console.error('Error fetching active orders:', e);
+  error = 'Error al cargar las órdenes';
+}
+
+const columns = [
+  { id: 'ingresado', title: 'Ingresado', color: 'border-red-500', bg: 'bg-red-50 dark:bg-red-900/10', icon: 'input' },
+  { id: 'en_diagnostico', title: 'Diagnóstico', color: 'border-purple-500', bg: 'bg-purple-50 dark:bg-purple-900/10', icon: 'biotech' },
+  { id: 'en_reparacion', title: 'Reparación', color: 'border-amber-500', bg: 'bg-amber-50 dark:bg-amber-900/10', icon: 'build' },
+  { id: 'finalizado', title: 'Finalizado', color: 'border-green-500', bg: 'bg-green-50 dark:bg-green-900/10', icon: 'check_circle' }
+];
 ---
 
-<DashboardLayout title="Órdenes en Curso" role="encargado" currentPath="/encargado/trabajos_en_curso">
-  <div class="max-w-7xl mx-auto">
+<DashboardLayout title="Tablero de Órdenes" role="encargado" currentPath="/encargado/trabajos_en_curso">
+  <div class="h-[calc(100vh-8rem)] flex flex-col" 
+       x-data="{
+         orders: [],
+         draggedOrder: null,
+         async init() {
+           this.orders = JSON.parse(document.getElementById('orders-data').textContent);
+         },
+         getOrdersByStatus(status) {
+           return this.orders.filter(o => o.estado === status);
+         },
+         async updateStatus(orderId, newStatus) {
+           // Optimistic update
+           const orderIndex = this.orders.findIndex(o => o.documentId === orderId);
+           if (orderIndex === -1) return;
+           
+           const oldStatus = this.orders[orderIndex].estado;
+           this.orders[orderIndex].estado = newStatus;
+           
+           try {
+             const formData = new FormData();
+             formData.append('orderId', orderId);
+             formData.append('newStatus', newStatus);
+             
+             await fetch(window.location.href, {
+               method: 'POST',
+               body: formData
+             });
+             
+             // Show success toast (global function)
+             if (window.showToast) window.showToast('Estado actualizado', 'success');
+             
+           } catch (e) {
+             // Revert on error
+             this.orders[orderIndex].estado = oldStatus;
+             if (window.showToast) window.showToast('Error al actualizar', 'error');
+           }
+         },
+         handleDrop(event, newStatus) {
+            const orderId = event.dataTransfer.getData('text/plain');
+            if (orderId) {
+                this.updateStatus(orderId, newStatus);
+            }
+            event.currentTarget.classList.remove('bg-gray-100', 'dark:bg-gray-800');
+         },
+         handleDragOver(event) {
+            event.preventDefault();
+            event.currentTarget.classList.add('bg-gray-100', 'dark:bg-gray-800');
+         },
+         handleDragLeave(event) {
+            event.currentTarget.classList.remove('bg-gray-100', 'dark:bg-gray-800');
+         }
+       }"
+  >
+    <!-- Data Injection -->
+    <script type="application/json" id="orders-data">
+      {JSON.stringify(activeOrders)}
+    </script>
+
     <!-- Header -->
-    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+    <div class="flex justify-between items-center mb-6 px-1">
       <div>
-        <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Órdenes en Curso</h1>
-        <p class="text-gray-500 dark:text-gray-400 mt-1">Gestiona las órdenes activas del taller</p>
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display flex items-center gap-3">
+          <span class="material-symbols-outlined text-4xl text-primary-600">view_kanban</span>
+          Tablero de Trabajo
+        </h1>
+        <p class="text-gray-500 dark:text-gray-400 mt-1">Arrastra las órdenes para cambiar su estado</p>
       </div>
       <div class="flex gap-2">
-        <a href="/encargado/asig_orden" class="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 flex items-center gap-2">
-          <span class="material-symbols-outlined">assignment_ind</span>
-          Asignar
-        </a>
-        <a href="/recepcion/crear_orden" class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center gap-2">
-          <span class="material-symbols-outlined">add_circle</span>
+        <a href="/recepcion/crear_orden" class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center gap-2 shadow-lg hover:shadow-primary-600/30 transition-all">
+          <span class="material-symbols-outlined">add</span>
           Nueva Orden
         </a>
       </div>
     </div>
 
-    <!-- Alertas -->
-    {stats.urgentes > 0 && (
-      <div class="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-4">
-        <div class="w-10 h-10 bg-red-500 rounded-full flex items-center justify-center animate-pulse">
-          <span class="material-symbols-outlined text-white">priority_high</span>
-        </div>
-        <div class="flex-1">
-          <p class="font-bold text-red-800">{stats.urgentes} orden{stats.urgentes > 1 ? 'es' : ''} urgente{stats.urgentes > 1 ? 's' : ''}</p>
-          <p class="text-sm text-red-600">Requieren atención inmediata</p>
-        </div>
-      </div>
-    )}
+    <!-- Kanban Board -->
+    <div class="flex-1 overflow-x-auto pb-4">
+      <div class="flex gap-6 h-full min-w-[1000px]">
+        {columns.map(col => (
+          <div class="flex-1 flex flex-col min-w-[280px] h-full">
+            <!-- Column Header -->
+            <div class={`flex items-center justify-between p-3 rounded-t-xl border-t-4 ${col.color} bg-white dark:bg-gray-800 shadow-sm mb-3`}>
+              <div class="flex items-center gap-2">
+                <span class="material-symbols-outlined text-gray-500">{col.icon}</span>
+                <h3 class="font-bold text-gray-900 dark:text-white">{col.title}</h3>
+              </div>
+              <span class="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-full text-xs font-bold text-gray-600 dark:text-gray-300" x-text={`getOrdersByStatus('${col.id}').length`}>0</span>
+            </div>
 
-    <!-- KPIs -->
-    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6">
-      <div class="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl p-4 text-white">
-        <p class="text-2xl font-bold">{stats.total}</p>
-        <p class="text-blue-100 text-xs">Total</p>
-      </div>
-      <div class="bg-gradient-to-br from-red-500 to-rose-600 rounded-xl p-4 text-white">
-        <p class="text-2xl font-bold">{stats.ingresados}</p>
-        <p class="text-red-100 text-xs">Ingresados</p>
-      </div>
-      <div class="bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl p-4 text-white">
-        <p class="text-2xl font-bold">{stats.enDiagnostico}</p>
-        <p class="text-purple-100 text-xs">Diagnóstico</p>
-      </div>
-      <div class="bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl p-4 text-white">
-        <p class="text-2xl font-bold">{stats.enReparacion}</p>
-        <p class="text-amber-100 text-xs">Reparación</p>
-      </div>
-      <div class="bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl p-4 text-white">
-        <p class="text-2xl font-bold">{stats.finalizados}</p>
-        <p class="text-green-100 text-xs">Finalizados</p>
-      </div>
-      <div class="bg-gradient-to-br from-cyan-500 to-blue-600 rounded-xl p-4 text-white">
-        <p class="text-2xl font-bold">{stats.facturados}</p>
-        <p class="text-cyan-100 text-xs">Facturados</p>
-      </div>
-      <div class="bg-gradient-to-br from-rose-600 to-pink-600 rounded-xl p-4 text-white">
-        <p class="text-2xl font-bold">{stats.urgentes}</p>
-        <p class="text-rose-100 text-xs">Urgentes</p>
-      </div>
-      <div class="bg-gradient-to-br from-gray-500 to-gray-600 rounded-xl p-4 text-white">
-        <p class="text-2xl font-bold">{stats.sinAsignar}</p>
-        <p class="text-gray-200 text-xs">Sin Asignar</p>
-      </div>
-    </div>
-
-    <!-- Vista Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="orders-grid">
-      {activeOrders.map((order) => (
-        <article 
-          class="order-card bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-lg transition-all"
-          data-estado={order.estado}
-          data-prioridad={order.prioridad || 'normal'}
-          data-mecanico={order.mecanico ? 'asignado' : 'sin_asignar'}
-          data-busqueda={`${order.vehiculo?.marca || ''} ${order.vehiculo?.modelo || ''} ${order.vehiculo?.patente || ''} ${order.vehiculo?.cliente?.nombre || ''} ${order.vehiculo?.cliente?.apellido || ''}`.toLowerCase()}
-        >
-          <div class={`px-4 py-2 flex items-center justify-between ${order.prioridad === 'urgente' ? 'bg-red-500' : 'bg-gray-100 dark:bg-gray-700/50'}`}>
-            <span class={`font-bold ${order.prioridad === 'urgente' ? 'text-white' : 'text-gray-700 dark:text-gray-300'}`}>
-              OT-{order.id}
-            </span>
-            {order.prioridad === 'urgente' && (
-              <span class="text-white text-xs font-bold">URGENTE</span>
-            )}
-          </div>
-          
-          <div class="p-4">
-            <div class="flex items-center gap-3 mb-3">
-              <div class="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
-                <span class="material-symbols-outlined text-gray-500">directions_car</span>
-              </div>
-              <div class="flex-1 min-w-0">
-                <p class="font-bold text-gray-900 dark:text-white truncate">
-                  {order.vehiculo ? `${order.vehiculo.marca} ${order.vehiculo.modelo}` : 'N/A'}
-                </p>
-                <p class="text-sm text-gray-500 font-mono">{order.vehiculo?.patente}</p>
-              </div>
-            </div>
-            
-            {order.vehiculo?.cliente && (
-              <div class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mb-3">
-                <span class="material-symbols-outlined text-base">person</span>
-                <span>{order.vehiculo.cliente.nombre} {order.vehiculo.cliente.apellido}</span>
-              </div>
-            )}
-            
-            <p class="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-4">{order.descripcion || 'Sin descripción'}</p>
-            
-            <div class="space-y-2 mb-4">
-              <div class="flex items-center justify-between">
-                <span class={`px-2.5 py-1 rounded-full text-xs font-bold ${getStatusColor(order.estado)}`}>
-                  {getStatusLabel(order.estado)}
-                </span>
-                <span class="text-sm font-bold text-gray-700 dark:text-gray-300">{getProgress(order.estado)}%</span>
-              </div>
-              <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                <div class={`h-2 rounded-full ${getProgressColor(order.estado)}`} style={`width: ${getProgress(order.estado)}%`}></div>
-              </div>
-            </div>
-            
-            <div class="flex items-center gap-2 pt-3 border-t border-gray-100 dark:border-gray-700">
-              <span class="material-symbols-outlined text-gray-400 text-base">engineering</span>
-              <span class="text-sm text-gray-600 dark:text-gray-400">
-                {order.mecanico ? `${order.mecanico.nombre} ${order.mecanico.apellido || ''}` : 'Sin asignar'}
-              </span>
-            </div>
-          </div>
-          
-          <div class="px-4 py-3 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-100 dark:border-gray-700 flex justify-between items-center">
-            <a 
-              href={`/encargado/detalles_de_orden?id=${order.documentId}`} 
-              class="text-sm font-medium text-primary-600 hover:underline inline-flex items-center gap-1"
+            <!-- Drop Zone -->
+            <div 
+              class={`flex-1 rounded-xl p-3 transition-colors ${col.bg} overflow-y-auto custom-scrollbar`}
+              @dragover="handleDragOver($event)"
+              @dragleave="handleDragLeave($event)"
+              @drop={`handleDrop($event, '${col.id}')`}
             >
-              <span class="material-symbols-outlined text-base">visibility</span>
-              Ver detalle
-            </a>
-            <div class="flex gap-2">
-              <a href={`/encargado/reasignar_orden?orden=${order.documentId}`} class="p-1.5 rounded-lg text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700" title="Reasignar">
-                <span class="material-symbols-outlined text-base">swap_horiz</span>
-              </a>
-              {order.estado === 'finalizado' && (
-                <a href={`/encargado/gen_factura?orden=${order.documentId}`} class="p-1.5 rounded-lg text-green-600 hover:bg-green-100" title="Facturar">
-                  <span class="material-symbols-outlined text-base">receipt_long</span>
-                </a>
-              )}
-              {order.estado === 'facturado' && (
-                <a href={`/encargado/ver_factura?orden=${order.documentId}`} class="p-1.5 rounded-lg text-blue-600 hover:bg-blue-100" title="Ver Factura">
-                  <span class="material-symbols-outlined text-base">receipt</span>
-                </a>
-              )}
+              <template x-for="order in getOrdersByStatus('${col.id}')" :key="order.documentId">
+                <div 
+                  draggable="true"
+                  @dragstart="$event.dataTransfer.setData('text/plain', order.documentId); $event.dataTransfer.effectAllowed = 'move';"
+                  class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mb-3 cursor-grab active:cursor-grabbing hover:shadow-md transition-all group relative"
+                >
+                  <!-- Priority Badge -->
+                  <template x-if="order.prioridad === 'urgente'">
+                    <div class="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full animate-pulse" title="Urgente"></div>
+                  </template>
+
+                  <div class="flex justify-between items-start mb-2">
+                    <span class="text-xs font-mono text-gray-500" x-text="'OT-' + order.id"></span>
+                    <a :href="'/encargado/detalles_de_orden?id=' + order.documentId" class="text-gray-400 hover:text-primary-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <span class="material-symbols-outlined text-lg">visibility</span>
+                    </a>
+                  </div>
+
+                  <h4 class="font-bold text-gray-900 dark:text-white mb-1" x-text="order.vehiculo?.marca + ' ' + order.vehiculo?.modelo"></h4>
+                  <p class="text-sm text-gray-500 mb-3" x-text="order.vehiculo?.patente"></p>
+                  
+                  <div class="flex items-center gap-2 mb-3">
+                    <div class="w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-600 dark:text-gray-300">
+                      <span x-text="(order.vehiculo?.cliente?.nombre || 'C')[0]"></span>
+                    </div>
+                    <span class="text-xs text-gray-600 dark:text-gray-400 truncate" x-text="order.vehiculo?.cliente?.nombre + ' ' + (order.vehiculo?.cliente?.apellido || '')"></span>
+                  </div>
+
+                  <div class="pt-3 border-t border-gray-100 dark:border-gray-700 flex justify-between items-center">
+                    <div class="flex items-center gap-1 text-xs text-gray-500">
+                      <span class="material-symbols-outlined text-sm">engineering</span>
+                      <span x-text="order.mecanico ? order.mecanico.nombre : 'Sin asignar'"></span>
+                    </div>
+                    
+                    <!-- Action Buttons based on status -->
+                    <template x-if="order.estado === 'finalizado'">
+                      <a :href="'/encargado/gen_factura?orden=' + order.documentId" class="text-xs font-medium text-green-600 hover:text-green-700 flex items-center gap-1 bg-green-50 px-2 py-1 rounded">
+                        <span class="material-symbols-outlined text-sm">receipt_long</span>
+                        Facturar
+                      </a>
+                    </template>
+                  </div>
+                </div>
+              </template>
+              
+              <!-- Empty State for Column -->
+              <div x-show="getOrdersByStatus('${col.id}').length === 0" class="h-full flex flex-col items-center justify-center text-gray-400 opacity-50 min-h-[100px]">
+                <span class="material-symbols-outlined text-3xl mb-1">inbox</span>
+                <span class="text-xs">Vacío</span>
+              </div>
             </div>
           </div>
-        </article>
-      ))}
-      
-      {activeOrders.length === 0 && (
-        <div class="col-span-full text-center py-16 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
-          <span class="material-symbols-outlined text-6xl text-gray-300 mb-4">inbox</span>
-          <h3 class="text-xl font-bold text-gray-900 dark:text-white">No hay órdenes activas</h3>
-          <p class="text-gray-500 mt-2">Todas las órdenes han sido completadas</p>
-          <a href="/recepcion/crear_orden" class="mt-4 inline-block text-primary-600 hover:underline">Crear nueva orden</a>
-        </div>
-      )}
+        ))}
+      </div>
     </div>
   </div>
-</DashboardLayout>
 
-<style>
-  .line-clamp-2 {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-</style>
+  <style>
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background-color: rgba(156, 163, 175, 0.5);
+      border-radius: 20px;
+    }
+  </style>
+</DashboardLayout>

@@ -1,0 +1,60 @@
+{
+    "kind": "collectionType",
+    "collectionName": "detalle_orden_items",
+    "info": {
+        "singularName": "detalle-orden-item",
+        "pluralName": "detalle-orden-items",
+        "displayName": "Detalle Orden Item",
+        "description": "Items detallados de una orden de trabajo (servicios, repuestos, mano de obra)"
+    },
+    "options": {
+        "draftAndPublish": false
+    },
+    "pluginOptions": {},
+    "attributes": {
+        "tipo": {
+            "type": "enumeration",
+            "enum": [
+                "servicio",
+                "repuesto",
+                "mano_obra",
+                "otro"
+            ],
+            "required": true
+        },
+        "descripcion": {
+            "type": "string",
+            "required": true
+        },
+        "cantidad": {
+            "type": "integer",
+            "default": 1,
+            "min": 1,
+            "required": true
+        },
+        "precio_unitario": {
+            "type": "decimal",
+            "required": true
+        },
+        "subtotal": {
+            "type": "decimal",
+            "required": true
+        },
+        "orden_de_trabajo": {
+            "type": "relation",
+            "relation": "manyToOne",
+            "target": "api::orden-de-trabajo.orden-de-trabajo",
+            "inversedBy": "items_detalle"
+        },
+        "repuesto": {
+            "type": "relation",
+            "relation": "manyToOne",
+            "target": "api::repuesto.repuesto"
+        },
+        "servicio": {
+            "type": "relation",
+            "relation": "manyToOne",
+            "target": "api::servicio.servicio"
+        }
+    }
+}

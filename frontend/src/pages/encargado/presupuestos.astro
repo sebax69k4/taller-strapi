@@ -93,31 +93,68 @@ try {
       const descuento = parseFloat(formData.get('descuento') as string || '0');
       const notas = formData.get('notas') || '';
 
-      // Calcular totales
+      // Obtener ID numérico de la orden
+      const orderRes = await strapiGet(`/api/orden-de-trabajos/${ordenId}`);
+      const orderNumericId = orderRes.data?.id;
+
+      // Calcular totales y crear items_detalle
       let subtotalServicios = 0;
       let subtotalRepuestos = 0;
 
-      // Sumar servicios
-      serviciosSeleccionados.forEach((sId) => {
+      // Crear items para servicios
+      for (const sId of serviciosSeleccionados) {
         const servicio = servicios.find(s => s.documentId === sId);
-        if (servicio) subtotalServicios += servicio.precio_base;
-      });
+        if (servicio) {
+          subtotalServicios += servicio.precio_base;
+          await strapiPost('/api/detalle-orden-items', {
+            tipo: 'servicio',
+            descripcion: servicio.nombre,
+            cantidad: 1,
+            precio_unitario: servicio.precio_base,
+            subtotal: servicio.precio_base,
+            orden_de_trabajo: orderNumericId,
+            servicio: servicio.id
+          });
+        }
+      }
 
-      // Sumar repuestos con cantidades
-      repuestosSeleccionados.forEach((rId, index) => {
+      // Crear items para repuestos con cantidades
+      for (let index = 0; index < repuestosSeleccionados.length; index++) {
+        const rId = repuestosSeleccionados[index];
         const repuesto = repuestos.find(r => r.documentId === rId);
         const cantidad = parseInt(cantidades[index] as string || '1');
-        if (repuesto) subtotalRepuestos += (repuesto.precio_venta || repuesto.precio) * cantidad;
-      });
+        if (repuesto) {
+          const precio = repuesto.precio_venta || repuesto.precio;
+          const itemSubtotal = precio * cantidad;
+          subtotalRepuestos += itemSubtotal;
+          await strapiPost('/api/detalle-orden-items', {
+            tipo: 'repuesto',
+            descripcion: repuesto.nombre,
+            cantidad: cantidad,
+            precio_unitario: precio,
+            subtotal: itemSubtotal,
+            orden_de_trabajo: orderNumericId,
+            repuesto: repuesto.id
+          });
+        }
+      }
+
+      // Crear item para mano de obra si existe
+      if (manoObra > 0) {
+        await strapiPost('/api/detalle-orden-items', {
+          tipo: 'mano_obra',
+          descripcion: 'Mano de obra adicional',
+          cantidad: 1,
+          precio_unitario: manoObra,
+          subtotal: manoObra,
+          orden_de_trabajo: orderNumericId
+        });
+      }
 
       const subtotal = subtotalServicios + subtotalRepuestos + manoObra;
       const descuentoMonto = (subtotal * descuento) / 100;
       const iva = (subtotal - descuentoMonto) * 0.19;
       const total = subtotal - descuentoMonto + iva;
-
-      // Obtener ID numérico de la orden
-      const orderRes = await strapiGet(`/api/orden-de-trabajos/${ordenId}`);
-      const orderNumericId = orderRes.data?.id;
 
       // Crear presupuesto
       await strapiPost('/api/presupuestos', {
@@ -127,7 +164,7 @@ try {
         orden_de_trabajo: orderNumericId
       });
 
-      return Astro.redirect(`/encargado/presupuestos?message=${encodeURIComponent('Presupuesto creado exitosamente.')}&type=success`);
+      return Astro.redirect(`/encargado/presupuestos?message=${encodeURIComponent('Presupuesto creado con desglose detallado.')}&type=success`);
     }
 
     if (action === 'aprobar_presupuesto') {

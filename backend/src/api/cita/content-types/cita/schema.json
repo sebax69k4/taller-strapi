@@ -1,0 +1,50 @@
+{
+    "kind": "collectionType",
+    "collectionName": "citas",
+    "info": {
+        "singularName": "cita",
+        "pluralName": "citas",
+        "displayName": "Cita",
+        "description": "Agendamiento de visitas al taller"
+    },
+    "options": {
+        "draftAndPublish": false
+    },
+    "pluginOptions": {},
+    "attributes": {
+        "fecha": {
+            "type": "date",
+            "required": true
+        },
+        "hora": {
+            "type": "time",
+            "required": true
+        },
+        "motivo": {
+            "type": "text",
+            "required": true
+        },
+        "estado": {
+            "type": "enumeration",
+            "enum": [
+                "pendiente",
+                "confirmada",
+                "cancelada",
+                "completada"
+            ],
+            "default": "pendiente"
+        },
+        "cliente": {
+            "type": "relation",
+            "relation": "manyToOne",
+            "target": "api::cliente.cliente",
+            "inversedBy": "citas"
+        },
+        "vehiculo": {
+            "type": "relation",
+            "relation": "manyToOne",
+            "target": "api::vehiculo.vehiculo",
+            "inversedBy": "citas"
+        }
+    }
+}

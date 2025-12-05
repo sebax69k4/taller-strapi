@@ -3,46 +3,23 @@ export const prerender = false;
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
 import Card from '../../components/ui/Card.astro';
 import Button from '../../components/ui/Button.astro';
+import Badge from '../../components/ui/Badge.astro';
 import { strapiGet, strapiPost, strapiPut } from '../../lib/strapi';
+import '../../styles/global.css';
 
-const userRole = Astro.cookies.get('user_role')?.value as 'recepcionista' | 'encargado' | 'mecanico' | undefined;
+const userRole = Astro.cookies.get('user_role')?.value;
 if (!userRole) {
   return Astro.redirect('/login');
 }
 
-// Define interfaces for type safety
-interface Cliente {
-  nombre: string;
-  apellido: string;
-  telefono: string;
-  email: string;
-}
-
-interface Vehiculo {
-  marca: string;
-  modelo: string;
-  ano: number;
-  patente: string;
-  cliente?: Cliente;
-}
-
+// --- Interfaces ---
 interface Repuesto {
+  id: number;
+  documentId: string;
   nombre: string;
   sku: string;
   precio: number;
   stock: number;
-}
-
-interface Mecanico {
-  nombre: string;
-  apellido: string;
-}
-
-interface Bitacora {
-  procedimientos: string;
-  fecha: string;
-  createdAt?: string;
-  mecanico?: Mecanico;
 }
 
 interface Orden {
@@ -52,115 +29,139 @@ interface Orden {
   estado: string;
   kilometraje: number;
   fecha_estimada: string;
-  fecha_ingreso?: string;
-  mecanico?: Mecanico;
-  vehiculo?: Vehiculo;
-  cliente?: Cliente;
+  createdAt: string;
+  updatedAt: string;
+  mecanico?: { nombre: string; apellido: string };
+  vehiculo?: {
+    marca: string;
+    modelo: string;
+    ano: number;
+    patente: string;
+    cliente?: {
+      nombre: string;
+      apellido: string;
+      telefono: string;
+      email: string;
+    };
+  };
   repuestos?: Repuesto[];
-  bitacoras?: Bitacora[];
+  bitacoras?: {
+    procedimientos: string;
+    fecha: string;
+    createdAt: string;
+    mecanico?: { nombre: string };
+  }[];
 }
 
 let order: Orden | null = null;
+let allParts: Repuesto[] = [];
 let error = '';
 let success = '';
 
-const url = new URL(Astro.request.url);
-const orderId = url.searchParams.get('id');
+const orderId = Astro.url.searchParams.get('id');
 
 if (!orderId) {
-  error = "No se ha especificado un ID de orden.";
+  error = "ID de orden no especificado.";
 } else {
   try {
-    // Handle POST requests for status updates or new log entries
+    // --- Handle POST Actions ---
     if (Astro.request.method === 'POST') {
       const formData = await Astro.request.formData();
       const action = formData.get('action');
 
+      // 1. Update Status
       if (action === 'updateStatus') {
         const newStatus = formData.get('status');
         
-        try {
-            // If finalizing, create invoice and update status
-            if (newStatus === 'finalizado') {
-                // 1. Get order details for invoice calculation
-                const orderDetails = await strapiGet(`/api/orden-de-trabajos/${orderId}?populate=repuestos&populate=presupuesto`);
-                const orderData = orderDetails.data;
-                
-                // 2. Calculate totals
-                const partsTotal = orderData.repuestos?.reduce((sum: number, r: any) => sum + (r.precio || 0), 0) || 0;
-                const laborCost = 75000; // Base labor cost
-                const subtotal = partsTotal + laborCost;
-                const iva = Math.round(subtotal * 0.19);
-                const total = subtotal + iva;
-                
-                // 3. Check if invoice already exists
-                const existingInvoice = await strapiGet(`/api/facturas?filters[orden_de_trabajo][documentId][$eq]=${orderId}`);
-                
-                if (!existingInvoice.data || existingInvoice.data.length === 0) {
-                    // 4. Create invoice
-                    const invoiceNumber = `FACT-${Date.now()}-${orderData.id}`;
-                    await strapiPost('/api/facturas', {
-                        numero_factura: invoiceNumber,
-                        fecha_emision: new Date().toISOString().split('T')[0],
-                        subtotal: subtotal,
-                        iva: iva,
-                        total: total,
-                        orden_de_trabajo: orderId,
-                        estado: 'pendiente'
-                    });
-                }
-                
-                // 5. Update order status to finalizado
-                await strapiPut(`/api/orden-de-trabajos/${orderId}`, {
-                    estado: 'finalizado'
-                });
-                
-                return Astro.redirect(`${Astro.url.pathname}?id=${orderId}&message=${encodeURIComponent('Orden finalizada y factura generada exitosamente.')}&type=success`);
-            } else {
-                await strapiPut(`/api/orden-de-trabajos/${orderId}`, {
-                    estado: newStatus
-                });
-                return Astro.redirect(`${Astro.url.pathname}?id=${orderId}&message=${encodeURIComponent('Estado actualizado correctamente.')}&type=success`);
-            }
-        } catch (err: any) {
-            console.error('Error updating status:', err);
-            return Astro.redirect(`${Astro.url.pathname}?id=${orderId}&message=${encodeURIComponent('Error al actualizar: ' + err.message)}&type=error`);
+        if (newStatus === 'finalizado') {
+             await strapiPut(`/api/orden-de-trabajos/${orderId}`, { estado: 'finalizado' });
+             return Astro.redirect(`/mecanico/checklist_entrega?orden=${orderId}`);
+        } else {
+            await strapiPut(`/api/orden-de-trabajos/${orderId}`, { estado: newStatus });
         }
+        success = 'Estado actualizado.';
       }
 
+      // 2. Add Bitacora Note
       if (action === 'addLog') {
-        const logNote = formData.get('comment');
-        const mechanicId = null; 
-
-        if (logNote) {
-          const orderResponse = await strapiGet(`/api/orden-de-trabajos/${orderId}`);
-          const orderNumericId = orderResponse.data?.id;
-          
-          await strapiPost('/api/bitacoras', {
-            procedimientos: logNote,
-            fecha: new Date().toISOString().split('T')[0],
-            orden_de_trabajo: orderNumericId,
-            mecanico: mechanicId,
-          });
-          success = 'Nota agregada a la bitácora.';
-        }
+        const note = formData.get('note');
+        const orderResponse = await strapiGet(`/api/orden-de-trabajos/${orderId}`);
+        await strapiPost('/api/bitacoras', {
+          procedimientos: note,
+          fecha: new Date().toISOString().split('T')[0],
+          orden_de_trabajo: orderResponse.data.id
+        });
+        success = 'Nota agregada.';
       }
-      return Astro.redirect(Astro.request.url);
+
+      // 2.1 Save Diagnosis
+      if (action === 'saveDiagnosis') {
+        const diagnostico = formData.get('diagnostico');
+        await strapiPut(`/api/orden-de-trabajos/${orderId}`, { diagnostico });
+        success = 'Diagnóstico guardado.';
+      }
+
+      // 3. Add Part
+      if (action === 'addPart') {
+        const partId = formData.get('partId');
+        const quantity = parseInt(formData.get('quantity')?.toString() || '1');
+        
+        const partRes = await strapiGet(`/api/repuestos/${partId}`);
+        const part = partRes.data;
+        
+        if (part && part.stock >= quantity) {
+            await strapiPut(`/api/repuestos/${partId}`, { stock: part.stock - quantity });
+            
+            const orderResponse = await strapiGet(`/api/orden-de-trabajos/${orderId}`);
+            await strapiPost('/api/bitacoras', {
+                procedimientos: `[REPUESTO] Se utilizó: ${part.nombre} x${quantity}`,
+                fecha: new Date().toISOString().split('T')[0],
+                orden_de_trabajo: orderResponse.data.id
+            });
+        } else {
+            error = 'Stock insuficiente.';
+        }
+        success = 'Repuesto registrado.';
+      }
+
+      // 4. Pausar Trabajo
+      if (action === 'pauseWork') {
+        const motivo = formData.get('motivo');
+        const detalles = formData.get('detalles');
+        const orderResponse = await strapiGet(`/api/orden-de-trabajos/${orderId}`);
+        
+        const motivoTextos: Record<string, string> = {
+            'esperando_repuesto': 'Esperando repuesto',
+            'esperando_cliente': 'Esperando respuesta del cliente',
+            'esperando_aprobacion': 'Esperando aprobación',
+            'falta_herramienta': 'Falta herramienta',
+            'fin_jornada': 'Fin de jornada',
+            'otro': 'Otro motivo'
+        };
+
+        await strapiPost('/api/bitacoras', {
+            procedimientos: `[PAUSA] ${motivoTextos[motivo as string] || motivo}`,
+            fecha: new Date().toISOString().split('T')[0],
+            orden_de_trabajo: orderResponse.data.id,
+            observaciones: detalles as string
+        });
+        success = 'Trabajo pausado registrado.';
+      }
+      
+      if (!error) return Astro.redirect(Astro.request.url);
     }
 
-    // Fetch all order data
-    const response = await strapiGet(`/api/orden-de-trabajos/${orderId}?populate[vehiculo][populate][0]=cliente&populate[mecanico]=true&populate[repuestos]=true&populate[bitacoras][populate][0]=mecanico`);
+    // --- Fetch Data ---
+    const [orderRes, partsRes] = await Promise.all([
+      strapiGet(`/api/orden-de-trabajos/${orderId}?populate[vehiculo][populate][0]=cliente&populate[mecanico]=true&populate[repuestos]=true&populate[bitacoras][populate][0]=mecanico&populate[bitacoras][sort]=createdAt:desc`),
+      strapiGet('/api/repuestos?sort=nombre:asc&pagination[limit]=100')
+    ]);
 
-    if (!response.data) {
-      throw new Error('No se pudo cargar la orden de trabajo.');
+    order = orderRes.data;
+    if (order?.vehiculo?.cliente) {
+        order.vehiculo.cliente = order.vehiculo.cliente; 
     }
-
-    const fetchedOrder: Orden = response.data;
-    
-    if (fetchedOrder.vehiculo?.cliente) {
-        fetchedOrder.cliente = fetchedOrder.vehiculo.cliente;
-    }
-    order = fetchedOrder;
+    allParts = partsRes.data || [];
 
   } catch (e: any) {
     console.error(e);
@@ -168,232 +169,521 @@ if (!orderId) {
   }
 }
 
-// Cost calculation
-const partsSubtotal = order?.repuestos?.reduce((sum: number, item: Repuesto) => sum + (item.precio || 0), 0) || 0;
-const laborCost = 75000;
-const taxRate = 0.19;
-const tax = (partsSubtotal + laborCost) * taxRate;
-const totalEstimated = partsSubtotal + laborCost + tax;
+// Helpers
+const formatDate = (date: string) => new Date(date).toLocaleDateString('es-CL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
-const formatCurrency = (amount: number) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(amount);
+const steps = ['ingresado', 'en_diagnostico', 'en_reparacion', 'finalizado'];
+const currentStepIndex = order ? steps.indexOf(order.estado) : 0;
 
-const urlMessage = url.searchParams.get('message');
-const urlMessageType = url.searchParams.get('type');
-
-if (urlMessage) {
-    if (urlMessageType === 'error') error = urlMessage;
-    else success = urlMessage;
-}
+// Motivos de pausa
+const motivosPausa = [
+  { value: 'esperando_repuesto', label: 'Esperando repuesto', icon: 'inventory_2' },
+  { value: 'esperando_cliente', label: 'Esperando cliente', icon: 'person' },
+  { value: 'esperando_aprobacion', label: 'Esperando aprobación', icon: 'approval' },
+  { value: 'falta_herramienta', label: 'Falta herramienta', icon: 'handyman' },
+  { value: 'fin_jornada', label: 'Fin de jornada', icon: 'schedule' },
+  { value: 'otro', label: 'Otro', icon: 'more_horiz' },
+];
 ---
 
-<DashboardLayout title="Detalle de Orden" role={userRole} currentPath={Astro.url.pathname}>
-    {error && <div class="p-4 text-sm text-red-700 bg-red-50 rounded-lg border border-red-100 flex items-center gap-2" role="alert"><span class="material-symbols-outlined text-lg">error</span><span>{error}</span></div>}
-    {success && <div class="p-4 text-sm text-green-700 bg-green-50 rounded-lg border border-green-100 flex items-center gap-2" role="alert"><span class="material-symbols-outlined text-lg">check_circle</span><span>{success}</span></div>}
+<DashboardLayout title={`Orden #${order?.id || ''}`} role="mecanico" currentPath="/mecanico/dash_mec">
+  {error && (
+    <div class="p-4 mb-4 bg-red-100 border border-red-200 text-red-700 rounded-lg flex items-center gap-2">
+      <span class="material-symbols-outlined">error</span>
+      {error}
+    </div>
+  )}
+  
+  {success && (
+    <div class="p-4 mb-4 bg-green-100 border border-green-200 text-green-700 rounded-lg flex items-center gap-2">
+      <span class="material-symbols-outlined">check_circle</span>
+      {success}
+    </div>
+  )}
 
-    {order ? (
-        <>
-            <div class="flex flex-wrap items-start justify-between gap-4">
-                <div class="flex min-w-72 flex-col gap-1">
-                    <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Orden: OT-{order.id}</h1>
-                    <p class="text-gray-500 dark:text-gray-400 text-base">
-                        Asignado a: <span class="font-medium text-gray-900 dark:text-white">{order.mecanico?.nombre || 'No asignado'}</span>
-                    </p>
-                </div>
-                <div class="flex items-center gap-3 flex-wrap">
-                    <div class="flex items-center gap-3">
-                        {/* Status Badge */}
-                        <div class={`px-3 py-1 rounded-full text-sm font-bold border ${
-                            order.estado === 'ingresado' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                            order.estado === 'en_diagnostico' ? 'bg-purple-50 text-purple-700 border-purple-200' :
-                            order.estado === 'en_reparacion' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' :
-                            order.estado === 'finalizado' ? 'bg-green-50 text-green-700 border-green-200' :
-                            'bg-gray-50 text-gray-700 border-gray-200'
+  {order ? (
+    <div class="max-w-7xl mx-auto" x-data="{ activeTab: 'general', showPartModal: false, showPauseModal: false }">
+      
+      <!-- Header & Actions -->
+      <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 mb-8">
+        <div>
+          <div class="flex items-center gap-3 mb-2">
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">OT-{order.id}</h1>
+            <Badge variant={
+              order.estado === 'ingresado' ? 'default' :
+              order.estado === 'en_diagnostico' ? 'warning' :
+              order.estado === 'en_reparacion' ? 'info' : 'success'
+            }>
+              {order.estado.replace('_', ' ').toUpperCase()}
+            </Badge>
+          </div>
+          <p class="text-gray-500 dark:text-gray-400">
+            {order.vehiculo?.marca} {order.vehiculo?.modelo} • {order.vehiculo?.patente}
+          </p>
+        </div>
+
+        <!-- Timer & Actions -->
+        <div class="flex items-center gap-4">
+            <!-- Timer Component -->
+            <div 
+                x-data={`timer('${order.updatedAt}', '${order.estado}')`} 
+                x-init="init()"
+                class="hidden md:flex items-center gap-2 bg-gray-900 text-white px-4 py-2 rounded-lg font-mono shadow-lg"
+                :class="isRunning ? 'animate-pulse border border-green-500' : 'opacity-75'"
+            >
+                <span class="material-symbols-outlined text-sm" :class="isRunning ? 'text-green-400' : 'text-gray-400'">timer</span>
+                <span x-text="formattedTime">00:00:00</span>
+            </div>
+
+            <div class="flex gap-2">
+                <form method="POST" class="flex gap-2">
+                    <input type="hidden" name="action" value="updateStatus" />
+                    
+                    {order.estado === 'ingresado' && (
+                        <button name="status" value="en_diagnostico" class="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium flex items-center gap-2 shadow-lg shadow-purple-600/20 transition-all">
+                            <span class="material-symbols-outlined">build</span>
+                            Iniciar
+                        </button>
+                    )}
+                    {order.estado === 'en_diagnostico' && (
+                        <button name="status" value="en_reparacion" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium flex items-center gap-2 shadow-lg shadow-blue-600/20 transition-all">
+                            <span class="material-symbols-outlined">handyman</span>
+                            Reparar
+                        </button>
+                    )}
+                    {order.estado === 'en_reparacion' && (
+                        <button name="status" value="finalizado" class="px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium flex items-center gap-2 shadow-lg shadow-green-600/20 transition-all" onclick="return confirm('¿Finalizar trabajo e ir al checklist?')">
+                            <span class="material-symbols-outlined">task_alt</span>
+                            Finalizar
+                        </button>
+                    )}
+                </form>
+
+                {(order.estado === 'en_diagnostico' || order.estado === 'en_reparacion') && (
+                    <button @click="showPauseModal = true" class="px-4 py-2.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded-lg hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-colors flex items-center gap-2">
+                        <span class="material-symbols-outlined">pause_circle</span>
+                        Pausar
+                    </button>
+                )}
+                
+                <a href={`/mecanico/checklist_entrega?orden=${order.documentId}`} class="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-2">
+                    <span class="material-symbols-outlined">checklist</span>
+                </a>
+            </div>
+        </div>
+      </div>
+
+      <!-- Stepper Visual -->
+      <div class="mb-8 overflow-x-auto">
+        <div class="flex items-center min-w-[600px]">
+            {steps.map((step, index) => (
+                <div class="flex-1 relative">
+                    <div class="flex items-center gap-2">
+                        <div class={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                            index <= currentStepIndex ? 'bg-primary-600 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-500'
                         }`}>
-                            {order.estado.replace('_', ' ').toUpperCase()}
+                            {index + 1}
                         </div>
+                        <span class={`text-sm font-medium ${
+                            index <= currentStepIndex ? 'text-primary-600 dark:text-primary-400' : 'text-gray-500'
+                        }`}>
+                            {step.replace('_', ' ').toUpperCase()}
+                        </span>
+                    </div>
+                    {index < steps.length - 1 && (
+                        <div class={`absolute top-4 left-8 right-0 h-0.5 -translate-y-1/2 ${
+                            index < currentStepIndex ? 'bg-primary-600' : 'bg-gray-200 dark:bg-gray-700'
+                        }`}></div>
+                    )}
+                </div>
+            ))}
+        </div>
+      </div>
 
-                        {/* Guided Workflow Buttons */}
+      <!-- Main Layout -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        <!-- Left Column: Info & Tabs -->
+        <div class="lg:col-span-2 flex flex-col gap-6">
+            
+            <!-- Tabs Navigation -->
+            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-1 flex gap-1">
+                <button 
+                    @click="activeTab = 'general'"
+                    :class="activeTab === 'general' ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'"
+                    class="flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2"
+                >
+                    <span class="material-symbols-outlined text-lg">info</span>
+                    General
+                </button>
+                <button 
+                    @click="activeTab = 'bitacora'"
+                    :class="activeTab === 'bitacora' ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'"
+                    class="flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2"
+                >
+                    <span class="material-symbols-outlined text-lg">history_edu</span>
+                    Bitácora
+                </button>
+                <button 
+                    @click="activeTab = 'repuestos'"
+                    :class="activeTab === 'repuestos' ? 'bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'"
+                    class="flex-1 py-2.5 px-4 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2"
+                >
+                    <span class="material-symbols-outlined text-lg">inventory_2</span>
+                    Repuestos
+                </button>
+            </div>
+
+            <!-- Tab Content: General -->
+            <div x-show="activeTab === 'general'" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-2" x-transition:enter-end="opacity-100 translate-y-0">
+                <Card>
+                    <!-- Priority Indicator -->
+                    <div class="flex items-center justify-between mb-6">
+                        <h3 class="text-lg font-bold text-gray-900 dark:text-white">Información del Trabajo</h3>
+                        <div class={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium ${
+                            order.prioridad === 'urgente' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' :
+                            order.prioridad === 'alta' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' :
+                            order.prioridad === 'normal' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
+                            'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                        }`}>
+                            <span class={`w-2 h-2 rounded-full ${
+                                order.prioridad === 'urgente' ? 'bg-red-500 animate-pulse' :
+                                order.prioridad === 'alta' ? 'bg-orange-500' :
+                                order.prioridad === 'normal' ? 'bg-blue-500' : 'bg-gray-400'
+                            }`}></span>
+                            Prioridad: {order.prioridad?.toUpperCase() || 'NORMAL'}
+                        </div>
+                    </div>
+
+                    <!-- Description -->
+                    <div class="mb-6">
+                        <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Descripción del Cliente</h4>
+                        <div class="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-100 dark:border-gray-700">
+                            <p class="text-gray-700 dark:text-gray-300 leading-relaxed">
+                                {order.descripcion || 'Sin descripción'}
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Diagnosis - Editable -->
+                    <div class="mb-6" x-data="{ editing: false, diagnosis: `${order.diagnostico || ''}` }">
+                        <div class="flex items-center justify-between mb-2">
+                            <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Diagnóstico del Mecánico</h4>
+                            <button 
+                                @click="editing = !editing" 
+                                class="text-sm text-primary-600 hover:text-primary-700 font-medium flex items-center gap-1"
+                                x-show="!editing"
+                            >
+                                <span class="material-symbols-outlined text-sm">edit</span>
+                                Editar
+                            </button>
+                        </div>
+                        
+                        <!-- View Mode -->
+                        <div x-show="!editing" class="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                            <p class="text-gray-700 dark:text-gray-300 leading-relaxed" x-text="diagnosis || 'Sin diagnóstico aún. Haz clic en Editar para agregar.'"></p>
+                        </div>
+                        
+                        <!-- Edit Mode -->
+                        <form method="POST" x-show="editing" x-cloak class="space-y-3">
+                            <input type="hidden" name="action" value="saveDiagnosis" />
+                            <textarea 
+                                name="diagnostico"
+                                x-model="diagnosis"
+                                rows="4" 
+                                class="w-full rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 focus:ring-primary-500 focus:border-primary-500"
+                                placeholder="Describe el diagnóstico técnico..."
+                            ></textarea>
+                            <div class="flex justify-end gap-2">
+                                <button type="button" @click="editing = false" class="px-4 py-2 text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                                    Cancelar
+                                </button>
+                                <button type="submit" class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center gap-2">
+                                    <span class="material-symbols-outlined text-sm">save</span>
+                                    Guardar Diagnóstico
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Vehicle Data -->
+                    <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Datos del Vehículo</h4>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div class="p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+                            <p class="text-xs text-gray-500 uppercase">Marca/Modelo</p>
+                            <p class="font-medium text-gray-900 dark:text-white">{order.vehiculo?.marca} {order.vehiculo?.modelo}</p>
+                        </div>
+                        <div class="p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+                            <p class="text-xs text-gray-500 uppercase">Año</p>
+                            <p class="font-medium text-gray-900 dark:text-white">{order.vehiculo?.ano}</p>
+                        </div>
+                        <div class="p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+                            <p class="text-xs text-gray-500 uppercase">Patente</p>
+                            <p class="font-medium text-gray-900 dark:text-white font-mono">{order.vehiculo?.patente}</p>
+                        </div>
+                        <div class="p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+                            <p class="text-xs text-gray-500 uppercase">Cliente</p>
+                            <p class="font-medium text-gray-900 dark:text-white">{order.vehiculo?.cliente?.nombre} {order.vehiculo?.cliente?.apellido}</p>
+                        </div>
+                    </div>
+                </Card>
+            </div>
+
+            <!-- Tab Content: Bitácora -->
+            <div x-show="activeTab === 'bitacora'" x-cloak>
+                <Card>
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-lg font-bold text-gray-900 dark:text-white">Registro de Actividad</h3>
+                    </div>
+
+                    <div class="space-y-6 mb-8">
+                        {order.bitacoras && order.bitacoras.length > 0 ? (
+                            <div class="relative border-l-2 border-gray-200 dark:border-gray-700 ml-3 space-y-8">
+                                {order.bitacoras.map(log => (
+                                    <div class="relative pl-8">
+                                        <div class={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 ${
+                                            log.procedimientos.includes('[PAUSA]') ? 'bg-amber-100 border-amber-500' : 
+                                            log.procedimientos.includes('[REPUESTO]') ? 'bg-blue-100 border-blue-500' :
+                                            'bg-white dark:bg-gray-800 border-primary-500'
+                                        }`}></div>
+                                        <p class="text-sm text-gray-500 dark:text-gray-400 mb-1">{formatDate(log.createdAt)}</p>
+                                        <p class={`font-medium p-3 rounded-lg ${
+                                            log.procedimientos.includes('[PAUSA]') ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200' : 
+                                            'bg-gray-50 dark:bg-gray-700/50 text-gray-900 dark:text-white'
+                                        }`}>
+                                            {log.procedimientos}
+                                        </p>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <p class="text-center text-gray-500 py-4">No hay registros aún.</p>
+                        )}
+                    </div>
+
+                    <form method="POST" class="border-t border-gray-100 dark:border-gray-700 pt-6">
+                        <input type="hidden" name="action" value="addLog" />
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Agregar Nota</label>
+                        <div class="flex gap-2">
+                            <textarea name="note" rows="2" class="flex-1 rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 focus:ring-primary-500 focus:border-primary-500" placeholder="Describe el avance..."></textarea>
+                            <button type="submit" class="px-4 bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center justify-center">
+                                <span class="material-symbols-outlined">send</span>
+                            </button>
+                        </div>
+                    </form>
+                </Card>
+            </div>
+
+            <!-- Tab Content: Repuestos -->
+            <div x-show="activeTab === 'repuestos'" x-cloak x-data="partsManager()">
+                <Card>
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-lg font-bold text-gray-900 dark:text-white">Repuestos Utilizados</h3>
+                        <button @click="showAddPart = !showAddPart" class="text-sm text-primary-600 font-medium hover:underline flex items-center gap-1">
+                            <span class="material-symbols-outlined text-lg">add</span>
+                            Agregar
+                        </button>
+                    </div>
+
+                    <!-- Add Part Form (Collapsible) -->
+                    <div x-show="showAddPart" x-collapse class="mb-6 bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl border border-gray-200 dark:border-gray-700">
                         <form method="POST">
-                            <input type="hidden" name="action" value="updateStatus" />
-                            
-                            {order.estado === 'ingresado' && (
-                                <button name="status" value="en_diagnostico" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2 shadow-sm">
-                                    <span class="material-symbols-outlined text-sm">build</span>
-                                    Iniciar Diagnóstico
-                                </button>
-                            )}
-                            {order.estado === 'en_diagnostico' && (
-                                <button name="status" value="en_reparacion" class="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors flex items-center gap-2 shadow-sm">
-                                    <span class="material-symbols-outlined text-sm">handyman</span>
-                                    Iniciar Reparación
-                                </button>
-                            )}
-                            {order.estado === 'en_reparacion' && (
-                                <button name="status" value="finalizado" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 shadow-sm" onclick="return confirm('¿Está seguro que desea finalizar el trabajo? Esto notificará al encargado.')">
-                                    <span class="material-symbols-outlined text-sm">check_circle</span>
-                                    Finalizar Trabajo
-                                </button>
-                            )}
-                        </form>
+                            <input type="hidden" name="action" value="addPart" />
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-500 uppercase mb-1">Buscar Repuesto</label>
+                                    <input 
+                                        type="text" 
+                                        x-model="search" 
+                                        placeholder="Escribe para buscar..." 
+                                        class="w-full rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm"
+                                    >
+                                    <!-- Results Dropdown -->
+                                    <div x-show="search.length > 1" class="mt-2 max-h-40 overflow-y-auto bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg">
+                                        <template x-for="part in filteredParts" :key="part.id">
+                                            <div @click="selectPart(part)" class="p-2 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer text-sm flex justify-between">
+                                                <span x-text="part.nombre"></span>
+                                                <span class="text-gray-500" x-text="'Stock: ' + part.stock"></span>
+                                            </div>
+                                        </template>
+                                        <div x-show="filteredParts.length === 0" class="p-2 text-sm text-gray-500">No encontrado</div>
+                                    </div>
+                                </div>
 
-                        {/* Manual Override (Restricted) */}
-                        <form method="POST" class="flex items-center gap-2">
-                            <input type="hidden" name="action" value="updateStatus" />
-                            <select name="status" class="form-select h-10 w-32 rounded-lg bg-gray-50 dark:bg-gray-800 border-gray-300 dark:border-gray-700 text-gray-500 text-xs focus:ring-primary-500 focus:border-primary-500" onchange="if(confirm('¿Cambiar estado manualmente?')) this.form.submit()">
-                                <option value="" disabled selected>Cambiar...</option>
-                                <option value="ingresado">Ingresado</option>
-                                <option value="en_diagnostico">En Diagnóstico</option>
-                                <option value="en_reparacion">En Reparación</option>
-                                <option value="finalizado">Finalizado</option>
-                            </select>
+                                <div x-show="selectedPart" class="flex gap-4 items-end">
+                                    <div class="flex-1">
+                                        <label class="block text-xs font-medium text-gray-500 uppercase mb-1">Repuesto Seleccionado</label>
+                                        <div class="p-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium" x-text="selectedPart?.nombre"></div>
+                                        <input type="hidden" name="partId" :value="selectedPart?.documentId">
+                                    </div>
+                                    <div class="w-24">
+                                        <label class="block text-xs font-medium text-gray-500 uppercase mb-1">Cantidad</label>
+                                        <input type="number" name="quantity" value="1" min="1" class="w-full rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm">
+                                    </div>
+                                    <button type="submit" class="px-4 py-2 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700">
+                                        Registrar
+                                    </button>
+                                </div>
+                            </div>
                         </form>
+                    </div>
 
-                        <Button variant="outline" onclick="window.print()" icon="print">
-                            Imprimir
-                        </Button>
+                    <!-- Parts List -->
+                    <div class="space-y-3">
+                        {order.bitacoras?.filter(b => b.procedimientos.includes('[REPUESTO]')).map(log => (
+                            <div class="flex items-center justify-between p-3 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg shadow-sm">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-amber-600">
+                                        <span class="material-symbols-outlined text-sm">inventory_2</span>
+                                    </div>
+                                    <div>
+                                        <p class="text-sm font-medium text-gray-900 dark:text-white">{log.procedimientos.replace('[REPUESTO] Se utilizó: ', '')}</p>
+                                        <p class="text-xs text-gray-500">{formatDate(log.createdAt)}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                        {(!order.bitacoras?.some(b => b.procedimientos.includes('[REPUESTO]'))) && (
+                            <p class="text-center text-gray-500 py-4 text-sm">No se han registrado repuestos.</p>
+                        )}
+                    </div>
+                </Card>
+            </div>
+
+        </div>
+
+        <!-- Right Column: Summary -->
+        <div class="flex flex-col gap-6">
+            <Card>
+                <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4">Resumen</h3>
+                <div class="space-y-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center text-blue-600">
+                            <span class="material-symbols-outlined">person</span>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500">Cliente</p>
+                            <p class="font-medium text-gray-900 dark:text-white">{order.vehiculo?.cliente?.nombre || 'N/A'}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-full bg-purple-50 dark:bg-purple-900/20 flex items-center justify-center text-purple-600">
+                            <span class="material-symbols-outlined">directions_car</span>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500">Vehículo</p>
+                            <p class="font-medium text-gray-900 dark:text-white">{order.vehiculo?.marca}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-full bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center text-amber-600">
+                            <span class="material-symbols-outlined">calendar_today</span>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500">Fecha Ingreso</p>
+                            <p class="font-medium text-gray-900 dark:text-white">{new Date(order.createdAt).toLocaleDateString()}</p>
+                        </div>
                     </div>
                 </div>
-            </div>
-            
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-6">
-                <div class="lg:col-span-1 flex flex-col gap-6">
-                    <Card noPadding>
-                        <h3 class="text-gray-900 dark:text-white text-lg font-bold px-5 py-4 border-b border-gray-100 dark:border-gray-800">Información General</h3>
-                        <div class="p-5 grid grid-cols-1 gap-y-4">
-                            <div class="grid grid-cols-2 gap-4">
-                                <div class="flex flex-col gap-1">
-                                    <p class="text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider font-semibold">Cliente</p>
-                                    <p class="text-gray-900 dark:text-white font-medium">{order.cliente?.nombre || 'N/A'}</p>
-                                </div>
-                                <div class="flex flex-col gap-1">
-                                    <p class="text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider font-semibold">Teléfono</p>
-                                    <p class="text-gray-900 dark:text-white font-medium">{order.cliente?.telefono || 'N/A'}</p>
-                                </div>
-                            </div>
-                            
-                            <div class="grid grid-cols-2 gap-4">
-                                <div class="flex flex-col gap-1">
-                                    <p class="text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider font-semibold">Vehículo</p>
-                                    <p class="text-gray-900 dark:text-white font-medium">{`${order.vehiculo?.marca || ''} ${order.vehiculo?.modelo || ''}`}</p>
-                                </div>
-                                <div class="flex flex-col gap-1">
-                                    <p class="text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider font-semibold">Año</p>
-                                    <p class="text-gray-900 dark:text-white font-medium">{order.vehiculo?.ano || 'N/A'}</p>
-                                </div>
-                            </div>
-
-                            <div class="grid grid-cols-2 gap-4">
-                                <div class="flex flex-col gap-1">
-                                    <p class="text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider font-semibold">Matrícula</p>
-                                    <p class="text-gray-900 dark:text-white font-medium">{order.vehiculo?.patente || 'N/A'}</p>
-                                </div>
-                                <div class="flex flex-col gap-1">
-                                    <p class="text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider font-semibold">Kilometraje</p>
-                                    <p class="text-gray-900 dark:text-white font-medium">{order.kilometraje ? `${order.kilometraje} km` : 'N/A'}</p>
-                                </div>
-                            </div>
-                            
-                            <div class="flex flex-col gap-1 pt-2 border-t border-gray-100 dark:border-gray-800">
-                                <p class="text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider font-semibold">Email</p>
-                                <p class="text-gray-900 dark:text-white font-medium truncate">{order.cliente?.email || 'N/A'}</p>
-                            </div>
-                            
-                            <div class="flex flex-col gap-1">
-                                <p class="text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider font-semibold">Fecha Entrega</p>
-                                <p class="text-gray-900 dark:text-white font-medium">{order.fecha_estimada ? new Date(order.fecha_estimada).toLocaleDateString() : 'N/A'}</p>
-                            </div>
-                        </div>
-                    </Card>
-                    
-                    <Card noPadding>
-                        <h3 class="text-gray-900 dark:text-white text-lg font-bold px-5 py-4 border-b border-gray-100 dark:border-gray-800">Descripción del Problema</h3>
-                        <p class="p-5 text-gray-600 dark:text-gray-300 text-sm leading-relaxed">{order.descripcion || 'No hay descripción.'}</p>
-                    </Card>
-                </div>
                 
-                <div class="lg:col-span-2 flex flex-col gap-6">
-                    <Card noPadding>
-                        <div class="border-b border-gray-200 dark:border-gray-700">
-                            <nav aria-label="Tabs" class="-mb-px flex gap-6 px-5">
-                                <a aria-current="page" class="shrink-0 border-b-2 border-primary-600 px-1 py-4 text-sm font-medium text-primary-600" href="#">Bitácora</a>
-                                <a class="shrink-0 border-b-2 border-transparent px-1 py-4 text-sm font-medium text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:border-gray-500 dark:hover:text-gray-200" href={`/mecanico/bitacora_repuestos?id=${orderId}`}>Repuestos</a>
-                            </nav>
-                        </div>
-                        <div class="p-5">
-                            <div class="flow-root">
-                                <ul class="-mb-8" role="list">
-                                    {order.bitacoras && order.bitacoras.length > 0 ? (
-                                        order.bitacoras.map((log: Bitacora, index: number) => (
-                                            <li>
-                                                <div class="relative pb-8">
-                                                    {order.bitacoras && index !== order.bitacoras.length - 1 && <span aria-hidden="true" class="absolute left-4 top-4 -ml-px h-full w-0.5 bg-gray-200 dark:bg-gray-700"></span>}
-                                                    <div class="relative flex space-x-3">
-                                                        <div>
-                                                            <span class="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center ring-8 ring-white dark:ring-gray-800">
-                                                                <span class="material-symbols-outlined text-base text-blue-600 dark:text-blue-400">build</span>
-                                                            </span>
-                                                        </div>
-                                                        <div class="flex min-w-0 flex-1 justify-between space-x-4 pt-1.5">
-                                                            <div>
-                                                                <p class="text-sm text-gray-600 dark:text-gray-300">{log.procedimientos} <span class="font-medium text-gray-900 dark:text-white"> - {log.mecanico?.nombre || 'Sistema'}</span></p>
-                                                            </div>
-                                                            <div class="whitespace-nowrap text-right text-sm text-gray-500 dark:text-gray-400">
-                                                                <time datetime={log.createdAt || ''}>{log.createdAt ? new Date(log.createdAt).toLocaleString() : 'N/A'}</time>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </li>
-                                        ))
-                                    ) : (
-                                        <div class="text-center py-6">
-                                            <p class="text-sm text-gray-500 dark:text-gray-400">No hay entradas en la bitácora.</p>
-                                        </div>
-                                    )}
-                                </ul>
-                            </div>
-                            <form method="POST" class="mt-8 flex gap-3">
-                                <input type="hidden" name="action" value="addLog" />
-                                <div class="flex-1">
-                                    <label class="sr-only" for="comment">Añadir nota</label>
-                                    <textarea class="block w-full rounded-lg border-gray-300 dark:border-gray-600 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm dark:bg-gray-700 dark:text-white" id="comment" name="comment" placeholder="Añadir una nota a la bitácora..." rows="3"></textarea>
-                                </div>
-                                <div class="mt-2 flex justify-end">
-                                    <Button type="submit">Agregar Nota</Button>
-                                </div>
-                            </form>
-                        </div>
-                    </Card>
-                    
-                    <Card noPadding>
-                        <h3 class="text-gray-900 dark:text-white text-lg font-bold px-5 py-4 border-b border-gray-100 dark:border-gray-800">Resumen de Costos</h3>
-                        <div class="p-5 space-y-3">
-                            <div class="flex justify-between text-sm text-gray-600 dark:text-gray-300">
-                                <span>Subtotal Repuestos</span>
-                                <span>{formatCurrency(partsSubtotal)}</span>
-                            </div>
-                            <div class="flex justify-between text-sm text-gray-600 dark:text-gray-300">
-                                <span>Mano de Obra (Estimado)</span>
-                                <span>{formatCurrency(laborCost)}</span>
-                            </div>
-                            <div class="flex justify-between text-sm text-gray-600 dark:text-gray-300">
-                                <span>IVA (19%)</span>
-                                <span>{formatCurrency(tax)}</span>
-                            </div>
-                            <div class="border-t border-gray-200 dark:border-gray-700 my-2"></div>
-                            <div class="flex justify-between text-base font-bold text-gray-900 dark:text-white">
-                                <span>Total Estimado</span>
-                                <span>{formatCurrency(totalEstimated)}</span>
-                            </div>
-                        </div>
-                    </Card>
+                <div class="mt-6 pt-6 border-t border-gray-100 dark:border-gray-700">
+                    <a href={`/mecanico/historial_vehiculo?patente=${order.vehiculo?.patente}`} class="w-full py-2 px-4 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center gap-2 transition-colors">
+                        <span class="material-symbols-outlined text-lg">history</span>
+                        Ver Historial Vehículo
+                    </a>
                 </div>
-            </div>
-        </>
-    ) : (
-        <div class="text-center py-20">
-            <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mb-4"></div>
-            <p class="text-lg text-gray-500">{error || "Cargando datos de la orden..."}</p>
+            </Card>
         </div>
-    )}
+
+      </div>
+
+      <!-- Pause Modal -->
+      <div x-show="showPauseModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" x-cloak>
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-md w-full p-6" @click.away="showPauseModal = false">
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-4">Pausar Trabajo</h3>
+            <form method="POST">
+                <input type="hidden" name="action" value="pauseWork" />
+                
+                <div class="space-y-3 mb-6">
+                    {motivosPausa.map(motivo => (
+                        <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer">
+                            <input type="radio" name="motivo" value={motivo.value} required class="text-amber-600 focus:ring-amber-500" />
+                            <span class="material-symbols-outlined text-gray-500">{motivo.icon}</span>
+                            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{motivo.label}</span>
+                        </label>
+                    ))}
+                </div>
+
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Detalles (Opcional)</label>
+                    <textarea name="detalles" rows="2" class="w-full rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 focus:ring-amber-500 focus:border-amber-500"></textarea>
+                </div>
+
+                <div class="flex justify-end gap-3">
+                    <button type="button" @click="showPauseModal = false" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700">Confirmar Pausa</button>
+                </div>
+            </form>
+        </div>
+      </div>
+
+    </div>
+  ) : (
+    <div class="text-center py-20">
+      <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mb-4"></div>
+      <p>Cargando orden...</p>
+    </div>
+  )}
 </DashboardLayout>
+
+<script define:vars={{ allParts }}>
+  document.addEventListener('alpine:init', () => {
+    Alpine.data('partsManager', () => ({
+      showAddPart: false,
+      search: '',
+      selectedPart: null,
+      allParts: allParts,
+      
+      get filteredParts() {
+        if (this.search.length < 2) return [];
+        return this.allParts.filter(p => 
+          p.nombre.toLowerCase().includes(this.search.toLowerCase()) || 
+          p.sku.toLowerCase().includes(this.search.toLowerCase())
+        ).slice(0, 5);
+      },
+      
+      selectPart(part) {
+        this.selectedPart = part;
+        this.search = '';
+      }
+    }));
+
+    Alpine.data('timer', (startTime, status) => ({
+        time: 0,
+        interval: null,
+        isRunning: false,
+        formattedTime: '00:00:00',
+
+        init() {
+            if (status === 'en_diagnostico' || status === 'en_reparacion') {
+                // Calculate elapsed time since last update (simplified)
+                // In a real app, we would track cumulative time. 
+                // Here we just show time since last status update as a demo.
+                const start = new Date(startTime).getTime();
+                this.isRunning = true;
+                
+                this.interval = setInterval(() => {
+                    const now = new Date().getTime();
+                    const diff = now - start;
+                    
+                    const hours = Math.floor(diff / (1000 * 60 * 60));
+                    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+                    
+                    this.formattedTime = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                }, 1000);
+            }
+        }
+    }));
+  });
+</script>

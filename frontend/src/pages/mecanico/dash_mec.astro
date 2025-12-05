@@ -2,158 +2,296 @@
 export const prerender = false;
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
 import Card from '../../components/ui/Card.astro';
-import Button from '../../components/ui/Button.astro';
-import { strapiGet, strapiPut } from '../../lib/strapi';
+import Badge from '../../components/ui/Badge.astro';
+import { strapiGet } from '../../lib/strapi';
+import '../../styles/global.css';
 
 const userRole = Astro.cookies.get('user_role')?.value;
 const mecanicoId = Astro.cookies.get('mecanico_id')?.value;
+const mechanicName = Astro.cookies.get('user_name')?.value || 'Mecánico';
 
-// Solo verificar que haya un rol de usuario
 if (!userRole) {
   return Astro.redirect('/login');
 }
 
-interface Order {
-  id: number;
-  documentId: string;
-  descripcion: string;
-  estado: string;
-  createdAt: string;
-  fecha_ingreso?: string;
-  vehiculo?: {
-    marca: string;
-    modelo: string;
-    imagen_url?: string;
-  }
-}
+// Fechas
+const today = new Date();
+const todayStr = today.toISOString().split('T')[0];
 
-let assignedOrders: Order[] = [];
-let filteredOrders: Order[] = [];
-let mechanicName = "Mecánico";
+let assignedOrders: any[] = [];
+let activeOrdersCount = 0;
+let completedTodayCount = 0;
+let totalCompletedCount = 0;
 let error = '';
 
-// Status mapping for colors and text
-const statusConfig: { [key: string]: { color: string; label: string; bg: string } } = {
-  'ingresado': { color: 'text-blue-700', bg: 'bg-blue-50', label: 'Ingresado' },
-  'en_diagnostico': { color: 'text-purple-700', bg: 'bg-purple-50', label: 'En Diagnóstico' },
-  'en_reparacion': { color: 'text-yellow-700', bg: 'bg-yellow-50', label: 'En Reparación' },
-  'finalizado': { color: 'text-green-700', bg: 'bg-green-50', label: 'Finalizado' },
-  'entregado': { color: 'text-gray-700', bg: 'bg-gray-50', label: 'Entregado' },
-};
+// Columnas del Kanban Personal
+let todoOrders: any[] = []; // Ingresado, En Diagnóstico
+let inProgressOrders: any[] = []; // En Reparación
+let doneOrders: any[] = []; // Finalizado
 
 try {
-  const userName = Astro.cookies.get('user_name')?.value;
-  mechanicName = userName || 'Mecánico';
-
-  // Si hay mecanico_id, filtrar por mecánico; si no, mostrar todas las órdenes (modo demo)
-  let endpoint = '/api/orden-de-trabajos?populate=vehiculo&sort=createdAt:desc';
+  let endpoint = '/api/orden-de-trabajos?populate=vehiculo&sort=updatedAt:desc&pagination[limit]=100';
+  
+  // Filtrar por mecánico si existe ID (si no, modo demo/admin)
   if (mecanicoId) {
-    endpoint = `/api/orden-de-trabajos?filters[mecanico][id][$eq]=${mecanicoId}&populate=vehiculo&sort=createdAt:desc`;
+    endpoint = `/api/orden-de-trabajos?filters[mecanico][id][$eq]=${mecanicoId}&populate=vehiculo&sort=updatedAt:desc&pagination[limit]=100`;
   }
   
-  console.log('🔍 Fetching orders from:', endpoint);
-  
-  // Intentar obtener órdenes
   const ordersRes = await strapiGet(endpoint);
-  console.log('📦 Response received, data length:', ordersRes?.data?.length);
   
   if (ordersRes && ordersRes.data) {
     assignedOrders = ordersRes.data;
+    
+    // Calcular KPIs
+    activeOrdersCount = assignedOrders.filter(o => !['entregado', 'facturado', 'finalizado'].includes(o.estado)).length;
+    
+    // Completadas hoy (estado finalizado/entregado/facturado y updated hoy)
+    completedTodayCount = assignedOrders.filter(o => 
+      ['finalizado', 'entregado', 'facturado'].includes(o.estado) && 
+      o.updatedAt.startsWith(todayStr)
+    ).length;
+    
+    totalCompletedCount = assignedOrders.filter(o => ['finalizado', 'entregado', 'facturado'].includes(o.estado)).length;
+
+    // Clasificar para Kanban
+    todoOrders = assignedOrders.filter(o => ['ingresado', 'en_diagnostico'].includes(o.estado));
+    inProgressOrders = assignedOrders.filter(o => ['en_reparacion'].includes(o.estado));
+    doneOrders = assignedOrders.filter(o => ['finalizado'].includes(o.estado));
   }
 } catch (e: any) {
   console.error('Error fetching orders:', e);
-  error = e.message || 'Error al cargar órdenes';
+  error = 'Error al cargar tus órdenes.';
 }
 
-// Obtener el filtro de estado desde la URL
-const statusFilter = Astro.url.searchParams.get('status') || 'Todas';
-
-// Filtrar órdenes según el estado seleccionado
-if (!statusFilter || statusFilter === 'Todas') {
-  filteredOrders = assignedOrders;
-} else {
-  filteredOrders = assignedOrders.filter((order: Order) => order.estado === statusFilter);
-}
+const getGreeting = () => {
+  const hour = new Date().getHours();
+  if (hour < 12) return '¡Buenos días';
+  if (hour < 18) return '¡Buenas tardes';
+  return '¡Buenas noches';
+};
 ---
 
 <DashboardLayout title="Dashboard Mecánico" role="mecanico" currentPath={Astro.url.pathname}>
-    <div class="flex flex-col gap-1">
-        <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Mis Órdenes de Trabajo</h1>
-        <p class="text-gray-500 dark:text-gray-400">Hola {mechanicName}, aquí tienes un resumen de tus órdenes asignadas.</p>
+  <div class="max-w-7xl mx-auto">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+      <div>
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">
+          {getGreeting()}, {mechanicName}
+        </h1>
+        <p class="text-gray-500 dark:text-gray-400 mt-1">
+          Aquí tienes el resumen de tu trabajo hoy.
+        </p>
+      </div>
+      <div class="flex gap-3">
+        <a href="/mecanico/solicitar_repuesto" class="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-2">
+          <span class="material-symbols-outlined">add_shopping_cart</span>
+          Solicitar Repuesto
+        </a>
+        <a href="/mecanico/historial_vehiculo" class="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-2">
+          <span class="material-symbols-outlined">history</span>
+          Historial Vehículo
+        </a>
+      </div>
     </div>
 
     {error && (
-        <div class="p-4 text-sm text-red-700 bg-red-50 rounded-lg border border-red-100 flex items-center gap-2" role="alert">
-            <span class="material-symbols-outlined text-lg">error</span>
-            <span>{error}</span>
-        </div>
+      <div class="p-4 mb-6 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg text-red-800 dark:text-red-200 flex items-center gap-2">
+        <span class="material-symbols-outlined">error</span>
+        <p>{error}</p>
+      </div>
     )}
 
-    <div class="flex gap-2 overflow-x-auto pb-2">
-        <a href="/mecanico/dash_mec?status=Todas" 
-           class:list={[
-               "flex items-center justify-center px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap",
-               !statusFilter || statusFilter === 'Todas' 
-                   ? "bg-primary-600 text-white shadow-sm" 
-                   : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
-           ]}>
-           Todas
-        </a>
-        {Object.keys(statusConfig).filter(s => s !== 'entregado').map(status => (
-            <a href={`/mecanico/dash_mec?status=${status}`} 
-               class:list={[
-                   "flex items-center justify-center px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap",
-                   statusFilter === status 
-                       ? "bg-primary-600 text-white shadow-sm" 
-                       : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700"
-               ]}>
-               {statusConfig[status].label}
-            </a>
-        ))}
-    </div>
-
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredOrders.length > 0 ? (
-            filteredOrders.map((order: Order) => {
-                const statusInfo = statusConfig[order.estado] || { color: 'text-gray-700', bg: 'bg-gray-50', label: order.estado };
-                const vehicleName = order.vehiculo ? `${order.vehiculo.marca} ${order.vehiculo.modelo}` : 'Vehículo no especificado';
-                const imageUrl = order.vehiculo?.imagen_url || 'https://cdn.usegalileo.ai/stability/64938e55-2324-4692-a43a-99badb3a964a.png';
-
-                return (
-                    <Card noPadding class="flex flex-col h-full group hover:shadow-lg transition-all duration-300">
-                        <div class="relative h-48 overflow-hidden">
-                            <div class="absolute inset-0 bg-center bg-cover transition-transform duration-500 group-hover:scale-105" style={`background-image: url("${imageUrl}");`}></div>
-                            <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
-                            <div class="absolute bottom-4 left-4 right-4">
-                                <span class:list={["inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-white/90 backdrop-blur-sm shadow-sm", statusInfo.color]}>
-                                    {statusInfo.label}
-                                </span>
-                            </div>
-                        </div>
-                        <div class="p-5 flex flex-col flex-1 gap-4">
-                            <div>
-                                <h3 class="text-lg font-bold text-gray-900 dark:text-white leading-tight">OT-{order.id} - {vehicleName}</h3>
-                                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">{order.descripcion || 'Sin descripción'}</p>
-                            </div>
-                            <div class="mt-auto pt-4 border-t border-gray-100 dark:border-gray-700">
-                                <a href={`/mecanico/detalle_orden_trabajo?id=${order.documentId}`} class="w-full inline-flex items-center justify-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium">
-                                    <span class="material-symbols-outlined text-lg">visibility</span>
-                                    Ver Detalle
-                                </a>
-                            </div>
-                        </div>
-                    </Card>
-                );
-            })
-        ) : (
-            <div class="col-span-full flex flex-col items-center justify-center py-12 text-center">
-                <div class="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
-                    <span class="material-symbols-outlined text-3xl text-gray-400">assignment_late</span>
-                </div>
-                <h3 class="text-lg font-medium text-gray-900 dark:text-white">No hay órdenes</h3>
-                <p class="text-gray-500 dark:text-gray-400 max-w-sm mt-1">No tienes órdenes de trabajo asignadas con este filtro.</p>
-                <a href="/mecanico/dash_mec?status=Todas" class="mt-4 text-primary-600 font-medium hover:underline">Ver todas las órdenes</a>
+    <!-- KPIs -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+      <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
+        <div class="absolute right-0 top-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10 blur-2xl"></div>
+        <div class="relative z-10">
+          <div class="flex items-center gap-3 mb-2">
+            <div class="p-2 bg-white/20 rounded-lg">
+              <span class="material-symbols-outlined text-xl">build</span>
             </div>
-        )}
+            <span class="text-blue-100 font-medium">En Progreso</span>
+          </div>
+          <p class="text-4xl font-bold">{activeOrdersCount}</p>
+          <p class="text-blue-100 text-sm mt-1">Órdenes activas</p>
+        </div>
+      </div>
+
+      <div class="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
+        <div class="absolute right-0 top-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10 blur-2xl"></div>
+        <div class="relative z-10">
+          <div class="flex items-center gap-3 mb-2">
+            <div class="p-2 bg-white/20 rounded-lg">
+              <span class="material-symbols-outlined text-xl">check_circle</span>
+            </div>
+            <span class="text-green-100 font-medium">Finalizadas Hoy</span>
+          </div>
+          <p class="text-4xl font-bold">{completedTodayCount}</p>
+          <p class="text-green-100 text-sm mt-1">Buen trabajo</p>
+        </div>
+      </div>
+
+      <div class="bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
+        <div class="absolute right-0 top-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10 blur-2xl"></div>
+        <div class="relative z-10">
+          <div class="flex items-center gap-3 mb-2">
+            <div class="p-2 bg-white/20 rounded-lg">
+              <span class="material-symbols-outlined text-xl">emoji_events</span>
+            </div>
+            <span class="text-purple-100 font-medium">Total Histórico</span>
+          </div>
+          <p class="text-4xl font-bold">{totalCompletedCount}</p>
+          <p class="text-purple-100 text-sm mt-1">Órdenes completadas</p>
+        </div>
+      </div>
     </div>
+
+    <!-- Kanban Personal -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      
+      <!-- Columna: Por Hacer -->
+      <div class="flex flex-col gap-4">
+        <div class="flex items-center justify-between px-1">
+          <h2 class="font-bold text-gray-700 dark:text-gray-200 flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-gray-400"></span>
+            Por Hacer
+            <span class="bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-0.5 rounded-full text-xs">{todoOrders.length}</span>
+          </h2>
+        </div>
+        
+        <div class="flex flex-col gap-3 min-h-[200px]">
+          {todoOrders.length > 0 ? (
+            todoOrders.map(order => (
+              <a href={`/mecanico/detalle_orden_trabajo?id=${order.documentId}`} class="block group">
+                <Card noPadding class="hover:shadow-md transition-shadow border-l-4 border-l-gray-400">
+                  <div class="p-4">
+                    <div class="flex justify-between items-start mb-2">
+                      <span class="font-bold text-gray-900 dark:text-white">OT-{order.id}</span>
+                      <Badge variant={order.estado === 'en_diagnostico' ? 'warning' : 'default'}>
+                        {order.estado === 'en_diagnostico' ? 'Diagnóstico' : 'Ingresado'}
+                      </Badge>
+                    </div>
+                    <p class="text-sm font-medium text-gray-800 dark:text-gray-200 mb-1">
+                      {order.vehiculo?.marca} {order.vehiculo?.modelo}
+                    </p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mb-3">
+                      {order.descripcion}
+                    </p>
+                    <div class="flex items-center justify-between text-xs text-gray-400">
+                      <span class="flex items-center gap-1">
+                        <span class="material-symbols-outlined text-sm">calendar_today</span>
+                        {new Date(order.createdAt).toLocaleDateString()}
+                      </span>
+                      <span class="group-hover:translate-x-1 transition-transform text-primary-600 font-medium">
+                        Ver detalles →
+                      </span>
+                    </div>
+                  </div>
+                </Card>
+              </a>
+            ))
+          ) : (
+            <div class="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl p-6 text-center text-gray-400">
+              <span class="material-symbols-outlined text-3xl mb-2">check</span>
+              <p class="text-sm">Nada pendiente</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <!-- Columna: En Progreso -->
+      <div class="flex flex-col gap-4">
+        <div class="flex items-center justify-between px-1">
+          <h2 class="font-bold text-blue-700 dark:text-blue-400 flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+            En Progreso
+            <span class="bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 px-2 py-0.5 rounded-full text-xs">{inProgressOrders.length}</span>
+          </h2>
+        </div>
+        
+        <div class="flex flex-col gap-3 min-h-[200px]">
+          {inProgressOrders.length > 0 ? (
+            inProgressOrders.map(order => (
+              <a href={`/mecanico/detalle_orden_trabajo?id=${order.documentId}`} class="block group">
+                <Card noPadding class="hover:shadow-md transition-shadow border-l-4 border-l-blue-500">
+                  <div class="p-4">
+                    <div class="flex justify-between items-start mb-2">
+                      <span class="font-bold text-gray-900 dark:text-white">OT-{order.id}</span>
+                      <Badge variant="info">Reparación</Badge>
+                    </div>
+                    <p class="text-sm font-medium text-gray-800 dark:text-gray-200 mb-1">
+                      {order.vehiculo?.marca} {order.vehiculo?.modelo}
+                    </p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mb-3">
+                      {order.descripcion}
+                    </p>
+                    <div class="flex items-center justify-between text-xs text-gray-400">
+                      <span class="flex items-center gap-1 text-blue-600 dark:text-blue-400 font-medium">
+                        <span class="material-symbols-outlined text-sm">timelapse</span>
+                        En curso
+                      </span>
+                      <span class="group-hover:translate-x-1 transition-transform text-primary-600 font-medium">
+                        Continuar →
+                      </span>
+                    </div>
+                  </div>
+                </Card>
+              </a>
+            ))
+          ) : (
+            <div class="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl p-6 text-center text-gray-400">
+              <span class="material-symbols-outlined text-3xl mb-2">handyman</span>
+              <p class="text-sm">Sin trabajos activos</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <!-- Columna: Listo / Finalizado -->
+      <div class="flex flex-col gap-4">
+        <div class="flex items-center justify-between px-1">
+          <h2 class="font-bold text-green-700 dark:text-green-400 flex items-center gap-2">
+            <span class="w-2 h-2 rounded-full bg-green-500"></span>
+            Listo para Entrega
+            <span class="bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-300 px-2 py-0.5 rounded-full text-xs">{doneOrders.length}</span>
+          </h2>
+        </div>
+        
+        <div class="flex flex-col gap-3 min-h-[200px]">
+          {doneOrders.length > 0 ? (
+            doneOrders.map(order => (
+              <a href={`/mecanico/detalle_orden_trabajo?id=${order.documentId}`} class="block group">
+                <Card noPadding class="hover:shadow-md transition-shadow border-l-4 border-l-green-500 opacity-75 hover:opacity-100">
+                  <div class="p-4">
+                    <div class="flex justify-between items-start mb-2">
+                      <span class="font-bold text-gray-900 dark:text-white">OT-{order.id}</span>
+                      <Badge variant="success">Finalizado</Badge>
+                    </div>
+                    <p class="text-sm font-medium text-gray-800 dark:text-gray-200 mb-1">
+                      {order.vehiculo?.marca} {order.vehiculo?.modelo}
+                    </p>
+                    <div class="flex items-center justify-between text-xs text-gray-400 mt-3">
+                      <span class="flex items-center gap-1 text-green-600 dark:text-green-400">
+                        <span class="material-symbols-outlined text-sm">check_circle</span>
+                        Completado
+                      </span>
+                      <span class="group-hover:translate-x-1 transition-transform text-primary-600 font-medium">
+                        Ver →
+                      </span>
+                    </div>
+                  </div>
+                </Card>
+              </a>
+            ))
+          ) : (
+            <div class="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl p-6 text-center text-gray-400">
+              <p class="text-sm">No hay órdenes finalizadas recientes</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+    </div>
+  </div>
 </DashboardLayout>

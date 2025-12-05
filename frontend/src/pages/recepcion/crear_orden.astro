@@ -3,6 +3,7 @@ export const prerender = false;
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
 import Card from '../../components/ui/Card.astro';
 import Button from '../../components/ui/Button.astro';
+import VehicleInspection from '../../components/recepcion/VehicleInspection.astro';
 import { strapiGet, strapiPost } from '../../lib/strapi';
 import '../../styles/global.css';
 
@@ -372,28 +373,7 @@ const categoriasNombres: Record<string, string> = {
 
                 <!-- Daños previos (checklist visual) -->
                 <div>
-                    <label class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3 block">
-                        Daños Previos Observados
-                    </label>
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        {[
-                            { id: 'rayones', label: 'Rayones', icon: 'gesture' },
-                            { id: 'abolladuras', label: 'Abolladuras', icon: 'warning' },
-                            { id: 'parabrisas', label: 'Parabrisas dañado', icon: 'window' },
-                            { id: 'luces', label: 'Luces rotas', icon: 'lightbulb' },
-                            { id: 'espejos', label: 'Espejos dañados', icon: 'flip' },
-                            { id: 'neumaticos', label: 'Neumáticos gastados', icon: 'tire_repair' },
-                            { id: 'interior', label: 'Daño interior', icon: 'airline_seat_recline_normal' },
-                            { id: 'otros', label: 'Otros daños', icon: 'more_horiz' }
-                        ].map(dano => (
-                            <label class="flex items-center gap-2 p-3 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors has-[:checked]:border-amber-500 has-[:checked]:bg-amber-50 dark:has-[:checked]:bg-amber-900/20">
-                                <input type="checkbox" x-model="danosSeleccionados" value={dano.id} class="rounded border-gray-300 text-amber-600 focus:ring-amber-500"/>
-                                <span class="material-symbols-outlined text-gray-400 text-sm">{dano.icon}</span>
-                                <span class="text-sm text-gray-700 dark:text-gray-300">{dano.label}</span>
-                            </label>
-                        ))}
-                    </div>
-                    <input type="hidden" name="danos_previos" :value="JSON.stringify(danosSeleccionados)"/>
+                    <VehicleInspection />
                 </div>
             </div>
 
@@ -442,10 +422,16 @@ const categoriasNombres: Record<string, string> = {
             <!-- Section 5: Servicios -->
             {servicios.length > 0 && (
                 <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
-                    <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
-                        <span class="flex items-center justify-center w-7 h-7 rounded-full bg-teal-100 dark:bg-teal-900/30 text-teal-600 text-sm font-bold">5</span>
-                        Servicios Solicitados
-                        <span class="text-sm font-normal text-gray-400">(opcional)</span>
+                    <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="flex items-center justify-center w-7 h-7 rounded-full bg-teal-100 dark:bg-teal-900/30 text-teal-600 text-sm font-bold">5</span>
+                            Servicios Solicitados
+                            <span class="text-sm font-normal text-gray-400">(opcional)</span>
+                        </div>
+                        <div class="text-right" x-show="estimatedTotal > 0">
+                            <p class="text-xs text-gray-500 uppercase">Presupuesto Estimado</p>
+                            <p class="text-xl font-bold text-primary-600" x-text="'$' + estimatedTotal.toLocaleString('es-CL')"></p>
+                        </div>
                     </h2>
                     
                     <div class="space-y-6">
@@ -455,7 +441,7 @@ const categoriasNombres: Record<string, string> = {
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     {serviciosPorCategoria[cat].map((servicio: Servicio) => (
                                         <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors has-[:checked]:border-teal-500 has-[:checked]:bg-teal-50 dark:has-[:checked]:bg-teal-900/20">
-                                            <input type="checkbox" name="servicios[]" value={servicio.documentId} class="rounded border-gray-300 text-teal-600 focus:ring-teal-500"/>
+                                            <input type="checkbox" name="servicios[]" value={servicio.documentId} @change="toggleService(servicio.precio_base)" class="rounded border-gray-300 text-teal-600 focus:ring-teal-500"/>
                                             <div class="flex-1">
                                                 <p class="font-medium text-gray-900 dark:text-white">{servicio.nombre}</p>
                                                 {servicio.descripcion && (
@@ -498,7 +484,7 @@ const categoriasNombres: Record<string, string> = {
         </form>
     </div>
 
-    <script define:vars={{ vehiculos, preselectedCliente, preselectedVehiculo }}>
+    <script define:vars={{ vehiculos, preselectedCliente, preselectedVehiculo, servicios }}>
         document.addEventListener('alpine:init', () => {
             Alpine.data('ordenFormController', () => ({
                 selectedClientId: preselectedCliente ? preselectedCliente.id : null,
@@ -507,6 +493,8 @@ const categoriasNombres: Record<string, string> = {
                 selectedVehiculo: preselectedVehiculo || null,
                 danosSeleccionados: [],
                 preselectedVehiculoId: preselectedVehiculo ? preselectedVehiculo.documentId : null,
+                estimatedTotal: 0,
+                allServices: servicios,
                 
                 init() {
                     // Si hay cliente preseleccionado, filtrar vehículos
@@ -538,6 +526,18 @@ const categoriasNombres: Record<string, string> = {
                 
                 selectVehiculo(documentId) {
                     this.selectedVehiculo = this.allVehiculos.find(v => v.documentId === documentId) || null;
+                },
+
+                toggleService(price) {
+                    this.$nextTick(() => {
+                        const checkedBoxes = document.querySelectorAll('input[name="servicios[]"]:checked');
+                        let total = 0;
+                        checkedBoxes.forEach(box => {
+                            const service = this.allServices.find(s => s.documentId === box.value);
+                            if (service) total += service.precio_base;
+                        });
+                        this.estimatedTotal = total;
+                    });
                 }
             }));
         });

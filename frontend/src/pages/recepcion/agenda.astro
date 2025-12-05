@@ -2,147 +2,350 @@
 export const prerender = false;
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
 import Card from '../../components/ui/Card.astro';
+import Button from '../../components/ui/Button.astro';
 import Badge from '../../components/ui/Badge.astro';
-import { strapiGet } from '../../lib/strapi';
+import { strapiGet, strapiPost, strapiPut, strapiDelete } from '../../lib/strapi';
+import '../../styles/global.css';
 
 const userRole = Astro.cookies.get('user_role')?.value;
-if (!userRole) return Astro.redirect('/login');
-
-// Get current week start (Monday)
-const today = new Date();
-const dayOfWeek = today.getDay(); // 0 (Sun) - 6 (Sat)
-const diff = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Adjust when day is Sunday
-const startOfWeek = new Date(today.setDate(diff));
-startOfWeek.setHours(0, 0, 0, 0);
-
-// Generate week days
-const weekDays = [];
-for (let i = 0; i < 5; i++) { // Mon-Fri
-    const d = new Date(startOfWeek);
-    d.setDate(startOfWeek.getDate() + i);
-    weekDays.push(d);
+if (!userRole) {
+  return Astro.redirect('/login');
 }
 
-let orders: any[] = [];
+let citas = [];
+let clientes = [];
+let vehiculos = [];
 let error = '';
+let success = '';
 
+// Get current date info
+const today = new Date();
+const currentMonth = parseInt(Astro.url.searchParams.get('month') || (today.getMonth() + 1).toString());
+const currentYear = parseInt(Astro.url.searchParams.get('year') || today.getFullYear().toString());
+
+// Calculate calendar days
+const daysInMonth = new Date(currentYear, currentMonth, 0).getDate();
+const firstDayOfMonth = new Date(currentYear, currentMonth - 1, 1).getDay(); // 0 = Sunday
+const adjustedFirstDay = firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1; // 0 = Monday
+
+// Fetch Data
 try {
-    // Fetch orders for this week (or all active orders to simplify)
-    // Ideally filter by date range in Strapi
-    const res = await strapiGet('/api/orden-de-trabajos?populate=vehiculo&sort=fecha_ingreso:asc');
-    orders = res.data || [];
+    // Calculate date range for the month
+    const startDate = `${currentYear}-${currentMonth.toString().padStart(2, '0')}-01`;
+    const endDate = `${currentYear}-${currentMonth.toString().padStart(2, '0')}-${daysInMonth}`;
+
+    const [citasRes, clientesRes, vehiculosRes] = await Promise.all([
+        strapiGet(`/api/citas?filters[fecha][$gte]=${startDate}&filters[fecha][$lte]=${endDate}&populate=cliente&populate=vehiculo`),
+        strapiGet('/api/clientes?sort=nombre:asc'),
+        strapiGet('/api/vehiculos?populate=cliente')
+    ]);
+
+    citas = citasRes.data || [];
+    clientes = clientesRes.data || [];
+    vehiculos = vehiculosRes.data || [];
+
+    // Handle POST actions
+    if (Astro.request.method === 'POST') {
+        const formData = await Astro.request.formData();
+        const action = formData.get('action');
+
+        if (action === 'create') {
+            const citaData = {
+                fecha: formData.get('fecha'),
+                hora: formData.get('hora'),
+                cliente: formData.get('cliente'),
+                vehiculo: formData.get('vehiculo'),
+                motivo: formData.get('motivo'),
+                estado: 'pendiente'
+            };
+            await strapiPost('/api/citas', citaData);
+            success = 'Cita agendada correctamente.';
+        }
+        
+        if (action === 'delete') {
+            const id = formData.get('id');
+            await strapiDelete(`/api/citas/${id}`);
+            success = 'Cita eliminada.';
+        }
+        
+        // Refresh data after mutation
+        const refreshRes = await strapiGet(`/api/citas?filters[fecha][$gte]=${startDate}&filters[fecha][$lte]=${endDate}&populate=cliente&populate=vehiculo`);
+        citas = refreshRes.data || [];
+    }
+
 } catch (e: any) {
-    error = 'Error al cargar agenda: ' + e.message;
+    console.error(e);
+    error = 'Error cargando agenda: ' + e.message;
 }
 
-const getOrdersForDay = (date: Date) => {
-    const dateStr = date.toISOString().split('T')[0];
-    return orders.filter((o: any) => o.fecha_ingreso === dateStr);
+// Helper to get citas for a specific day
+const getCitasForDay = (day: number) => {
+    const dateStr = `${currentYear}-${currentMonth.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+    return citas.filter((c: any) => c.fecha === dateStr).sort((a: any, b: any) => a.hora.localeCompare(b.hora));
 };
 
-const formatStatus = (status: string) => {
-    const map: Record<string, string> = {
-        ingresado: 'Ingresado',
-        en_diagnostico: 'Diagnóstico',
-        en_reparacion: 'Reparación',
-        finalizado: 'Finalizado',
-        entregado: 'Entregado'
-    };
-    return map[status] || status;
-};
-
-const getStatusColor = (status: string) => {
-    switch(status) {
-        case 'ingresado': return 'bg-blue-100 text-blue-800 border-blue-200';
-        case 'en_diagnostico': return 'bg-purple-100 text-purple-800 border-purple-200';
-        case 'en_reparacion': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-        case 'finalizado': return 'bg-green-100 text-green-800 border-green-200';
-        default: return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
-};
+const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 ---
 
-<DashboardLayout title="Agenda Semanal" role="recepcionista" currentPath={Astro.url.pathname}>
-    <div class="flex flex-col h-full">
-        <div class="mb-6 flex justify-between items-center">
+<DashboardLayout title="Agenda de Citas" role="recepcionista" currentPath="/recepcion/agenda">
+    {error && (
+        <div class="p-4 mb-4 bg-red-100 border border-red-200 text-red-700 rounded-lg flex items-center gap-2">
+            <span class="material-symbols-outlined">error</span>
+            {error}
+        </div>
+    )}
+    
+    {success && (
+        <div class="p-4 mb-4 bg-green-100 border border-green-200 text-green-700 rounded-lg flex items-center gap-2">
+            <span class="material-symbols-outlined">check_circle</span>
+            {success}
+        </div>
+    )}
+
+    <div class="max-w-7xl mx-auto" x-data="agendaController()">
+        
+        <!-- Header & Controls -->
+        <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-8">
             <div>
-                <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Agenda Semanal</h1>
-                <p class="text-gray-500 dark:text-gray-400">
-                    Semana del {weekDays[0].toLocaleDateString('es-CL')} al {weekDays[4].toLocaleDateString('es-CL')}
-                </p>
+                <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Agenda de Citas</h1>
+                <p class="text-gray-500 dark:text-gray-400">Gestiona las visitas al taller</p>
             </div>
-            <div class="flex gap-2">
-                <button class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300">
-                    <span class="material-symbols-outlined">chevron_left</span>
-                </button>
-                <button class="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 shadow-sm">
-                    Hoy
-                </button>
-                <button class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300">
-                    <span class="material-symbols-outlined">chevron_right</span>
+            
+            <div class="flex items-center gap-4">
+                <div class="flex items-center bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-1">
+                    <a href={`?month=${currentMonth === 1 ? 12 : currentMonth - 1}&year=${currentMonth === 1 ? currentYear - 1 : currentYear}`} class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-600 dark:text-gray-300">
+                        <span class="material-symbols-outlined">chevron_left</span>
+                    </a>
+                    <span class="px-4 font-bold text-gray-900 dark:text-white min-w-[150px] text-center">
+                        {monthNames[currentMonth - 1]} {currentYear}
+                    </span>
+                    <a href={`?month=${currentMonth === 12 ? 1 : currentMonth + 1}&year=${currentMonth === 12 ? currentYear + 1 : currentYear}`} class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md text-gray-600 dark:text-gray-300">
+                        <span class="material-symbols-outlined">chevron_right</span>
+                    </a>
+                </div>
+                
+                <button @click="openModal()" class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center gap-2 shadow-lg shadow-primary-600/20">
+                    <span class="material-symbols-outlined">add</span>
+                    Nueva Cita
                 </button>
             </div>
         </div>
 
-        {error && (
-            <div class="p-4 mb-4 text-red-700 bg-red-100 rounded-lg">
-                {error}
+        <!-- Calendar Grid -->
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <!-- Days Header -->
+            <div class="grid grid-cols-7 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+                {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(day => (
+                    <div class="py-3 text-center text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        {day}
+                    </div>
+                ))}
             </div>
-        )}
-
-        <div class="grid grid-cols-5 gap-4 flex-1 min-h-[600px]">
-            {weekDays.map((day) => {
-                const dayOrders = getOrdersForDay(day);
-                const isToday = day.toDateString() === new Date().toDateString();
+            
+            <!-- Days Grid -->
+            <div class="grid grid-cols-7 auto-rows-fr bg-gray-200 dark:bg-gray-700 gap-px">
+                <!-- Empty cells for previous month -->
+                {Array.from({ length: adjustedFirstDay }).map(() => (
+                    <div class="bg-gray-50 dark:bg-gray-800/50 min-h-[120px]"></div>
+                ))}
                 
-                return (
-                    <div class={`flex flex-col h-full rounded-xl border ${isToday ? 'border-primary-500 bg-primary-50/30 dark:bg-primary-900/10' : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50'}`}>
-                        <!-- Day Header -->
-                        <div class={`p-3 text-center border-b ${isToday ? 'border-primary-200 dark:border-primary-800' : 'border-gray-200 dark:border-gray-700'}`}>
-                            <p class={`text-sm font-medium ${isToday ? 'text-primary-700 dark:text-primary-400' : 'text-gray-500 dark:text-gray-400'}`}>
-                                {day.toLocaleDateString('es-CL', { weekday: 'long' })}
-                            </p>
-                            <p class={`text-2xl font-bold ${isToday ? 'text-primary-800 dark:text-primary-300' : 'text-gray-900 dark:text-white'}`}>
-                                {day.getDate()}
-                            </p>
+                <!-- Days of current month -->
+                {Array.from({ length: daysInMonth }).map((_, i) => {
+                    const day = i + 1;
+                    const dayCitas = getCitasForDay(day);
+                    const isToday = day === today.getDate() && currentMonth === (today.getMonth() + 1) && currentYear === today.getFullYear();
+                    
+                    return (
+                        <div class={`bg-white dark:bg-gray-800 min-h-[120px] p-2 transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/50 group relative ${isToday ? 'ring-2 ring-inset ring-primary-500' : ''}`}>
+                            <div class="flex justify-between items-start mb-2">
+                                <span class={`w-7 h-7 flex items-center justify-center rounded-full text-sm font-bold ${isToday ? 'bg-primary-600 text-white' : 'text-gray-700 dark:text-gray-300'}`}>
+                                    {day}
+                                </span>
+                                <button @click={`openModal('${currentYear}-${currentMonth.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}')`} class="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-primary-600 transition-opacity">
+                                    <span class="material-symbols-outlined text-lg">add_circle</span>
+                                </button>
+                            </div>
+                            
+                            <div class="space-y-1 overflow-y-auto max-h-[90px] custom-scrollbar">
+                                {dayCitas.map((cita: any) => (
+                                    <div class="text-xs p-1.5 rounded bg-blue-50 dark:bg-blue-900/20 border-l-2 border-blue-500 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
+                                         @click={`viewCita(${JSON.stringify(cita)})`}>
+                                        <div class="font-bold text-blue-700 dark:text-blue-300 flex justify-between">
+                                            <span>{cita.hora.substring(0, 5)}</span>
+                                        </div>
+                                        <div class="truncate text-gray-600 dark:text-gray-400">
+                                            {cita.cliente?.nombre} {cita.cliente?.apellido}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+
+        <!-- Create/Edit Modal -->
+        <div x-show="showModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" x-cloak>
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-md w-full p-6" @click.away="showModal = false">
+                <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-4">Agendar Cita</h3>
+                
+                <form method="POST">
+                    <input type="hidden" name="action" value="create" />
+                    
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fecha</label>
+                                <input type="date" name="fecha" x-model="form.fecha" required class="w-full rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900" />
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Hora</label>
+                                <input type="time" name="hora" required class="w-full rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900" />
+                            </div>
                         </div>
 
-                        <!-- Slots -->
-                        <div class="flex-1 p-2 space-y-2 overflow-y-auto">
-                            {dayOrders.length > 0 ? (
-                                dayOrders.map((order: any) => (
-                                    <a href={`/recepcion/ver_estado_orden?id=${order.documentId}`} class="block">
-                                        <div class={`p-3 rounded-lg border shadow-sm hover:shadow-md transition-shadow cursor-pointer bg-white dark:bg-gray-800 ${getStatusColor(order.estado)}`}>
-                                            <div class="flex justify-between items-start mb-1">
-                                                <span class="font-bold text-xs">OT-{order.id}</span>
-                                                <span class="text-[10px] uppercase font-bold opacity-75">{formatStatus(order.estado)}</span>
-                                            </div>
-                                            <p class="font-medium text-sm truncate text-gray-900 dark:text-white">
-                                                {order.vehiculo?.marca} {order.vehiculo?.modelo}
-                                            </p>
-                                            <p class="text-xs text-gray-500 dark:text-gray-400 truncate mt-1">
-                                                {order.vehiculo?.patente}
-                                            </p>
-                                        </div>
-                                    </a>
-                                ))
-                            ) : (
-                                <div class="h-full flex items-center justify-center opacity-30">
-                                    <span class="material-symbols-outlined text-4xl">calendar_today</span>
-                                </div>
-                            )}
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Cliente</label>
+                            <select name="cliente" x-model="form.clienteId" @change="filterVehiculos()" required class="w-full rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900">
+                                <option value="">Seleccionar cliente...</option>
+                                {clientes.map((c: any) => (
+                                    <option value={c.documentId}>{c.nombre} {c.apellido}</option>
+                                ))}
+                            </select>
                         </div>
-                        
-                        <!-- Add Button -->
-                        <div class="p-2 border-t border-gray-200 dark:border-gray-700">
-                            <a href={`/recepcion/crear_orden?date=${day.toISOString().split('T')[0]}`} class="flex items-center justify-center w-full py-2 rounded-lg border border-dashed border-gray-300 dark:border-gray-600 text-gray-500 hover:bg-white dark:hover:bg-gray-700 hover:text-primary-600 hover:border-primary-300 transition-colors text-sm">
-                                <span class="material-symbols-outlined text-lg mr-1">add</span>
-                                Agendar
-                            </a>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Vehículo</label>
+                            <select name="vehiculo" required class="w-full rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900" :disabled="!form.clienteId">
+                                <option value="">Seleccionar vehículo...</option>
+                                <template x-for="v in filteredVehiculos" :key="v.documentId">
+                                    <option :value="v.documentId" x-text="`${v.marca} ${v.modelo} (${v.patente})`"></option>
+                                </template>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Motivo</label>
+                            <textarea name="motivo" rows="3" required class="w-full rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900" placeholder="Ej: Mantención 10.000km, Ruido en frenos..."></textarea>
                         </div>
                     </div>
-                );
-            })}
+
+                    <div class="mt-6 flex justify-end gap-3">
+                        <button type="button" @click="showModal = false" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Cancelar</button>
+                        <button type="submit" class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700">Guardar Cita</button>
+                    </div>
+                </form>
+            </div>
         </div>
+
+        <!-- View Details Modal -->
+        <div x-show="showDetailsModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" x-cloak>
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-md w-full p-6" @click.away="showDetailsModal = false">
+                <template x-if="selectedCita">
+                    <div>
+                        <div class="flex justify-between items-start mb-4">
+                            <div>
+                                <h3 class="text-xl font-bold text-gray-900 dark:text-white">Detalle de Cita</h3>
+                                <p class="text-sm text-gray-500" x-text="formatDate(selectedCita.fecha) + ' - ' + selectedCita.hora.substring(0,5)"></p>
+                            </div>
+                            <Badge variant="info" x-text="selectedCita.estado.toUpperCase()"></Badge>
+                        </div>
+
+                        <div class="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-xl border border-gray-100 dark:border-gray-700 mb-6 space-y-3">
+                            <div>
+                                <p class="text-xs text-gray-500 uppercase">Cliente</p>
+                                <p class="font-medium" x-text="selectedCita.cliente?.nombre + ' ' + selectedCita.cliente?.apellido"></p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-500 uppercase">Vehículo</p>
+                                <p class="font-medium" x-text="selectedCita.vehiculo ? `${selectedCita.vehiculo.marca} ${selectedCita.vehiculo.modelo} (${selectedCita.vehiculo.patente})` : 'N/A'"></p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-500 uppercase">Motivo</p>
+                                <p class="font-medium" x-text="selectedCita.motivo"></p>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-col gap-3">
+                            <a :href="`/recepcion/crear_orden?clienteId=${selectedCita.cliente?.documentId}&vehiculoId=${selectedCita.vehiculo?.documentId}&descripcion=${encodeURIComponent(selectedCita.motivo)}`" 
+                               class="w-full py-2.5 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 flex items-center justify-center gap-2 shadow-lg shadow-green-600/20">
+                                <span class="material-symbols-outlined">input</span>
+                                Ingresar Vehículo (Crear Orden)
+                            </a>
+                            
+                            <form method="POST" onsubmit="return confirm('¿Eliminar esta cita?')">
+                                <input type="hidden" name="action" value="delete" />
+                                <input type="hidden" name="id" :value="selectedCita.documentId" />
+                                <button type="submit" class="w-full py-2.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg font-medium flex items-center justify-center gap-2">
+                                    <span class="material-symbols-outlined">delete</span>
+                                    Cancelar Cita
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
     </div>
 </DashboardLayout>
+
+<script define:vars={{ clientes, vehiculos }}>
+    document.addEventListener('alpine:init', () => {
+        Alpine.data('agendaController', () => ({
+            showModal: false,
+            showDetailsModal: false,
+            selectedCita: null,
+            allVehiculos: vehiculos,
+            filteredVehiculos: [],
+            form: {
+                fecha: '',
+                clienteId: ''
+            },
+
+            init() {
+                // Init logic if needed
+            },
+
+            openModal(date = '') {
+                this.form.fecha = date || new Date().toISOString().split('T')[0];
+                this.form.clienteId = '';
+                this.filteredVehiculos = [];
+                this.showModal = true;
+            },
+
+            viewCita(cita) {
+                this.selectedCita = cita;
+                this.showDetailsModal = true;
+            },
+
+            filterVehiculos() {
+                if (!this.form.clienteId) {
+                    this.filteredVehiculos = [];
+                    return;
+                }
+                this.filteredVehiculos = this.allVehiculos.filter(v => v.cliente && v.cliente.documentId === this.form.clienteId);
+            },
+
+            formatDate(dateStr) {
+                if (!dateStr) return '';
+                const date = new Date(dateStr + 'T00:00:00');
+                return date.toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' });
+            }
+        }));
+    });
+</script>
+
+<style>
+    .custom-scrollbar::-webkit-scrollbar {
+        width: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+        background-color: rgba(156, 163, 175, 0.5);
+        border-radius: 20px;
+    }
+</style>

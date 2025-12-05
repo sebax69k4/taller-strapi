@@ -41,6 +41,12 @@
       "relation": "oneToMany",
       "target": "api::vehiculo.vehiculo",
       "mappedBy": "cliente"
+    },
+    "citas": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::cita.cita",
+      "mappedBy": "cliente"
     }
   }
 }

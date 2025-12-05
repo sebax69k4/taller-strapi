@@ -25,9 +25,9 @@
       "enum": [
         "pendiente",
         "aprobado",
-        "rechazado",
-        "default:pendiente"
-      ]
+        "rechazado"
+      ],
+      "default": "pendiente"
     },
     "orden_de_trabajo": {
       "type": "relation",

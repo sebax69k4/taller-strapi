@@ -64,6 +64,12 @@
       "relation": "manyToOne",
       "target": "api::mecenico.mecenico",
       "inversedBy": "vehiculos"
+    },
+    "citas": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::cita.cita",
+      "mappedBy": "vehiculo"
     }
   }
 }

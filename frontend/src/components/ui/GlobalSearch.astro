@@ -141,8 +141,8 @@
 
     var html = '<div class="p-2">';
     results.forEach(function(item) {
-      var icon = item.type === 'cliente' ? 'person' : item.type === 'vehiculo' ? 'directions_car' : 'assignment';
-      var color = item.type === 'cliente' ? 'blue' : item.type === 'vehiculo' ? 'green' : 'purple';
+      var icon = item.type === 'cliente' ? 'person' : item.type === 'vehiculo' ? 'directions_car' : item.type === 'repuesto' ? 'inventory_2' : 'assignment';
+      var color = item.type === 'cliente' ? 'blue' : item.type === 'vehiculo' ? 'green' : item.type === 'repuesto' ? 'amber' : 'purple';
       html += '<a href="' + item.url + '" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">';
       html += '<div class="w-10 h-10 rounded-lg bg-' + color + '-100 dark:bg-' + color + '-900/30 flex items-center justify-center text-' + color + '-600 dark:text-' + color + '-400">';
       html += '<span class="material-symbols-outlined">' + icon + '</span></div>';
@@ -164,7 +164,7 @@
 
     try {
       // Search clients
-      var clientesRes = await fetch('/api/strapi/clientes?filters[$or][0][nombre][$containsi]=' + encodeURIComponent(query) + '&filters[$or][1][apellido][$containsi]=' + encodeURIComponent(query) + '&filters[$or][2][rut][$containsi]=' + encodeURIComponent(query) + '&pagination[pageSize]=5');
+      var clientesRes = await fetch('/api/strapi/clientes?filters[$or][0][nombre][$containsi]=' + encodeURIComponent(query) + '&filters[$or][1][apellido][$containsi]=' + encodeURIComponent(query) + '&filters[$or][2][rut][$containsi]=' + encodeURIComponent(query) + '&pagination[pageSize]=3');
       if (clientesRes.ok) {
         var clientesData = await clientesRes.json();
         if (clientesData.data) {
@@ -173,14 +173,14 @@
               type: 'cliente',
               title: c.nombre + ' ' + c.apellido,
               subtitle: 'RUT: ' + (c.rut || 'N/A'),
-              url: '/admin/clientes/ver/' + c.documentId
+              url: '/recepcion/crear_cliente?edit=' + c.documentId // Asumiendo que se puede editar o ver aquí
             });
           });
         }
       }
 
       // Search vehicles
-      var vehiculosRes = await fetch('/api/strapi/vehiculos?filters[$or][0][patente][$containsi]=' + encodeURIComponent(query) + '&filters[$or][1][marca][$containsi]=' + encodeURIComponent(query) + '&populate=cliente&pagination[pageSize]=5');
+      var vehiculosRes = await fetch('/api/strapi/vehiculos?filters[$or][0][patente][$containsi]=' + encodeURIComponent(query) + '&filters[$or][1][marca][$containsi]=' + encodeURIComponent(query) + '&populate=cliente&pagination[pageSize]=3');
       if (vehiculosRes.ok) {
         var vehiculosData = await vehiculosRes.json();
         if (vehiculosData.data) {
@@ -190,14 +190,14 @@
               type: 'vehiculo',
               title: v.patente + ' - ' + v.marca + ' ' + v.modelo,
               subtitle: 'Propietario: ' + owner,
-              url: '/admin/vehiculos/ver/' + v.documentId
+              url: '/recepcion/crear_vehiculo?edit=' + v.documentId
             });
           });
         }
       }
 
       // Search orders
-      var ordenesRes = await fetch('/api/strapi/orden-de-trabajos?filters[descripcion_problema][$containsi]=' + encodeURIComponent(query) + '&populate[vehiculo][populate]=cliente&pagination[pageSize]=5');
+      var ordenesRes = await fetch('/api/strapi/orden-de-trabajos?filters[descripcion_problema][$containsi]=' + encodeURIComponent(query) + '&populate[vehiculo][populate]=cliente&pagination[pageSize]=3');
       if (ordenesRes.ok) {
         var ordenesData = await ordenesRes.json();
         if (ordenesData.data) {
@@ -207,7 +207,23 @@
               type: 'orden',
               title: 'Orden #' + o.id + ' - ' + patente,
               subtitle: (o.descripcion_problema || 'Sin descripción').substring(0, 50),
-              url: '/admin/ordenes/ver/' + o.documentId
+              url: '/encargado/detalles_de_orden?id=' + o.documentId
+            });
+          });
+        }
+      }
+
+      // Search inventory (NEW)
+      var repuestosRes = await fetch('/api/strapi/repuestos?filters[$or][0][nombre][$containsi]=' + encodeURIComponent(query) + '&filters[$or][1][sku][$containsi]=' + encodeURIComponent(query) + '&pagination[pageSize]=3');
+      if (repuestosRes.ok) {
+        var repuestosData = await repuestosRes.json();
+        if (repuestosData.data) {
+          repuestosData.data.forEach(function(r) {
+            results.push({
+              type: 'repuesto',
+              title: r.nombre,
+              subtitle: 'SKU: ' + r.sku + ' | Stock: ' + r.stock,
+              url: '/encargado/inventario?search=' + encodeURIComponent(r.nombre)
             });
           });
         }

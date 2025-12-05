@@ -204,11 +204,15 @@ const formatCurrency = (amount: number) => new Intl.NumberFormat('es-CL', { styl
         <p class="text-gray-500 dark:text-gray-400 mt-1">Gestiona el stock y precios de los repuestos del taller</p>
       </div>
       <div class="flex gap-2">
+        <a href="/encargado/presupuestos" class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center gap-2 font-medium">
+          <span class="material-symbols-outlined">add</span>
+          Crear Presupuesto
+        </a>
         <a href="/encargado/alert_stock" class="px-4 py-2 bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 flex items-center gap-2 font-medium">
           <span class="material-symbols-outlined">warning</span>
           Alertas ({stats.bajoStock + stats.sinStock})
         </a>
-        <button @click="showAddModal = true" class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center gap-2 font-medium">
+        <button @click="showAddModal = true" class="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2 font-medium">
           <span class="material-symbols-outlined">add</span>
           Nuevo Repuesto
         </button>

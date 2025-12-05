@@ -20,12 +20,6 @@
     "especialidad": {
       "type": "string"
     },
-    "servicios": {
-      "type": "relation",
-      "relation": "oneToMany",
-      "target": "api::servicio.servicio",
-      "mappedBy": "mecenico"
-    },
     "orden_de_trabajos": {
       "type": "relation",
       "relation": "oneToMany",
@@ -55,12 +49,6 @@
     },
     "email": {
       "type": "email"
-    },
-    "zonas": {
-      "type": "relation",
-      "relation": "oneToMany",
-      "target": "api::zona.zona",
-      "mappedBy": "mecanico"
     },
     "bitacoras": {
       "type": "relation",

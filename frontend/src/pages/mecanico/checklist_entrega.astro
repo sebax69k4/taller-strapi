@@ -1,8 +1,16 @@
 ---
 export const prerender = false;
-import Layout from '../../layouts/Layout.astro';
-import Sidebar from '../../components/Sidebar.astro';
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import Card from '../../components/ui/Card.astro';
+import Button from '../../components/ui/Button.astro';
+import Badge from '../../components/ui/Badge.astro';
 import { strapiGet, strapiPut, strapiPost } from '../../lib/strapi';
+import '../../styles/global.css';
+
+const userRole = Astro.cookies.get('user_role')?.value;
+if (!userRole) {
+  return Astro.redirect('/login');
+}
 
 const ordenId = Astro.url.searchParams.get('orden');
 let orden: any = null;
@@ -32,13 +40,10 @@ if (Astro.request.method === 'POST' && orden) {
     ];
     
     const completados: string[] = [];
-    const faltantes: string[] = [];
     
     checkItems.forEach(item => {
       if (formData.get(item) === 'on') {
         completados.push(item);
-      } else {
-        faltantes.push(item);
       }
     });
     
@@ -54,29 +59,23 @@ if (Astro.request.method === 'POST' && orden) {
     } else if (confirmar) {
       // Registrar en bitácora
       await strapiPost('/api/bitacoras', {
-        descripcion: `Checklist de entrega completado. Items verificados: ${completados.length}/${checkItems.length}. ${notas ? 'Notas: ' + notas : ''}`,
-        tipo: 'checklist',
+        procedimientos: `[CHECKLIST] Entrega completada. Items: ${completados.length}/${checkItems.length}. ${notas ? 'Notas: ' + notas : ''}`,
+        fecha: new Date().toISOString().split('T')[0],
         orden_de_trabajo: orden.id,
       });
       
-      // Cambiar estado a finalizado
-      await strapiPut(`/api/orden-de-trabajos/${ordenId}`, {
-        estado: 'finalizado',
-      });
+      // Cambiar estado a finalizado (si no lo estaba ya)
+      if (orden.estado !== 'finalizado') {
+          await strapiPut(`/api/orden-de-trabajos/${ordenId}`, {
+            estado: 'finalizado',
+          });
+      }
       
-      successMessage = '¡Checklist completado! La orden ha sido marcada como finalizada y lista para facturación.';
+      successMessage = '¡Checklist completado! La orden está lista para entrega.';
       
       // Recargar orden
       const response = await strapiGet(`/api/orden-de-trabajos/${ordenId}?populate[vehiculo][populate][cliente]=*&populate[mecanico]=*`);
       orden = response.data;
-    } else {
-      // Solo guardar progreso
-      await strapiPost('/api/bitacoras', {
-        descripcion: `Progreso de checklist guardado. Items completados: ${completados.length}/${checkItems.length}`,
-        tipo: 'nota',
-        orden_de_trabajo: orden.id,
-      });
-      successMessage = 'Progreso guardado correctamente.';
     }
   } catch (e: any) {
     error = e.message;
@@ -92,150 +91,189 @@ const checklistItems = [
   { id: 'neumaticos_ok', label: 'Estado y presión de neumáticos', icon: 'tire_repair', critico: false },
   { id: 'documentos_orden', label: 'Documentación de orden completa', icon: 'description', critico: false },
   { id: 'herramientas_retiradas', label: 'Herramientas retiradas del vehículo', icon: 'construction', critico: false },
-  { id: 'piezas_cambiadas', label: 'Piezas reemplazadas entregadas al cliente', icon: 'inventory_2', critico: false },
+  { id: 'piezas_cambiadas', label: 'Piezas reemplazadas entregadas', icon: 'inventory_2', critico: false },
   { id: 'prueba_manejo', label: 'Prueba de manejo realizada', icon: 'directions_car', critico: true },
 ];
 ---
 
-<Layout title="Checklist de Entrega">
-  <div class="flex min-h-screen bg-background-light dark:bg-background-dark">
-    <Sidebar role="mecanico" currentPath="/mecanico/checklist_entrega" />
-    
-    <main class="flex-1 p-8">
-      <div class="max-w-4xl mx-auto">
-        <div class="mb-8">
-          <h1 class="text-3xl font-bold text-gray-800 dark:text-white">Checklist de Entrega</h1>
-          <p class="text-gray-600 dark:text-gray-400 mt-2">Verificación final antes de marcar la orden como finalizada</p>
+<DashboardLayout title="Checklist de Entrega" role="mecanico" currentPath="/mecanico/checklist_entrega">
+  <div class="max-w-4xl mx-auto">
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Checklist de Entrega</h1>
+      <p class="text-gray-500 dark:text-gray-400 mt-2">Verificación final de calidad antes de devolver el vehículo.</p>
+    </div>
+
+    {!ordenId && (
+      <Card>
+        <div class="text-center py-8">
+          <span class="material-symbols-outlined text-4xl text-gray-300 mb-4">search</span>
+          <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-2">Seleccionar Orden</h2>
+          <p class="text-gray-500 mb-6">Debes acceder a esta página desde el detalle de una orden.</p>
+          <a href="/mecanico/dash_mec" class="btn-primary inline-flex items-center gap-2">
+            <span class="material-symbols-outlined">arrow_back</span>
+            Volver al Dashboard
+          </a>
         </div>
+      </Card>
+    )}
 
-        {!ordenId && (
-          <div class="card p-8">
-            <h2 class="text-xl font-bold text-gray-800 dark:text-white mb-4">Seleccionar Orden</h2>
-            <p class="text-gray-600 mb-4">Ingrese el ID de la orden para realizar el checklist de entrega:</p>
-            <form class="flex gap-4">
-              <input 
-                type="text" 
-                name="orden"
-                placeholder="ID de la orden..."
-                class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              />
-              <button type="submit" class="btn-primary">Buscar</button>
-            </form>
-          </div>
-        )}
+    {error && (
+      <div class="p-4 mb-6 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg text-red-800 dark:text-red-200 flex items-center gap-2">
+        <span class="material-symbols-outlined">error</span>
+        <p>{error}</p>
+      </div>
+    )}
 
-        {error && (
-          <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
-            ⚠️ {error}
-          </div>
-        )}
+    {successMessage && (
+      <div class="p-6 mb-6 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl text-center">
+        <div class="w-16 h-16 bg-green-100 dark:bg-green-800 rounded-full flex items-center justify-center mx-auto mb-4">
+          <span class="material-symbols-outlined text-3xl text-green-600 dark:text-green-300">celebration</span>
+        </div>
+        <h3 class="text-xl font-bold text-green-800 dark:text-green-200 mb-2">¡Excelente trabajo!</h3>
+        <p class="text-green-700 dark:text-green-300 mb-4">{successMessage}</p>
+        <a href="/mecanico/dash_mec" class="inline-flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium">
+          Volver al Dashboard
+        </a>
+      </div>
+    )}
 
-        {successMessage && (
-          <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6">
-            ✓ {successMessage}
-          </div>
-        )}
-
-        {orden && (
-          <>
-            <!-- Info de la orden -->
-            <div class="card p-6 mb-6">
-              <div class="flex items-center justify-between">
-                <div>
-                  <h2 class="text-xl font-bold text-gray-800 dark:text-white">
-                    Orden #{orden.id}
-                  </h2>
-                  <p class="text-gray-600">
-                    {orden.vehiculo?.patente} - {orden.vehiculo?.marca} {orden.vehiculo?.modelo}
-                  </p>
-                  <p class="text-sm text-gray-500">
-                    Cliente: {orden.vehiculo?.cliente?.nombre} {orden.vehiculo?.cliente?.apellido}
-                  </p>
-                </div>
-                <div class="text-right">
-                  <span class={`px-3 py-1 rounded-full text-sm font-bold ${
-                    orden.estado === 'finalizado' ? 'bg-green-100 text-green-800' :
-                    orden.estado === 'en_reparacion' ? 'bg-orange-100 text-orange-800' :
-                    'bg-gray-100 text-gray-800'
-                  }`}>
-                    {orden.estado?.replace('_', ' ').toUpperCase()}
-                  </span>
-                </div>
-              </div>
+    {orden && !successMessage && (
+      <div x-data="{ 
+        checkedCount: 0, 
+        totalCount: 10,
+        criticalChecked: 0,
+        totalCritical: 3,
+        updateProgress() {
+          const checkboxes = document.querySelectorAll('input[type=checkbox]:not([name=confirmar_entrega])');
+          this.checkedCount = Array.from(checkboxes).filter(c => c.checked).length;
+          
+          const criticals = document.querySelectorAll('input[data-critical=true]');
+          this.criticalChecked = Array.from(criticals).filter(c => c.checked).length;
+        }
+      }">
+        
+        <!-- Info Orden -->
+        <Card class="mb-6 bg-gradient-to-r from-gray-900 to-gray-800 text-white border-none">
+          <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+              <p class="text-gray-400 text-sm uppercase tracking-wider font-medium mb-1">Orden #{orden.id}</p>
+              <h2 class="text-2xl font-bold flex items-center gap-3">
+                {orden.vehiculo?.marca} {orden.vehiculo?.modelo}
+                <span class="text-lg font-normal text-gray-400 bg-white/10 px-2 py-0.5 rounded">{orden.vehiculo?.patente}</span>
+              </h2>
             </div>
+            <div class="text-right">
+              <div class="text-3xl font-bold font-mono" x-text="Math.round((checkedCount / totalCount) * 100) + '%'">0%</div>
+              <p class="text-sm text-gray-400">Completado</p>
+            </div>
+          </div>
+          
+          <!-- Progress Bar -->
+          <div class="mt-6 h-2 bg-gray-700 rounded-full overflow-hidden">
+            <div 
+              class="h-full bg-green-500 transition-all duration-500 ease-out"
+              :style="`width: ${(checkedCount / totalCount) * 100}%`"
+            ></div>
+          </div>
+        </Card>
 
-            {orden.estado === 'finalizado' ? (
-              <div class="card p-8 text-center">
-                <span class="material-symbols-outlined text-6xl text-green-500 mb-4">task_alt</span>
-                <h3 class="text-xl font-bold text-gray-800 dark:text-white mb-2">Orden Finalizada</h3>
-                <p class="text-gray-600">Esta orden ya ha sido marcada como finalizada y está lista para facturación.</p>
-              </div>
-            ) : (
-              <form method="POST" class="card p-6">
-                <h2 class="text-xl font-bold text-gray-800 dark:text-white mb-6">
-                  Lista de Verificación
-                </h2>
-                
-                <div class="space-y-3 mb-6">
-                  {checklistItems.map((item) => (
-                    <label class={`flex items-center p-4 rounded-lg border-2 cursor-pointer transition-all hover:border-blue-300 ${item.critico ? 'border-red-200 bg-red-50/50' : 'border-gray-200'}`}>
-                      <input 
-                        type="checkbox" 
-                        name={item.id}
-                        class="w-5 h-5 rounded text-blue-600 focus:ring-blue-500 mr-4"
-                      />
-                      <span class="material-symbols-outlined text-gray-400 mr-3">{item.icon}</span>
-                      <span class="flex-1 font-medium text-gray-800 dark:text-white">
-                        {item.label}
-                      </span>
-                      {item.critico && (
-                        <span class="text-xs bg-red-100 text-red-800 px-2 py-1 rounded-full font-bold">
-                          CRÍTICO
-                        </span>
-                      )}
-                    </label>
-                  ))}
-                </div>
-
-                <div class="mb-6">
-                  <label class="block text-gray-700 dark:text-gray-300 font-bold mb-2">
-                    Notas adicionales
-                  </label>
-                  <textarea 
-                    name="notas"
-                    rows="3"
-                    placeholder="Observaciones, detalles adicionales..."
-                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  ></textarea>
-                </div>
-
-                <div class="p-4 bg-yellow-50 border border-yellow-200 rounded-lg mb-6">
-                  <label class="flex items-center cursor-pointer">
+        <form method="POST">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <!-- Items Críticos -->
+            <div class="space-y-4">
+              <h3 class="font-bold text-red-600 dark:text-red-400 flex items-center gap-2 uppercase text-sm tracking-wider">
+                <span class="material-symbols-outlined">warning</span>
+                Puntos Críticos
+              </h3>
+              {checklistItems.filter(i => i.critico).map(item => (
+                <label class="flex items-start gap-3 p-4 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 rounded-xl cursor-pointer hover:bg-red-100 dark:hover:bg-red-900/20 transition-colors group">
+                  <div class="relative flex items-center">
                     <input 
                       type="checkbox" 
-                      name="confirmar_entrega"
-                      class="w-5 h-5 rounded text-green-600 focus:ring-green-500 mr-3"
+                      name={item.id} 
+                      data-critical="true"
+                      @change="updateProgress()"
+                      class="peer h-6 w-6 cursor-pointer appearance-none rounded-md border border-red-300 checked:border-red-600 checked:bg-red-600 transition-all"
                     />
-                    <span class="font-bold text-yellow-800">
-                      ✓ Confirmo que he verificado todos los items y el vehículo está listo para entrega
-                    </span>
-                  </label>
-                </div>
+                    <span class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-white opacity-0 peer-checked:opacity-100 pointer-events-none material-symbols-outlined text-sm font-bold">check</span>
+                  </div>
+                  <div class="flex-1">
+                    <span class="font-medium text-gray-900 dark:text-white block group-hover:text-red-700 dark:group-hover:text-red-300 transition-colors">{item.label}</span>
+                    <span class="text-xs text-red-500 mt-0.5 block">Requerido para finalizar</span>
+                  </div>
+                  <span class="material-symbols-outlined text-red-300 group-hover:text-red-500 transition-colors">{item.icon}</span>
+                </label>
+              ))}
+            </div>
 
-                <div class="flex gap-4">
-                  <button type="submit" class="btn-primary flex-1">
-                    <span class="material-symbols-outlined mr-2">save</span>
-                    Guardar y Finalizar Orden
-                  </button>
-                  <a href="/mecanico/dash_mec" class="btn-secondary">
-                    Cancelar
-                  </a>
-                </div>
-              </form>
-            )}
-          </>
-        )}
+            <!-- Items Generales -->
+            <div class="space-y-4">
+              <h3 class="font-bold text-gray-500 dark:text-gray-400 flex items-center gap-2 uppercase text-sm tracking-wider">
+                <span class="material-symbols-outlined">check_circle</span>
+                Verificación General
+              </h3>
+              {checklistItems.filter(i => !i.critico).map(item => (
+                <label class="flex items-start gap-3 p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl cursor-pointer hover:border-blue-300 dark:hover:border-blue-700 transition-colors group">
+                  <div class="relative flex items-center">
+                    <input 
+                      type="checkbox" 
+                      name={item.id} 
+                      @change="updateProgress()"
+                      class="peer h-6 w-6 cursor-pointer appearance-none rounded-md border border-gray-300 checked:border-blue-600 checked:bg-blue-600 transition-all"
+                    />
+                    <span class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-white opacity-0 peer-checked:opacity-100 pointer-events-none material-symbols-outlined text-sm font-bold">check</span>
+                  </div>
+                  <div class="flex-1">
+                    <span class="font-medium text-gray-700 dark:text-gray-300 block group-hover:text-blue-700 dark:group-hover:text-blue-300 transition-colors">{item.label}</span>
+                  </div>
+                  <span class="material-symbols-outlined text-gray-300 group-hover:text-blue-400 transition-colors">{item.icon}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <Card>
+            <div class="mb-6">
+              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Observaciones Finales</label>
+              <textarea 
+                name="notas" 
+                rows="3" 
+                class="w-full rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 focus:ring-primary-500 focus:border-primary-500"
+                placeholder="Detalles adicionales sobre la entrega..."
+              ></textarea>
+            </div>
+
+            <div class="flex items-center gap-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg mb-6">
+              <input 
+                type="checkbox" 
+                name="confirmar_entrega" 
+                required
+                class="h-5 w-5 text-yellow-600 border-gray-300 rounded focus:ring-yellow-500"
+              />
+              <label class="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                Confirmo que el vehículo ha sido inspeccionado y cumple con los estándares de calidad para su entrega.
+              </label>
+            </div>
+
+            <div class="flex justify-end gap-4">
+              <a href={`/mecanico/detalle_orden_trabajo?id=${orden.documentId}`} class="px-6 py-3 text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors">
+                Cancelar
+              </a>
+              <button 
+                type="submit" 
+                class="px-8 py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-all shadow-lg shadow-green-600/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                :disabled="criticalChecked < totalCritical"
+              >
+                <span class="material-symbols-outlined">task_alt</span>
+                Finalizar Orden
+              </button>
+            </div>
+            <p x-show="criticalChecked < totalCritical" class="text-center text-red-500 text-sm mt-4">
+              * Debes completar todos los puntos críticos para finalizar.
+            </p>
+          </Card>
+        </form>
       </div>
-    </main>
+    )}
   </div>
-</Layout>
+</DashboardLayout>

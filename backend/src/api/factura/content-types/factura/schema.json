@@ -39,18 +39,30 @@
     },
     "estado": {
       "type": "enumeration",
-      "enum": ["pendiente", "pagado"],
+      "enum": [
+        "pendiente",
+        "pagado"
+      ],
       "default": "pendiente"
     },
     "metodo_pago": {
       "type": "enumeration",
-      "enum": ["efectivo", "tarjeta_debito", "tarjeta_credito", "transferencia", "cheque"]
+      "enum": [
+        "efectivo",
+        "tarjeta_debito",
+        "tarjeta_credito",
+        "transferencia",
+        "cheque"
+      ]
     },
     "referencia_pago": {
       "type": "string"
     },
     "fecha_pago": {
       "type": "datetime"
+    },
+    "desglose": {
+      "type": "json"
     }
   }
 }

@@ -2,43 +2,21 @@
 export const prerender = false;
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
 import Card from '../../components/ui/Card.astro';
+import Button from '../../components/ui/Button.astro';
 import { strapiGet, strapiPost } from '../../lib/strapi';
 import '../../styles/global.css';
 
 const userRole = Astro.cookies.get('user_role')?.value;
 const mecanicoId = Astro.cookies.get('mecanico_id')?.value;
-const mecanicoName = Astro.cookies.get('user_name')?.value || 'Mecánico';
 
 if (!userRole) {
   return Astro.redirect('/login');
 }
 
-interface Repuesto {
-  id: number;
-  documentId: string;
-  nombre: string;
-  sku: string;
-  precio: number;
-  stock: number;
-  stock_minimo: number;
-}
-
-interface Order {
-  id: number;
-  documentId: string;
-  descripcion: string;
-  vehiculo: {
-    marca: string;
-    modelo: string;
-    patente: string;
-  } | null;
-}
-
-let repuestos: Repuesto[] = [];
-let ordenes: Order[] = [];
+let repuestos: any[] = [];
+let ordenes: any[] = [];
 let message = '';
 let messageType = '';
-let error = '';
 
 // Obtener mensaje de URL
 const urlMessage = Astro.url.searchParams.get('message');
@@ -48,288 +26,281 @@ if (urlMessage) {
   messageType = urlType || 'success';
 }
 
-const preselectedOrderId = Astro.url.searchParams.get('ordenId') || '';
-
 try {
-  // Obtener repuestos disponibles
-  const repuestosData = await strapiGet('/api/repuestos?sort=nombre:asc');
+  // Obtener repuestos
+  const repuestosData = await strapiGet('/api/repuestos?sort=nombre:asc&pagination[limit]=100');
   repuestos = repuestosData.data || [];
 
-  // Obtener órdenes del mecánico (activas)
-  let ordenesEndpoint = '/api/orden-de-trabajos?filters[estado][$notIn][0]=entregado&filters[estado][$notIn][1]=facturado&populate[vehiculo][fields][0]=marca&populate[vehiculo][fields][1]=modelo&populate[vehiculo][fields][2]=patente&sort=updatedAt:desc';
-  
+  // Obtener órdenes activas del mecánico
+  let ordenesEndpoint = '/api/orden-de-trabajos?filters[estado][$notIn][0]=entregado&filters[estado][$notIn][1]=facturado&populate[vehiculo]=true&sort=updatedAt:desc';
   if (mecanicoId) {
-    ordenesEndpoint = `/api/orden-de-trabajos?filters[mecanico][id][$eq]=${mecanicoId}&filters[estado][$notIn][0]=entregado&filters[estado][$notIn][1]=facturado&populate[vehiculo][fields][0]=marca&populate[vehiculo][fields][1]=modelo&populate[vehiculo][fields][2]=patente&sort=updatedAt:desc`;
+    ordenesEndpoint = `/api/orden-de-trabajos?filters[mecanico][id][$eq]=${mecanicoId}&filters[estado][$notIn][0]=entregado&filters[estado][$notIn][1]=facturado&populate[vehiculo]=true&sort=updatedAt:desc`;
   }
-  
   const ordenesData = await strapiGet(ordenesEndpoint);
   ordenes = ordenesData.data || [];
 
-  // Manejar POST para crear solicitud
+  // Manejar POST (Carrito)
   if (Astro.request.method === 'POST') {
     const formData = await Astro.request.formData();
-    const ordenId = formData.get('orden');
-    const repuestoId = formData.get('repuesto');
-    const cantidad = parseInt(formData.get('cantidad')?.toString() || '1');
-    const urgencia = formData.get('urgencia') || 'normal';
-    const notas = formData.get('notas') || '';
-
-    if (!ordenId || !repuestoId) {
-      return Astro.redirect(`/mecanico/solicitar_repuesto?message=${encodeURIComponent('Debe seleccionar una orden y un repuesto.')}&type=error`);
-    }
-
-    // Obtener datos del repuesto para el nombre
-    const repuestoInfo = repuestos.find(r => r.documentId === repuestoId);
+    const cartJson = formData.get('cart') as string;
+    const ordenId = formData.get('ordenId');
     
-    // Crear solicitud de repuesto en la tabla de solicitudes
-    try {
-      // Obtener ID numérico de la orden y el repuesto
-      const orderResponse = await strapiGet(`/api/orden-de-trabajos/${ordenId}`);
-      const orderNumericId = orderResponse.data?.id;
-      
-      const repuestoResponse = await strapiGet(`/api/repuestos/${repuestoId}`);
-      const repuestoNumericId = repuestoResponse.data?.id;
-      
-      // Crear solicitud en la tabla solicitud-de-repuestos
-      await strapiPost('/api/solicitud-de-repuestos', {
-        cantidad: cantidad,
-        urgencia: urgencia === 'normal' ? 'media' : urgencia === 'critica' ? 'alta' : urgencia,
-        estado: 'pendiente',
-        observaciones: notas || '',
-        repuesto: repuestoNumericId,
-        orden_de_trabajo: orderNumericId
-      });
+    if (cartJson && ordenId) {
+        const cart = JSON.parse(cartJson);
+        const orderResponse = await strapiGet(`/api/orden-de-trabajos/${ordenId}`);
+        const orderNumericId = orderResponse.data?.id;
 
-      // También agregar a bitácora como registro
-      await strapiPost('/api/bitacoras', {
-        procedimientos: `[SOLICITUD REPUESTO] ${repuestoInfo?.nombre || 'Repuesto'} x${cantidad} - Urgencia: ${urgencia}`,
-        fecha: new Date().toISOString().split('T')[0],
-        orden_de_trabajo: orderNumericId,
-        observaciones: `Solicitud enviada al encargado. SKU: ${repuestoInfo?.sku || 'N/A'}`,
-      });
+        let successCount = 0;
+        let errors = [];
 
-      return Astro.redirect(`/mecanico/solicitar_repuesto?message=${encodeURIComponent('Solicitud de repuesto enviada al encargado.')}&type=success`);
-    } catch (err: any) {
-      console.error('Error creating request:', err);
-      return Astro.redirect(`/mecanico/solicitar_repuesto?message=${encodeURIComponent('Error al enviar solicitud: ' + err.message)}&type=error`);
+        for (const item of cart) {
+            try {
+                // Obtener ID numérico del repuesto
+                // Nota: item.id debería ser el documentId si viene del frontend, necesitamos el ID numérico para la relación
+                // O Strapi v5 usa documentId para relaciones? Depende de la config.
+                // Asumiremos que necesitamos buscar el ID numérico o usar el que tenemos si ya es numérico.
+                // En el frontend pasaremos el objeto repuesto completo.
+                
+                // Crear solicitud
+                await strapiPost('/api/solicitud-de-repuestos', {
+                    cantidad: parseInt(item.cantidad),
+                    urgencia: item.urgencia,
+                    estado: 'pendiente',
+                    observaciones: item.notas || '',
+                    repuesto: item.repuesto.id, // ID numérico
+                    orden_de_trabajo: orderNumericId
+                });
+                successCount++;
+            } catch (err: any) {
+                console.error('Error requesting part:', err);
+                errors.push(item.repuesto.nombre);
+            }
+        }
+
+        if (successCount > 0) {
+            // Log en bitácora
+            await strapiPost('/api/bitacoras', {
+                procedimientos: `[SOLICITUD] Se solicitaron ${successCount} repuestos al encargado.`,
+                fecha: new Date().toISOString().split('T')[0],
+                orden_de_trabajo: orderNumericId,
+            });
+            
+            return Astro.redirect(`/mecanico/solicitar_repuesto?message=${encodeURIComponent(`Se enviaron ${successCount} solicitudes correctamente.`)}&type=success`);
+        } else {
+             return Astro.redirect(`/mecanico/solicitar_repuesto?message=${encodeURIComponent('Error al procesar las solicitudes.')}&type=error`);
+        }
     }
   }
 
-} catch (e: any) {
-  console.error('Error:', e);
-  error = 'Error al cargar datos';
+} catch (e) {
+  console.error(e);
 }
 ---
 
-<DashboardLayout title="Solicitar Repuesto" role="mecanico" currentPath="/mecanico/solicitar_repuesto">
-  <div class="max-w-4xl mx-auto">
-    <!-- Header -->
+<DashboardLayout title="Solicitar Repuestos" role="mecanico" currentPath="/mecanico/solicitar_repuesto">
+  <div class="max-w-6xl mx-auto" x-data="requestCart()">
+    
     <div class="mb-8">
-      <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Solicitar Repuesto</h1>
-      <p class="text-gray-500 dark:text-gray-400 mt-2">Solicita repuestos al encargado para tus órdenes de trabajo.</p>
+      <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Solicitar Repuestos</h1>
+      <p class="text-gray-500 dark:text-gray-400 mt-2">Gestiona tus pedidos de piezas al encargado.</p>
     </div>
 
     {message && (
-      <div class={`p-4 mb-6 rounded-lg border flex items-center gap-3 ${messageType === 'success' ? 'bg-green-50 border-green-200 text-green-800 dark:bg-green-900/30 dark:border-green-800 dark:text-green-300' : 'bg-red-50 border-red-200 text-red-800 dark:bg-red-900/30 dark:border-red-800 dark:text-red-300'}`}>
+      <div class={`p-4 mb-6 rounded-lg border flex items-center gap-3 ${messageType === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
         <span class="material-symbols-outlined">{messageType === 'success' ? 'check_circle' : 'error'}</span>
         <p>{message}</p>
       </div>
     )}
 
-    {error && (
-      <div class="p-4 mb-6 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg text-red-800 dark:text-red-200 flex items-center gap-2">
-        <span class="material-symbols-outlined">error</span>
-        <p>{error}</p>
-      </div>
-    )}
-
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <!-- Formulario de Solicitud -->
-      <div class="lg:col-span-2">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      
+      <!-- Left Column: Selection -->
+      <div class="lg:col-span-2 space-y-6">
+        
+        <!-- Order Selection -->
         <Card>
-          <form method="POST" class="space-y-6" x-data="solicitudForm()">
-            <!-- Selección de Orden -->
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Orden de Trabajo *
-              </label>
-              <select 
-                name="orden" 
-                required
-                x-model="selectedOrden"
-                class="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              >
-                <option value="">Seleccione una orden...</option>
-                {ordenes.map((orden) => (
-                  <option value={orden.documentId} selected={preselectedOrderId === orden.documentId}>
-                    OT-{orden.id} - {orden.vehiculo?.marca} {orden.vehiculo?.modelo} ({orden.vehiculo?.patente})
-                  </option>
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">1. Seleccionar Orden de Trabajo</label>
+            <select x-model="selectedOrder" class="w-full rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 py-3">
+                <option value="">-- Seleccione una orden --</option>
+                {ordenes.map(orden => (
+                    <option value={orden.documentId}>
+                        OT-{orden.id} • {orden.vehiculo?.marca} {orden.vehiculo?.modelo}
+                    </option>
                 ))}
-              </select>
-            </div>
+            </select>
+        </Card>
 
-            <!-- Búsqueda y Selección de Repuesto -->
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Repuesto *
-              </label>
-              <div class="relative">
-                <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">search</span>
-                <input 
-                  type="text" 
-                  x-model="searchQuery"
-                  placeholder="Buscar repuesto por nombre o SKU..."
-                  class="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                />
-              </div>
-              
-              <!-- Lista de Repuestos -->
-              <div class="mt-3 max-h-60 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg divide-y divide-gray-200 dark:divide-gray-700">
-                {repuestos.map((repuesto) => (
-                  <label 
-                    class="flex items-center gap-4 p-3 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-colors"
-                    x-show={`!searchQuery || '${repuesto.nombre.toLowerCase()}'.includes(searchQuery.toLowerCase()) || '${repuesto.sku.toLowerCase()}'.includes(searchQuery.toLowerCase())`}
-                  >
+        <!-- Part Selection -->
+        <Card class="relative" x-bind:class="!selectedOrder ? 'opacity-50 pointer-events-none' : ''">
+            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">2. Buscar y Agregar Repuestos</label>
+            
+            <div class="flex gap-4 mb-4">
+                <div class="flex-1 relative">
+                    <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">search</span>
                     <input 
-                      type="radio" 
-                      name="repuesto" 
-                      value={repuesto.documentId}
-                      x-model="selectedRepuesto"
-                      class="w-4 h-4 text-primary-600 border-gray-300 focus:ring-primary-500"
-                    />
-                    <div class="flex-1 min-w-0">
-                      <p class="font-medium text-gray-900 dark:text-white">{repuesto.nombre}</p>
-                      <p class="text-sm text-gray-500 dark:text-gray-400">SKU: {repuesto.sku}</p>
+                        type="text" 
+                        x-model="search" 
+                        placeholder="Buscar por nombre o SKU..." 
+                        class="w-full pl-10 rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900"
+                    >
+                    <!-- Dropdown Results -->
+                    <div x-show="search.length > 1 && !selectedPart" class="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                        <template x-for="part in filteredParts" :key="part.id">
+                            <div @click="selectPart(part)" class="p-3 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-0">
+                                <div class="flex justify-between">
+                                    <span class="font-medium text-gray-900 dark:text-white" x-text="part.nombre"></span>
+                                    <span class="text-xs font-bold" :class="part.stock > 0 ? 'text-green-600' : 'text-red-600'" x-text="'Stock: ' + part.stock"></span>
+                                </div>
+                                <p class="text-xs text-gray-500" x-text="'SKU: ' + part.sku"></p>
+                            </div>
+                        </template>
+                        <div x-show="filteredParts.length === 0" class="p-3 text-sm text-gray-500 text-center">No se encontraron repuestos</div>
                     </div>
-                    <div class="text-right">
-                      <p class="font-bold text-gray-900 dark:text-white">${repuesto.precio.toLocaleString('es-CL')}</p>
-                      <p class={`text-xs ${repuesto.stock <= repuesto.stock_minimo ? 'text-red-600' : 'text-green-600'}`}>
-                        Stock: {repuesto.stock}
-                      </p>
+                </div>
+            </div>
+
+            <!-- Selected Part Config -->
+            <div x-show="selectedPart" class="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                <div class="flex justify-between items-start mb-4">
+                    <div>
+                        <h4 class="font-bold text-gray-900 dark:text-white" x-text="selectedPart?.nombre"></h4>
+                        <p class="text-sm text-gray-500" x-text="selectedPart?.sku"></p>
                     </div>
-                  </label>
-                ))}
-              </div>
-            </div>
+                    <button @click="selectedPart = null; search = ''" class="text-gray-400 hover:text-red-500">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
 
-            <!-- Cantidad y Urgencia -->
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Cantidad *
-                </label>
-                <input 
-                  type="number" 
-                  name="cantidad" 
-                  min="1" 
-                  value="1"
-                  required
-                  class="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                />
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Urgencia
-                </label>
-                <select 
-                  name="urgencia"
-                  class="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                >
-                  <option value="baja">Baja - Puede esperar</option>
-                  <option value="normal" selected>Normal</option>
-                  <option value="alta">Alta - Urgente</option>
-                  <option value="critica">Crítica - Trabajo detenido</option>
-                </select>
-              </div>
-            </div>
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Cantidad</label>
+                        <input type="number" x-model="quantity" min="1" class="w-full rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-500 mb-1">Urgencia</label>
+                        <select x-model="urgency" class="w-full rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800">
+                            <option value="baja">Baja</option>
+                            <option value="media">Media</option>
+                            <option value="alta">Alta</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-xs font-medium text-gray-500 mb-1">Notas (Opcional)</label>
+                    <input type="text" x-model="notes" placeholder="Ej: Marca específica..." class="w-full rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800">
+                </div>
 
-            <!-- Notas -->
-            <div>
-              <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Notas adicionales
-              </label>
-              <textarea 
-                name="notas"
-                rows="3"
-                placeholder="Especificaciones adicionales, número de parte alternativo, etc..."
-                class="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              ></textarea>
+                <div class="mt-4 flex justify-end">
+                    <button @click="addToCart()" class="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 flex items-center gap-2">
+                        <span class="material-symbols-outlined">add_shopping_cart</span>
+                        Agregar al Pedido
+                    </button>
+                </div>
             </div>
-
-            <!-- Botón de Envío -->
-            <div class="flex justify-end gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-              <a 
-                href="/mecanico/dash_mec"
-                class="px-6 py-3 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-              >
-                Cancelar
-              </a>
-              <button 
-                type="submit"
-                class="px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2"
-                :disabled="!selectedOrden || !selectedRepuesto"
-              >
-                <span class="material-symbols-outlined">send</span>
-                Enviar Solicitud
-              </button>
-            </div>
-          </form>
         </Card>
       </div>
 
-      <!-- Panel Lateral -->
-      <div class="space-y-6">
-        <!-- Info Box -->
-        <Card>
-          <div class="flex items-start gap-3">
-            <span class="material-symbols-outlined text-blue-600 dark:text-blue-400 text-2xl">info</span>
-            <div>
-              <h3 class="font-bold text-gray-900 dark:text-white mb-2">¿Cómo funciona?</h3>
-              <ol class="text-sm text-gray-600 dark:text-gray-400 space-y-2 list-decimal list-inside">
-                <li>Selecciona la orden de trabajo</li>
-                <li>Busca y selecciona el repuesto</li>
-                <li>Indica cantidad y urgencia</li>
-                <li>El encargado aprobará la solicitud</li>
-                <li>Se descontará del inventario</li>
-              </ol>
+      <!-- Right Column: Cart -->
+      <div class="lg:col-span-1">
+        <Card class="sticky top-6 h-[calc(100vh-100px)] flex flex-col">
+            <div class="flex items-center gap-2 mb-4 pb-4 border-b border-gray-100 dark:border-gray-700">
+                <span class="material-symbols-outlined text-primary-600">shopping_cart</span>
+                <h2 class="font-bold text-lg text-gray-900 dark:text-white">Tu Pedido</h2>
+                <span class="ml-auto bg-primary-100 text-primary-800 text-xs font-bold px-2 py-1 rounded-full" x-text="cart.length">0</span>
             </div>
-          </div>
-        </Card>
 
-        <!-- Solicitudes Recientes -->
-        <Card noPadding>
-          <h3 class="text-gray-900 dark:text-white font-bold px-5 py-4 border-b border-gray-200 dark:border-gray-700">
-            Acciones Rápidas
-          </h3>
-          <div class="p-4 space-y-2">
-            <a 
-              href="/mecanico/dash_mec"
-              class="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-            >
-              <span class="material-symbols-outlined text-gray-500">assignment</span>
-              <span class="text-gray-700 dark:text-gray-300">Ver mis órdenes</span>
-            </a>
-            <a 
-              href="/mecanico/bitacora_repuestos"
-              class="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-            >
-              <span class="material-symbols-outlined text-gray-500">inventory</span>
-              <span class="text-gray-700 dark:text-gray-300">Gestionar repuestos</span>
-            </a>
-          </div>
+            <div class="flex-1 overflow-y-auto space-y-3 pr-2">
+                <template x-for="(item, index) in cart" :key="index">
+                    <div class="p-3 bg-gray-50 dark:bg-gray-900/30 rounded-lg border border-gray-200 dark:border-gray-700 relative group">
+                        <button @click="removeFromCart(index)" class="absolute top-2 right-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <span class="material-symbols-outlined text-sm">delete</span>
+                        </button>
+                        <p class="font-medium text-sm text-gray-900 dark:text-white pr-6" x-text="item.repuesto.nombre"></p>
+                        <div class="flex items-center gap-2 mt-1 text-xs text-gray-500">
+                            <span class="bg-white dark:bg-gray-800 px-1.5 py-0.5 rounded border border-gray-200 dark:border-gray-600" x-text="'x' + item.cantidad"></span>
+                            <span class="capitalize" :class="{
+                                'text-red-600 font-bold': item.urgencia === 'alta',
+                                'text-orange-600': item.urgencia === 'media'
+                            }" x-text="item.urgencia"></span>
+                        </div>
+                        <p x-show="item.notas" class="text-xs text-gray-400 mt-1 italic" x-text="item.notas"></p>
+                    </div>
+                </template>
+                
+                <div x-show="cart.length === 0" class="text-center py-10 text-gray-400">
+                    <span class="material-symbols-outlined text-4xl mb-2 opacity-50">remove_shopping_cart</span>
+                    <p class="text-sm">El carrito está vacío</p>
+                </div>
+            </div>
+
+            <div class="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+                <form method="POST">
+                    <input type="hidden" name="cart" :value="JSON.stringify(cart)">
+                    <input type="hidden" name="ordenId" :value="selectedOrder">
+                    
+                    <button 
+                        type="submit" 
+                        class="w-full py-3 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 transition-all shadow-lg shadow-green-600/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        :disabled="cart.length === 0 || !selectedOrder"
+                    >
+                        <span class="material-symbols-outlined">send</span>
+                        Enviar Solicitud
+                    </button>
+                </form>
+            </div>
         </Card>
       </div>
+
     </div>
   </div>
 </DashboardLayout>
 
-<script>
-  declare const Alpine: any;
+<script define:vars={{ repuestos }}>
   document.addEventListener('alpine:init', () => {
-    Alpine.data('solicitudForm', () => ({
-      searchQuery: '',
-      selectedOrden: new URLSearchParams(window.location.search).get('ordenId') || '',
-      selectedRepuesto: ''
+    Alpine.data('requestCart', () => ({
+      repuestos: repuestos,
+      selectedOrder: '',
+      search: '',
+      selectedPart: null,
+      quantity: 1,
+      urgency: 'media',
+      notes: '',
+      cart: [],
+
+      get filteredParts() {
+        if (this.search.length < 2) return [];
+        return this.repuestos.filter(p => 
+          p.nombre.toLowerCase().includes(this.search.toLowerCase()) || 
+          p.sku.toLowerCase().includes(this.search.toLowerCase())
+        ).slice(0, 10);
+      },
+
+      selectPart(part) {
+        this.selectedPart = part;
+        this.quantity = 1;
+        this.urgency = 'media';
+        this.notes = '';
+        this.search = '';
+      },
+
+      addToCart() {
+        if (!this.selectedPart) return;
+        
+        this.cart.push({
+            repuesto: this.selectedPart,
+            cantidad: this.quantity,
+            urgencia: this.urgency,
+            notas: this.notes
+        });
+
+        this.selectedPart = null;
+        this.search = '';
+      },
+
+      removeFromCart(index) {
+        this.cart.splice(index, 1);
+      }
     }));
   });
 </script>

@@ -25,12 +25,6 @@
       "relation": "oneToMany",
       "target": "api::mecenico.mecenico",
       "mappedBy": "zona"
-    },
-    "mecanico": {
-      "type": "relation",
-      "relation": "manyToOne",
-      "target": "api::mecenico.mecenico",
-      "inversedBy": "zonas"
     }
   }
 }
