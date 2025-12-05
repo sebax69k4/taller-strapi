@@ -42,6 +42,8 @@ if (Astro.request.method === 'POST') {
     const email = params.get('email')?.trim() || '';
     const telefono = params.get('telefono')?.trim() || '';
     const rut = params.get('rut')?.trim() || '';
+    const direccion = params.get('direccion')?.trim() || '';
+    const comuna = params.get('comuna')?.trim() || '';
     const idToUpdate = params.get('id');
 
     // Validaciones del servidor
@@ -58,7 +60,15 @@ if (Astro.request.method === 'POST') {
       return Astro.redirect(`${redirectUrl}?message=${encodeURIComponent(errorMsg)}&type=error`);
     }
 
-    const clientData = { nombre, apellido, email, telefono, rut };
+    const clientData = { 
+      nombre, 
+      apellido, 
+      email, 
+      telefono, 
+      rut,
+      direccion: direccion || null,
+      comuna: comuna || null
+    };
     let successMessage = '';
 
     if (idToUpdate) {
@@ -78,6 +88,17 @@ if (Astro.request.method === 'POST') {
     return Astro.redirect(`${redirectUrl}${separator}message=${encodeURIComponent(errorMessage)}&type=error`);
   }
 }
+
+// Lista de comunas de Santiago para autocompletado
+const comunasSantiago = [
+  'Cerrillos', 'Cerro Navia', 'Conchalí', 'El Bosque', 'Estación Central',
+  'Huechuraba', 'Independencia', 'La Cisterna', 'La Florida', 'La Granja',
+  'La Pintana', 'La Reina', 'Las Condes', 'Lo Barnechea', 'Lo Espejo',
+  'Lo Prado', 'Macul', 'Maipú', 'Ñuñoa', 'Pedro Aguirre Cerda',
+  'Peñalolén', 'Providencia', 'Pudahuel', 'Quilicura', 'Quinta Normal',
+  'Recoleta', 'Renca', 'San Bernardo', 'San Joaquín', 'San Miguel',
+  'San Ramón', 'Santiago', 'Vitacura', 'Puente Alto', 'Colina', 'Lampa'
+];
 ---
 
 <DashboardLayout title={isEditMode ? 'Editar Cliente' : 'Registrar Nuevo Cliente'} role="recepcionista" currentPath={Astro.url.pathname}>
@@ -89,6 +110,8 @@ if (Astro.request.method === 'POST') {
             rut: initialData.rut || '',
             email: initialData.email || '',
             telefono: initialData.telefono || '',
+            direccion: initialData.direccion || '',
+            comuna: initialData.comuna || '',
             errors: {},
             touched: {},
             serverMessage: initialData.serverMessage || '',
@@ -205,7 +228,7 @@ if (Astro.request.method === 'POST') {
         }));
     });
     </script>
-    <div class="w-full max-w-2xl mx-auto" x-data={`clienteFormValidator(${JSON.stringify({ nombre: cliente?.nombre || '', apellido: cliente?.apellido || '', rut: cliente?.rut || '', email: cliente?.email || '', telefono: cliente?.telefono || '', serverMessage: message || '', serverMessageType: messageType || '' })})`}>
+    <div class="w-full max-w-3xl mx-auto" x-data={`clienteFormValidator(${JSON.stringify({ nombre: cliente?.nombre || '', apellido: cliente?.apellido || '', rut: cliente?.rut || '', email: cliente?.email || '', telefono: cliente?.telefono || '', direccion: cliente?.direccion || '', comuna: cliente?.comuna || '', serverMessage: message || '', serverMessageType: messageType || '' })})`}>
         <div class="flex flex-col gap-2 mb-6">
             <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">{isEditMode ? 'Editar' : 'Registrar Nuevo'} Cliente</h1>
             <p class="text-gray-500 dark:text-gray-400">{isEditMode ? 'Modifique los datos del cliente.' : 'Complete los siguientes campos para añadir un nuevo cliente al sistema.'}</p>
@@ -220,119 +243,194 @@ if (Astro.request.method === 'POST') {
         </template>
 
         <Card>
-            <form method="POST" @submit="submitForm($event)" class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+            <form method="POST" @submit="submitForm($event)" class="space-y-6">
                 {isEditMode && <input type="hidden" name="id" value={clientId} />}
                 
-                <!-- Nombre -->
-                <div class="sm:col-span-1">
-                    <label for="nombre" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nombre <span class="text-red-500">*</span></label>
-                    <input 
-                        type="text"
-                        name="nombre" 
-                        id="nombre" 
-                        x-model="nombre"
-                        @blur="validateField('nombre')"
-                        @input="touched.nombre && validateField('nombre')"
-                        placeholder="ej: Juan"
-                        class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-800 dark:text-white transition-colors"
-                        :class="errors.nombre ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 dark:border-gray-600'"
-                        required
-                    />
-                    <p x-show="errors.nombre" x-text="errors.nombre" class="mt-1 text-sm text-red-600 dark:text-red-400"></p>
-                </div>
-                
-                <!-- Apellido -->
-                <div class="sm:col-span-1">
-                    <label for="apellido" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Apellido <span class="text-red-500">*</span></label>
-                    <input 
-                        type="text"
-                        name="apellido" 
-                        id="apellido" 
-                        x-model="apellido"
-                        @blur="validateField('apellido')"
-                        @input="touched.apellido && validateField('apellido')"
-                        placeholder="ej: Pérez"
-                        class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-800 dark:text-white transition-colors"
-                        :class="errors.apellido ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 dark:border-gray-600'"
-                        required
-                    />
-                    <p x-show="errors.apellido" x-text="errors.apellido" class="mt-1 text-sm text-red-600 dark:text-red-400"></p>
-                </div>
-                
-                <!-- RUT -->
-                <div class="sm:col-span-2">
-                    <label for="rut" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">RUT <span class="text-red-500">*</span></label>
-                    <input 
-                        type="text"
-                        name="rut" 
-                        id="rut" 
-                        x-model="rut"
-                        @input="onRutInput($event)"
-                        @blur="validateField('rut')"
-                        placeholder="ej: 12.345.678-9"
-                        maxlength="12"
-                        class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-800 dark:text-white transition-colors"
-                        :class="errors.rut ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 dark:border-gray-600'"
-                        required
-                    />
-                    <p x-show="errors.rut" x-text="errors.rut" class="mt-1 text-sm text-red-600 dark:text-red-400"></p>
-                    <p x-show="!errors.rut && touched.rut && rut" class="mt-1 text-sm text-green-600 dark:text-green-400 flex items-center gap-1">
-                        <span class="material-symbols-outlined text-sm">check_circle</span> RUT válido
-                    </p>
-                </div>
-                
-                <!-- Email -->
-                <div class="sm:col-span-2">
-                    <label for="email" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email <span class="text-red-500">*</span></label>
-                    <input 
-                        type="email"
-                        name="email" 
-                        id="email" 
-                        x-model="email"
-                        @blur="validateField('email')"
-                        @input="touched.email && validateField('email')"
-                        placeholder="ej: juan.perez@email.com"
-                        class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-800 dark:text-white transition-colors"
-                        :class="errors.email ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 dark:border-gray-600'"
-                        required
-                    />
-                    <p x-show="errors.email" x-text="errors.email" class="mt-1 text-sm text-red-600 dark:text-red-400"></p>
-                </div>
-                
-                <!-- Teléfono -->
-                <div class="sm:col-span-2">
-                    <label for="telefono" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Teléfono <span class="text-red-500">*</span></label>
-                    <input 
-                        type="tel"
-                        name="telefono" 
-                        id="telefono" 
-                        x-model="telefono"
-                        @blur="validateField('telefono')"
-                        @input="touched.telefono && validateField('telefono')"
-                        placeholder="ej: 912345678"
-                        class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-800 dark:text-white transition-colors"
-                        :class="errors.telefono ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 dark:border-gray-600'"
-                        required
-                    />
-                    <p x-show="errors.telefono" x-text="errors.telefono" class="mt-1 text-sm text-red-600 dark:text-red-400"></p>
-                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Ingrese 9 dígitos comenzando con 9 (ej: 912345678)</p>
+                <!-- Sección: Datos Personales -->
+                <div>
+                    <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                        <span class="flex items-center justify-center w-6 h-6 rounded-full bg-primary-100 dark:bg-primary-900/30 text-primary-600 text-xs">1</span>
+                        Datos Personales
+                    </h2>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <!-- Nombre -->
+                        <div>
+                            <label for="nombre" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nombre <span class="text-red-500">*</span></label>
+                            <input 
+                                type="text"
+                                name="nombre" 
+                                id="nombre" 
+                                x-model="nombre"
+                                @blur="validateField('nombre')"
+                                @input="touched.nombre && validateField('nombre')"
+                                placeholder="ej: Juan"
+                                class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-800 dark:text-white transition-colors"
+                                :class="errors.nombre ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 dark:border-gray-600'"
+                                required
+                            />
+                            <p x-show="errors.nombre" x-text="errors.nombre" class="mt-1 text-sm text-red-600 dark:text-red-400"></p>
+                        </div>
+                        
+                        <!-- Apellido -->
+                        <div>
+                            <label for="apellido" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Apellido <span class="text-red-500">*</span></label>
+                            <input 
+                                type="text"
+                                name="apellido" 
+                                id="apellido" 
+                                x-model="apellido"
+                                @blur="validateField('apellido')"
+                                @input="touched.apellido && validateField('apellido')"
+                                placeholder="ej: Pérez"
+                                class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-800 dark:text-white transition-colors"
+                                :class="errors.apellido ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 dark:border-gray-600'"
+                                required
+                            />
+                            <p x-show="errors.apellido" x-text="errors.apellido" class="mt-1 text-sm text-red-600 dark:text-red-400"></p>
+                        </div>
+                        
+                        <!-- RUT -->
+                        <div class="sm:col-span-2">
+                            <label for="rut" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">RUT <span class="text-red-500">*</span></label>
+                            <input 
+                                type="text"
+                                name="rut" 
+                                id="rut" 
+                                x-model="rut"
+                                @input="onRutInput($event)"
+                                @blur="validateField('rut')"
+                                placeholder="ej: 12.345.678-9"
+                                maxlength="12"
+                                class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-800 dark:text-white transition-colors"
+                                :class="errors.rut ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 dark:border-gray-600'"
+                                required
+                            />
+                            <p x-show="errors.rut" x-text="errors.rut" class="mt-1 text-sm text-red-600 dark:text-red-400"></p>
+                            <p x-show="!errors.rut && touched.rut && rut" class="mt-1 text-sm text-green-600 dark:text-green-400 flex items-center gap-1">
+                                <span class="material-symbols-outlined text-sm">check_circle</span> RUT válido
+                            </p>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="sm:col-span-2 flex justify-end gap-3 pt-4 border-t border-gray-100 dark:border-gray-800 mt-2">
-                     <a href="/recepcion/list_c_y_v">
-                        <Button type="button" variant="secondary">
-                            Cancelar
-                        </Button>
-                    </a>
-                    <button 
-                        type="submit" 
-                        :disabled="isSubmitting || Object.keys(errors).length > 0"
-                        class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                        <span class="material-symbols-outlined text-lg" x-show="!isSubmitting">save</span>
-                        <span class="material-symbols-outlined text-lg animate-spin" x-show="isSubmitting">progress_activity</span>
-                        <span x-text="isSubmitting ? 'Guardando...' : '{isEditMode ? 'Actualizar' : 'Guardar'} Cliente'"></span>
-                    </button>
+                <div class="border-t border-gray-100 dark:border-gray-800"></div>
+                
+                <!-- Sección: Contacto -->
+                <div>
+                    <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                        <span class="flex items-center justify-center w-6 h-6 rounded-full bg-primary-100 dark:bg-primary-900/30 text-primary-600 text-xs">2</span>
+                        Información de Contacto
+                    </h2>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <!-- Email -->
+                        <div>
+                            <label for="email" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email <span class="text-red-500">*</span></label>
+                            <input 
+                                type="email"
+                                name="email" 
+                                id="email" 
+                                x-model="email"
+                                @blur="validateField('email')"
+                                @input="touched.email && validateField('email')"
+                                placeholder="ej: juan.perez@email.com"
+                                class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-800 dark:text-white transition-colors"
+                                :class="errors.email ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 dark:border-gray-600'"
+                                required
+                            />
+                            <p x-show="errors.email" x-text="errors.email" class="mt-1 text-sm text-red-600 dark:text-red-400"></p>
+                        </div>
+                        
+                        <!-- Teléfono -->
+                        <div>
+                            <label for="telefono" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Teléfono <span class="text-red-500">*</span></label>
+                            <div class="relative">
+                                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">+56</span>
+                                <input 
+                                    type="tel"
+                                    name="telefono" 
+                                    id="telefono" 
+                                    x-model="telefono"
+                                    @blur="validateField('telefono')"
+                                    @input="touched.telefono && validateField('telefono')"
+                                    placeholder="912345678"
+                                    maxlength="9"
+                                    class="w-full pl-12 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-800 dark:text-white transition-colors"
+                                    :class="errors.telefono ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 dark:border-gray-600'"
+                                    required
+                                />
+                            </div>
+                            <p x-show="errors.telefono" x-text="errors.telefono" class="mt-1 text-sm text-red-600 dark:text-red-400"></p>
+                            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">9 dígitos comenzando con 9</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="border-t border-gray-100 dark:border-gray-800"></div>
+                
+                <!-- Sección: Dirección -->
+                <div>
+                    <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                        <span class="flex items-center justify-center w-6 h-6 rounded-full bg-primary-100 dark:bg-primary-900/30 text-primary-600 text-xs">3</span>
+                        Dirección
+                        <span class="text-sm font-normal text-gray-400">(opcional)</span>
+                    </h2>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <!-- Dirección -->
+                        <div class="sm:col-span-2">
+                            <label for="direccion" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Dirección</label>
+                            <input 
+                                type="text"
+                                name="direccion" 
+                                id="direccion" 
+                                x-model="direccion"
+                                placeholder="ej: Av. Providencia 1234, Depto 56"
+                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-800 dark:text-white transition-colors"
+                            />
+                        </div>
+                        
+                        <!-- Comuna -->
+                        <div>
+                            <label for="comuna" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Comuna</label>
+                            <input 
+                                type="text"
+                                name="comuna" 
+                                id="comuna" 
+                                x-model="comuna"
+                                list="comunas-list"
+                                placeholder="ej: Providencia"
+                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-800 dark:text-white transition-colors"
+                            />
+                            <datalist id="comunas-list">
+                                {comunasSantiago.map(c => <option value={c} />)}
+                            </datalist>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="border-t border-gray-100 dark:border-gray-800"></div>
+
+                <!-- Actions -->
+                <div class="flex flex-col sm:flex-row justify-between items-center gap-4 pt-2">
+                    <div class="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">
+                        <span class="material-symbols-outlined text-lg">info</span>
+                        Los campos marcados con <span class="text-red-500">*</span> son obligatorios
+                    </div>
+                    <div class="flex gap-3">
+                        <a href="/recepcion/list_c_y_v">
+                            <Button type="button" variant="secondary">
+                                Cancelar
+                            </Button>
+                        </a>
+                        <button 
+                            type="submit" 
+                            :disabled="isSubmitting || Object.keys(errors).length > 0"
+                            class="inline-flex items-center gap-2 px-6 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                        >
+                            <span class="material-symbols-outlined text-lg" x-show="!isSubmitting">save</span>
+                            <span class="material-symbols-outlined text-lg animate-spin" x-show="isSubmitting">progress_activity</span>
+                            <span x-text={`isSubmitting ? 'Guardando...' : '${isEditMode ? 'Actualizar' : 'Guardar'} Cliente'`}></span>
+                        </button>
+                    </div>
                 </div>
             </form>
         </Card>

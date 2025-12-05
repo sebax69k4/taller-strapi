@@ -515,9 +515,11 @@ export interface ApiClienteCliente extends Struct.CollectionTypeSchema {
   };
   attributes: {
     apellido: Schema.Attribute.String;
+    comuna: Schema.Attribute.String;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    direccion: Schema.Attribute.String;
     email: Schema.Attribute.Email &
       Schema.Attribute.Required &
       Schema.Attribute.Unique;
@@ -671,6 +673,7 @@ export interface ApiOrdenDeTrabajoOrdenDeTrabajo
     fecha_inicio_planificada: Schema.Attribute.DateTime;
     hora_fin_real: Schema.Attribute.DateTime;
     hora_inicio_real: Schema.Attribute.DateTime;
+    kilometraje_ingreso: Schema.Attribute.Integer;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
       'oneToMany',
@@ -678,10 +681,17 @@ export interface ApiOrdenDeTrabajoOrdenDeTrabajo
     > &
       Schema.Attribute.Private;
     mecanico: Schema.Attribute.Relation<'manyToOne', 'api::mecenico.mecenico'>;
+    nivel_combustible: Schema.Attribute.Enumeration<
+      ['vacio', 'cuarto', 'medio', 'tres_cuartos', 'lleno']
+    >;
     presupuesto: Schema.Attribute.Relation<
       'oneToOne',
       'api::presupuesto.presupuesto'
     >;
+    prioridad: Schema.Attribute.Enumeration<
+      ['urgente', 'alta', 'normal', 'baja']
+    > &
+      Schema.Attribute.DefaultTo<'normal'>;
     publishedAt: Schema.Attribute.DateTime;
     repuestos: Schema.Attribute.Relation<
       'manyToMany',
@@ -945,9 +955,11 @@ export interface ApiVehiculoVehiculo extends Struct.CollectionTypeSchema {
   attributes: {
     ano: Schema.Attribute.Integer;
     cliente: Schema.Attribute.Relation<'manyToOne', 'api::cliente.cliente'>;
+    color: Schema.Attribute.String;
     createdAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
+    kilometraje: Schema.Attribute.Integer;
     locale: Schema.Attribute.String & Schema.Attribute.Private;
     localizations: Schema.Attribute.Relation<
       'oneToMany',
@@ -958,6 +970,7 @@ export interface ApiVehiculoVehiculo extends Struct.CollectionTypeSchema {
     mecanico: Schema.Attribute.Relation<'manyToOne', 'api::mecenico.mecenico'>;
     modelo: Schema.Attribute.String;
     numero_de_chasis: Schema.Attribute.String;
+    observaciones: Schema.Attribute.Text;
     orden_de_trabajos: Schema.Attribute.Relation<
       'oneToMany',
       'api::orden-de-trabajo.orden-de-trabajo'
@@ -966,6 +979,9 @@ export interface ApiVehiculoVehiculo extends Struct.CollectionTypeSchema {
       Schema.Attribute.Required &
       Schema.Attribute.Unique;
     publishedAt: Schema.Attribute.DateTime;
+    tipo_combustible: Schema.Attribute.Enumeration<
+      ['bencina', 'diesel', 'hibrido', 'electrico', 'gas']
+    >;
     updatedAt: Schema.Attribute.DateTime;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;

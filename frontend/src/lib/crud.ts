@@ -3,7 +3,7 @@
  * Funciones genéricas para operaciones CRUD en todas las entidades
  */
 
-const STRAPI_URL = import.meta.env.STRAPI_URL || 'https://engaging-bubble-5a6bf0674c.strapiapp.com:1337'; /*http://localhost:1337*/
+const STRAPI_URL = import.meta.env.STRAPI_URL || 'http://localhost:1337';
 const STRAPI_TOKEN = import.meta.env.STRAPI_TOKEN || '';
 
 export interface StrapiResponse<T> {
@@ -48,26 +48,26 @@ export async function getAll<T>(
   } = {}
 ): Promise<StrapiResponse<T[]>> {
   const params = new URLSearchParams();
-  
+
   // Populate
   if (options.populate && options.populate.length > 0) {
     options.populate.forEach((field, index) => {
       params.append(`populate[${index}]`, field);
     });
   }
-  
+
   // Filters
   if (options.filters) {
     Object.entries(options.filters).forEach(([key, value]) => {
       params.append(`filters[${key}]`, String(value));
     });
   }
-  
+
   // Sort
   if (options.sort) {
     params.append('sort', options.sort);
   }
-  
+
   // Pagination
   if (options.pagination) {
     if (options.pagination.page) {
@@ -77,21 +77,21 @@ export async function getAll<T>(
       params.append('pagination[pageSize]', String(options.pagination.pageSize));
     }
   }
-  
+
   const queryString = params.toString();
   const url = `${STRAPI_URL}/api/${collection}${queryString ? `?${queryString}` : ''}`;
-  
+
   const response = await fetch(url, {
     headers: STRAPI_TOKEN ? {
       'Authorization': `Bearer ${STRAPI_TOKEN}`
     } : {}
   });
-  
+
   if (!response.ok) {
     const error: StrapiError = await response.json();
     throw new Error(error.error.message || `Error fetching ${collection}`);
   }
-  
+
   return response.json();
 }
 
@@ -106,27 +106,27 @@ export async function getById<T>(
   } = {}
 ): Promise<StrapiResponse<T>> {
   const params = new URLSearchParams();
-  
+
   if (options.populate && options.populate.length > 0) {
     options.populate.forEach((field, index) => {
       params.append(`populate[${index}]`, field);
     });
   }
-  
+
   const queryString = params.toString();
   const url = `${STRAPI_URL}/api/${collection}/${id}${queryString ? `?${queryString}` : ''}`;
-  
+
   const response = await fetch(url, {
     headers: STRAPI_TOKEN ? {
       'Authorization': `Bearer ${STRAPI_TOKEN}`
     } : {}
   });
-  
+
   if (!response.ok) {
     const error: StrapiError = await response.json();
     throw new Error(error.error.message || `Error fetching ${collection} with id ${id}`);
   }
-  
+
   return response.json();
 }
 
@@ -138,7 +138,7 @@ export async function create<T>(
   data: any
 ): Promise<StrapiResponse<T>> {
   const url = `${STRAPI_URL}/api/${collection}`;
-  
+
   const response = await fetch(url, {
     method: 'POST',
     headers: {
@@ -147,12 +147,12 @@ export async function create<T>(
     },
     body: JSON.stringify({ data })
   });
-  
+
   if (!response.ok) {
     const error: StrapiError = await response.json();
     throw new Error(error.error.message || `Error creating ${collection}`);
   }
-  
+
   return response.json();
 }
 
@@ -165,7 +165,7 @@ export async function update<T>(
   data: any
 ): Promise<StrapiResponse<T>> {
   const url = `${STRAPI_URL}/api/${collection}/${id}`;
-  
+
   const response = await fetch(url, {
     method: 'PUT',
     headers: {
@@ -174,12 +174,12 @@ export async function update<T>(
     },
     body: JSON.stringify({ data })
   });
-  
+
   if (!response.ok) {
     const error: StrapiError = await response.json();
     throw new Error(error.error.message || `Error updating ${collection} with id ${id}`);
   }
-  
+
   return response.json();
 }
 
@@ -191,19 +191,19 @@ export async function remove<T>(
   id: number | string
 ): Promise<StrapiResponse<T>> {
   const url = `${STRAPI_URL}/api/${collection}/${id}`;
-  
+
   const response = await fetch(url, {
     method: 'DELETE',
     headers: STRAPI_TOKEN ? {
       'Authorization': `Bearer ${STRAPI_TOKEN}`
     } : {}
   });
-  
+
   if (!response.ok) {
     const error: StrapiError = await response.json();
     throw new Error(error.error.message || `Error deleting ${collection} with id ${id}`);
   }
-  
+
   return response.json();
 }
 
@@ -224,15 +224,15 @@ export const clientes = {
  * VEHICULOS
  */
 export const vehiculos = {
-  getAll: (populate = ['cliente', 'mecanico', 'orden_de_trabajos']) => 
+  getAll: (populate = ['cliente', 'mecanico', 'orden_de_trabajos']) =>
     getAll('vehiculos', { populate, sort: 'patente:asc' }),
-  getById: (id: number | string, populate = ['cliente', 'mecanico', 'orden_de_trabajos']) => 
+  getById: (id: number | string, populate = ['cliente', 'mecanico', 'orden_de_trabajos']) =>
     getById('vehiculos', id, { populate }),
   create: (data: any) => create('vehiculos', data),
   update: (id: number | string, data: any) => update('vehiculos', id, data),
   delete: (id: number | string) => remove('vehiculos', id),
-  getByCliente: (clienteId: number | string) => 
-    getAll('vehiculos', { 
+  getByCliente: (clienteId: number | string) =>
+    getAll('vehiculos', {
       filters: { 'cliente': { 'id': { '$eq': clienteId } } },
       populate: ['cliente']
     }),
@@ -242,15 +242,15 @@ export const vehiculos = {
  * REPUESTOS
  */
 export const repuestos = {
-  getAll: (populate = ['servicios', 'orden_de_trabajos']) => 
+  getAll: (populate = ['servicios', 'orden_de_trabajos']) =>
     getAll('repuestos', { populate, sort: 'nombre:asc' }),
-  getById: (id: number | string, populate = ['servicios', 'orden_de_trabajos']) => 
+  getById: (id: number | string, populate = ['servicios', 'orden_de_trabajos']) =>
     getById('repuestos', id, { populate }),
   create: (data: any) => create('repuestos', data),
   update: (id: number | string, data: any) => update('repuestos', id, data),
   delete: (id: number | string) => remove('repuestos', id),
-  getLowStock: () => 
-    getAll('repuestos', { 
+  getLowStock: () =>
+    getAll('repuestos', {
       filters: { 'stock': { '$lte': { '$ref': 'stock_minimo' } } },
       sort: 'stock:asc'
     }),
@@ -260,20 +260,20 @@ export const repuestos = {
  * MECANICOS
  */
 export const mecanicos = {
-  getAll: (populate = ['servicios', 'orden_de_trabajos', 'zona', 'vehiculos', 'bitacoras']) => 
+  getAll: (populate = ['servicios', 'orden_de_trabajos', 'zona', 'vehiculos', 'bitacoras']) =>
     getAll('mecenico', { populate, sort: 'nombre:asc' }),
-  getById: (id: number | string, populate = ['servicios', 'orden_de_trabajos', 'zona']) => 
+  getById: (id: number | string, populate = ['servicios', 'orden_de_trabajos', 'zona']) =>
     getById('mecenico', id, { populate }),
   create: (data: any) => create('mecenico', data),
   update: (id: number | string, data: any) => update('mecenico', id, data),
   delete: (id: number | string) => remove('mecenico', id),
-  getByEstado: (estado: string) => 
-    getAll('mecenico', { 
+  getByEstado: (estado: string) =>
+    getAll('mecenico', {
       filters: { 'estado': { '$eq': estado } },
       populate: ['zona']
     }),
-  getByEmail: (email: string) => 
-    getAll('mecenico', { 
+  getByEmail: (email: string) =>
+    getAll('mecenico', {
       filters: { 'email': { '$eq': email } }
     }),
 };
@@ -282,9 +282,9 @@ export const mecanicos = {
  * ZONAS
  */
 export const zonas = {
-  getAll: (populate = ['orden_de_trabajos', 'mecanicos']) => 
+  getAll: (populate = ['orden_de_trabajos', 'mecanicos']) =>
     getAll('zonas', { populate, sort: 'nombre:asc' }),
-  getById: (id: number | string, populate = ['orden_de_trabajos', 'mecanicos']) => 
+  getById: (id: number | string, populate = ['orden_de_trabajos', 'mecanicos']) =>
     getById('zonas', id, { populate }),
   create: (data: any) => create('zonas', data),
   update: (id: number | string, data: any) => update('zonas', id, data),
@@ -295,27 +295,27 @@ export const zonas = {
  * ORDENES DE TRABAJO
  */
 export const ordenDeTrabajo = {
-  getAll: (populate = ['vehiculo', 'mecanico', 'zona', 'presupuesto', 'factura', 'repuestos', 'bitacoras']) => 
+  getAll: (populate = ['vehiculo', 'mecanico', 'zona', 'presupuesto', 'factura', 'repuestos', 'bitacoras']) =>
     getAll('orden-de-trabajos', { populate, sort: 'fecha_ingreso:desc' }),
-  getById: (id: number | string, populate = ['vehiculo', 'mecanico', 'zona', 'presupuesto', 'factura', 'repuestos', 'bitacoras']) => 
+  getById: (id: number | string, populate = ['vehiculo', 'mecanico', 'zona', 'presupuesto', 'factura', 'repuestos', 'bitacoras']) =>
     getById('orden-de-trabajos', id, { populate }),
   create: (data: any) => create('orden-de-trabajos', data),
   update: (id: number | string, data: any) => update('orden-de-trabajos', id, data),
   delete: (id: number | string) => remove('orden-de-trabajos', id),
-  getByEstado: (estado: string, populate = ['vehiculo', 'mecanico', 'zona']) => 
-    getAll('orden-de-trabajos', { 
+  getByEstado: (estado: string, populate = ['vehiculo', 'mecanico', 'zona']) =>
+    getAll('orden-de-trabajos', {
       filters: { 'estado': { '$eq': estado } },
       populate,
       sort: 'fecha_ingreso:desc'
     }),
-  getByMecanico: (mecanicoId: number | string) => 
-    getAll('orden-de-trabajos', { 
+  getByMecanico: (mecanicoId: number | string) =>
+    getAll('orden-de-trabajos', {
       filters: { 'mecanico': { 'id': { '$eq': mecanicoId } } },
       populate: ['vehiculo', 'zona'],
       sort: 'fecha_ingreso:desc'
     }),
-  getByZona: (zonaId: number | string) => 
-    getAll('orden-de-trabajos', { 
+  getByZona: (zonaId: number | string) =>
+    getAll('orden-de-trabajos', {
       filters: { 'zona': { 'id': { '$eq': zonaId } } },
       populate: ['vehiculo', 'mecanico'],
       sort: 'fecha_ingreso:desc'
@@ -326,9 +326,9 @@ export const ordenDeTrabajo = {
  * SERVICIOS
  */
 export const servicios = {
-  getAll: (populate = ['vehiculo', 'mecenico', 'repuestos']) => 
+  getAll: (populate = ['vehiculo', 'mecenico', 'repuestos']) =>
     getAll('servicios', { populate, sort: 'fecha_ingreso:desc' }),
-  getById: (id: number | string, populate = ['vehiculo', 'mecenico', 'repuestos']) => 
+  getById: (id: number | string, populate = ['vehiculo', 'mecenico', 'repuestos']) =>
     getById('servicios', id, { populate }),
   create: (data: any) => create('servicios', data),
   update: (id: number | string, data: any) => update('servicios', id, data),
@@ -339,15 +339,15 @@ export const servicios = {
  * BITACORAS
  */
 export const bitacoras = {
-  getAll: (populate = ['orden_de_trabajo', 'mecanico']) => 
+  getAll: (populate = ['orden_de_trabajo', 'mecanico']) =>
     getAll('bitacoras', { populate, sort: 'fecha:desc' }),
-  getById: (id: number | string, populate = ['orden_de_trabajo', 'mecanico']) => 
+  getById: (id: number | string, populate = ['orden_de_trabajo', 'mecanico']) =>
     getById('bitacoras', id, { populate }),
   create: (data: any) => create('bitacoras', data),
   update: (id: number | string, data: any) => update('bitacoras', id, data),
   delete: (id: number | string) => remove('bitacoras', id),
-  getByOrden: (ordenId: number | string) => 
-    getAll('bitacoras', { 
+  getByOrden: (ordenId: number | string) =>
+    getAll('bitacoras', {
       filters: { 'orden_de_trabajo': { 'id': { '$eq': ordenId } } },
       populate: ['mecanico'],
       sort: 'fecha:desc'
@@ -358,9 +358,9 @@ export const bitacoras = {
  * PRESUPUESTOS
  */
 export const presupuestos = {
-  getAll: (populate = ['orden_de_trabajo']) => 
+  getAll: (populate = ['orden_de_trabajo']) =>
     getAll('presupuestos', { populate, sort: 'fecha_generacion:desc' }),
-  getById: (id: number | string, populate = ['orden_de_trabajo']) => 
+  getById: (id: number | string, populate = ['orden_de_trabajo']) =>
     getById('presupuestos', id, { populate }),
   create: (data: any) => create('presupuestos', data),
   update: (id: number | string, data: any) => update('presupuestos', id, data),
@@ -371,9 +371,9 @@ export const presupuestos = {
  * FACTURAS
  */
 export const facturas = {
-  getAll: (populate = ['orden_de_trabajo']) => 
+  getAll: (populate = ['orden_de_trabajo']) =>
     getAll('facturas', { populate, sort: 'fecha_emision:desc' }),
-  getById: (id: number | string, populate = ['orden_de_trabajo']) => 
+  getById: (id: number | string, populate = ['orden_de_trabajo']) =>
     getById('facturas', id, { populate }),
   create: (data: any) => create('facturas', data),
   update: (id: number | string, data: any) => update('facturas', id, data),

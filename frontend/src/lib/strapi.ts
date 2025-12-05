@@ -1,10 +1,10 @@
 // Configuración de Strapi
-export const STRAPI_URL = import.meta.env.PUBLIC_STRAPI_URL || 'https://engaging-bubble-5a6bf0674c.strapiapp.com';
+export const STRAPI_URL = import.meta.env.PUBLIC_STRAPI_URL || 'http://localhost:1337';
 
 // Helper para hacer peticiones a Strapi (sin autenticación - APIs públicas)
 export async function fetchStrapi(endpoint: string, options: RequestInit = {}) {
   const url = `${STRAPI_URL}${endpoint}`;
-  
+
   const defaultOptions: RequestInit = {
     headers: {
       'Content-Type': 'application/json',
@@ -15,7 +15,7 @@ export async function fetchStrapi(endpoint: string, options: RequestInit = {}) {
 
   try {
     const response = await fetch(url, defaultOptions);
-    
+
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error?.message || `Error ${response.status}`);
@@ -31,7 +31,7 @@ export async function fetchStrapi(endpoint: string, options: RequestInit = {}) {
 // Helper simplificado para GET que aplana la estructura de Strapi
 export async function strapiGet(endpoint: string) {
   const response = await fetchStrapi(endpoint, { method: 'GET' });
-  
+
   // En Strapi v5, los datos ya vienen planos (sin attributes wrapper)
   // Solo necesitamos devolver la respuesta tal cual
   return response;

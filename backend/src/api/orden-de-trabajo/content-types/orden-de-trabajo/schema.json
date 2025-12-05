@@ -100,6 +100,29 @@
     },
     "danos_previos": {
       "type": "json"
+    },
+    "prioridad": {
+      "type": "enumeration",
+      "enum": [
+        "urgente",
+        "alta",
+        "normal",
+        "baja"
+      ],
+      "default": "normal"
+    },
+    "kilometraje_ingreso": {
+      "type": "integer"
+    },
+    "nivel_combustible": {
+      "type": "enumeration",
+      "enum": [
+        "vacio",
+        "cuarto",
+        "medio",
+        "tres_cuartos",
+        "lleno"
+      ]
     }
   }
 }

@@ -13,6 +13,7 @@ interface Cliente {
   nombre: string;
   apellido: string;
   rut: string;
+  telefono?: string;
 }
 
 interface Vehiculo {
@@ -21,8 +22,35 @@ interface Vehiculo {
   patente: string;
   marca: string;
   modelo: string;
+  ano?: number;
+  color?: string;
+  kilometraje?: number;
   cliente: Cliente | null;
-  clienteId?: number; // Para facilitar el filtrado en frontend
+}
+
+interface Mecanico {
+  id: number;
+  documentId: string;
+  nombre: string;
+  apellido: string;
+  especialidad?: string;
+  estado?: string;
+}
+
+interface Zona {
+  id: number;
+  documentId: string;
+  nombre: string;
+}
+
+interface Servicio {
+  id: number;
+  documentId: string;
+  nombre: string;
+  descripcion?: string;
+  precio_base: number;
+  tiempo_estimado?: number;
+  categoria?: string;
 }
 
 const userRole = Astro.cookies.get('user_role')?.value;
@@ -33,23 +61,32 @@ if (!userRole) {
 let message = Astro.url.searchParams.get('message');
 let messageType = Astro.url.searchParams.get('type');
 
-// Parámetros preseleccionados desde buscar_cliente o historial_vehiculo
+// Parámetros preseleccionados
 const preselectedClienteId = Astro.url.searchParams.get('clienteId') || '';
-const preselectedVehiculoId = Astro.url.searchParams.get('vehiculoId') || '';
+const preselectedVehiculoId = Astro.url.searchParams.get('vehiculoId') || Astro.url.searchParams.get('vehiculo') || '';
 
 let clientes: Cliente[] = [];
 let vehiculos: Vehiculo[] = [];
+let mecanicos: Mecanico[] = [];
+let zonas: Zona[] = [];
+let servicios: Servicio[] = [];
 let preselectedCliente: Cliente | null = null;
 let preselectedVehiculo: Vehiculo | null = null;
 
 try {
-  const [clientesResponse, vehiculosResponse] = await Promise.all([
+  const [clientesResponse, vehiculosResponse, mecanicosResponse, zonasResponse, serviciosResponse] = await Promise.all([
     strapiGet('/api/clientes?sort=nombre:asc'),
-    strapiGet('/api/vehiculos?populate=cliente&sort=marca:asc')
+    strapiGet('/api/vehiculos?populate=cliente&sort=marca:asc'),
+    strapiGet('/api/mecenicos?filters[estado][$eq]=disponible&sort=nombre:asc'),
+    strapiGet('/api/zonas?sort=nombre:asc'),
+    strapiGet('/api/servicios?filters[activo][$eq]=true&sort=categoria:asc,nombre:asc')
   ]);
 
   clientes = clientesResponse.data || [];
   vehiculos = vehiculosResponse.data || [];
+  mecanicos = mecanicosResponse.data || [];
+  zonas = zonasResponse.data || [];
+  servicios = serviciosResponse.data || [];
 
   // Buscar cliente y vehículo preseleccionados
   if (preselectedVehiculoId) {
@@ -70,24 +107,47 @@ try {
 if (Astro.request.method === 'POST') {
   try {
     const formData = await Astro.request.formData();
-    const clienteId = formData.get('cliente');
-    const vehiculoDocumentId = formData.get('vehiculo'); // Ahora es documentId
+    const vehiculoDocumentId = formData.get('vehiculo');
     const fechaEntrada = formData.get('fecha_entrada');
+    const fechaEstimada = formData.get('fecha_estimada');
     const descripcion = formData.get('descripcion');
+    const prioridad = formData.get('prioridad') || 'normal';
+    const mecanicoId = formData.get('mecanico');
+    const zonaId = formData.get('zona');
+    const kilometrajeIngreso = formData.get('kilometraje_ingreso');
+    const nivelCombustible = formData.get('nivel_combustible');
+    const serviciosSeleccionados = formData.getAll('servicios[]');
+    const danosStr = formData.get('danos_previos');
 
-    if (!clienteId || !vehiculoDocumentId || !fechaEntrada || !descripcion) {
-        return Astro.redirect(`/recepcion/crear_orden?message=${encodeURIComponent('Todos los campos son obligatorios.')}&type=error`);
+    if (!vehiculoDocumentId || !fechaEntrada || !descripcion) {
+        return Astro.redirect(`/recepcion/crear_orden?message=${encodeURIComponent('Vehículo, fecha y descripción son obligatorios.')}&type=error`);
     }
 
-    // En Strapi v5, las relaciones se conectan usando documentId
-    const result = await strapiPost('/api/orden-de-trabajos', {
-      vehiculo: vehiculoDocumentId, // Usar documentId directamente
+    // Construir objeto de orden
+    const ordenData: any = {
+      vehiculo: vehiculoDocumentId,
       fecha_ingreso: fechaEntrada,
       descripcion: descripcion,
-      estado: 'ingresado'
-    });
+      estado: 'ingresado',
+      prioridad: prioridad
+    };
 
-    return Astro.redirect(`/recepcion/dash_recep?message=${encodeURIComponent('Orden creada exitosamente.')}&type=success`);
+    // Campos opcionales
+    if (fechaEstimada) ordenData.fecha_estimada = fechaEstimada;
+    if (mecanicoId) ordenData.mecanico = mecanicoId;
+    if (zonaId) ordenData.zona = zonaId;
+    if (kilometrajeIngreso) ordenData.kilometraje_ingreso = parseInt(kilometrajeIngreso.toString());
+    if (nivelCombustible) ordenData.nivel_combustible = nivelCombustible;
+    if (serviciosSeleccionados.length > 0) ordenData.servicios = serviciosSeleccionados;
+    if (danosStr) {
+      try {
+        ordenData.danos_previos = JSON.parse(danosStr.toString());
+      } catch (e) {}
+    }
+
+    const result = await strapiPost('/api/orden-de-trabajos', ordenData);
+
+    return Astro.redirect(`/recepcion/dash_recep?message=${encodeURIComponent('Orden de trabajo creada exitosamente.')}&type=success`);
 
   } catch (error: any) {
     console.error('Error creating order:', error);
@@ -95,127 +155,367 @@ if (Astro.request.method === 'POST') {
     messageType = 'error';
   }
 }
+
+// Agrupar servicios por categoría
+const serviciosPorCategoria = servicios.reduce((acc: Record<string, Servicio[]>, s: Servicio) => {
+  const cat = s.categoria || 'otros';
+  if (!acc[cat]) acc[cat] = [];
+  acc[cat].push(s);
+  return acc;
+}, {});
+
+const categoriasOrden = ['mantencion', 'reparacion', 'diagnostico', 'electrico', 'pintura', 'neumaticos', 'otros'];
+const categoriasNombres: Record<string, string> = {
+  mantencion: '🔧 Mantención',
+  reparacion: '🛠️ Reparación',
+  diagnostico: '🔍 Diagnóstico',
+  electrico: '⚡ Eléctrico',
+  pintura: '🎨 Pintura',
+  neumaticos: '🛞 Neumáticos',
+  otros: '📦 Otros'
+};
 ---
 
 <DashboardLayout title="Crear Orden de Trabajo" role="recepcionista" currentPath="/recepcion/crear_orden">
-    <div class="max-w-4xl mx-auto">
+    <div class="max-w-5xl mx-auto" x-data="ordenFormController()">
         <!-- Page Header -->
-        <div class="mb-8">
-            <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Nueva Orden de Trabajo</h1>
-            <p class="text-gray-500 dark:text-gray-400 text-sm mt-1">Registra un nuevo vehículo para servicio</p>
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Nueva Orden de Trabajo</h1>
+                <p class="text-gray-500 dark:text-gray-400 text-sm mt-1">Complete la información para ingresar un vehículo al taller</p>
+            </div>
+            <div class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                <span class="material-symbols-outlined text-lg">schedule</span>
+                {new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })}
+            </div>
         </div>
 
         <!-- Alert Messages -->
         {message && (
-            <div class={`p-4 mb-6 rounded-lg border flex items-center gap-3 ${messageType === 'success' ? 'bg-green-50 border-green-200 text-green-800 dark:bg-green-900/30 dark:border-green-800 dark:text-green-300' : 'bg-red-50 border-red-200 text-red-800 dark:bg-red-900/30 dark:border-red-800 dark:text-red-300'}`}>
+            <div class={`p-4 mb-6 rounded-xl border flex items-center gap-3 ${messageType === 'success' ? 'bg-green-50 border-green-200 text-green-800 dark:bg-green-900/30 dark:border-green-800 dark:text-green-300' : 'bg-red-50 border-red-200 text-red-800 dark:bg-red-900/30 dark:border-red-800 dark:text-red-300'}`}>
                 <span class="material-symbols-outlined">{messageType === 'success' ? 'check_circle' : 'error'}</span>
                 <p class="text-sm font-medium">{message}</p>
             </div>
         )}
 
-        <Card>
-            <form method="POST" class="space-y-8" x-data="formController()" x-init="init()">
-                
-                <!-- Preselection Alert -->
-                {(preselectedCliente || preselectedVehiculo) && (
-                    <div class="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 flex items-center gap-3">
-                        <span class="material-symbols-outlined text-blue-600 dark:text-blue-400">info</span>
-                        <p class="text-sm text-blue-700 dark:text-blue-300">
-                            {preselectedVehiculo 
-                                ? `Creando orden para: ${preselectedVehiculo.marca} ${preselectedVehiculo.modelo} (${preselectedVehiculo.patente})`
-                                : `Creando orden para: ${preselectedCliente?.nombre} ${preselectedCliente?.apellido}`
-                            }
+        <form method="POST" class="space-y-6">
+            
+            <!-- Preselection Alert -->
+            {(preselectedCliente || preselectedVehiculo) && (
+                <div class="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800 flex items-center gap-3">
+                    <span class="material-symbols-outlined text-blue-600 dark:text-blue-400">info</span>
+                    <p class="text-sm text-blue-700 dark:text-blue-300">
+                        {preselectedVehiculo 
+                            ? `Creando orden para: ${preselectedVehiculo.marca} ${preselectedVehiculo.modelo} (${preselectedVehiculo.patente})`
+                            : `Creando orden para: ${preselectedCliente?.nombre} ${preselectedCliente?.apellido}`
+                        }
+                    </p>
+                </div>
+            )}
+            
+            <!-- Section 1: Cliente y Vehículo -->
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+                <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+                    <span class="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600 text-sm font-bold">1</span>
+                    Cliente y Vehículo
+                </h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="flex flex-col gap-2">
+                        <label class="text-sm font-medium text-gray-700 dark:text-gray-300" for="cliente">
+                            Cliente <span class="text-red-500">*</span>
+                        </label>
+                        <select name="cliente" id="cliente" @change="filterVehiculos($event.target.value)" class="form-select w-full rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:border-primary-500 focus:ring-primary-500 dark:text-gray-200" required>
+                            <option value="" disabled selected>Seleccione un cliente...</option>
+                            {clientes.map((cliente: any) => (
+                                <option value={cliente.id} selected={preselectedCliente?.id === cliente.id}>
+                                    {cliente.nombre} {cliente.apellido} ({cliente.rut})
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    <div class="flex flex-col gap-2">
+                        <label class="text-sm font-medium text-gray-700 dark:text-gray-300" for="vehiculo">
+                            Vehículo <span class="text-red-500">*</span>
+                        </label>
+                        <select name="vehiculo" id="vehiculo" @change="selectVehiculo($event.target.value)" class="form-select w-full rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:border-primary-500 focus:ring-primary-500 dark:text-gray-200" required :disabled="filteredVehiculos.length === 0">
+                            <option value="" disabled selected>Seleccione un vehículo...</option>
+                            <template x-for="vehiculo in filteredVehiculos" :key="vehiculo.documentId">
+                                <option :value="vehiculo.documentId" x-text="`${vehiculo.patente} - ${vehiculo.marca} ${vehiculo.modelo} ${vehiculo.ano ? '(' + vehiculo.ano + ')' : ''}`"></option>
+                            </template>
+                        </select>
+                        <p x-show="selectedClientId && filteredVehiculos.length === 0" class="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                            <span class="material-symbols-outlined text-sm">warning</span>
+                            Sin vehículos. <a href="/recepcion/crear_vehiculo" class="font-medium hover:underline">Añadir uno</a>
                         </p>
                     </div>
-                )}
+                </div>
                 
-                <!-- Client and Vehicle Selection -->
-                <div>
-                    <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                        <span class="flex items-center justify-center w-6 h-6 rounded-full bg-primary-100 dark:bg-primary-900/30 text-primary-600 text-xs">1</span>
-                        Información de Cliente y Vehículo
-                    </h2>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                        <div class="flex flex-col gap-2">
-                            <label class="text-sm font-medium text-gray-700 dark:text-gray-300" for="cliente">Cliente</label>
-                            <select name="cliente" id="cliente" @change="filterVehiculos($event.target.value)" class="form-select w-full rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 focus:border-primary-500 focus:ring-primary-500 dark:text-gray-200" required>
-                                <option value="" disabled selected>Seleccione un cliente...</option>
-                                {clientes.map((cliente: any) => (
-                                    <option value={cliente.id}>{cliente.nombre} {cliente.apellido}</option>
-                                ))}
-                            </select>
+                <!-- Vehicle Info Card -->
+                <template x-if="selectedVehiculo">
+                    <div class="mt-4 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-gray-700">
+                        <div class="flex items-center gap-4">
+                            <div class="w-14 h-14 rounded-xl bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
+                                <span class="material-symbols-outlined text-2xl text-primary-600 dark:text-primary-400">directions_car</span>
+                            </div>
+                            <div class="flex-1 grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">Patente</p>
+                                    <p class="font-bold text-gray-900 dark:text-white font-mono" x-text="selectedVehiculo.patente"></p>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">Marca/Modelo</p>
+                                    <p class="font-semibold text-gray-900 dark:text-white" x-text="`${selectedVehiculo.marca} ${selectedVehiculo.modelo}`"></p>
+                                </div>
+                                <div x-show="selectedVehiculo.ano">
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">Año</p>
+                                    <p class="font-semibold text-gray-900 dark:text-white" x-text="selectedVehiculo.ano"></p>
+                                </div>
+                                <div x-show="selectedVehiculo.color">
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">Color</p>
+                                    <p class="font-semibold text-gray-900 dark:text-white" x-text="selectedVehiculo.color"></p>
+                                </div>
+                            </div>
                         </div>
-                        <div class="flex flex-col gap-2">
-                            <label class="text-sm font-medium text-gray-700 dark:text-gray-300" for="vehiculo">Vehículo</label>
-                            <select name="vehiculo" id="vehiculo" class="form-select w-full rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 focus:border-primary-500 focus:ring-primary-500 dark:text-gray-200" required :disabled="filteredVehiculos.length === 0">
-                                <option value="" disabled selected>Seleccione un vehículo...</option>
-                                <template x-for="vehiculo in filteredVehiculos" :key="vehiculo.documentId">
-                                    <option :value="vehiculo.documentId" x-text="`${vehiculo.marca} ${vehiculo.modelo} (${vehiculo.patente})`"></option>
-                                </template>
-                            </select>
-                            <p x-show="selectedClientId && filteredVehiculos.length === 0" class="text-xs text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
-                                <span class="material-symbols-outlined text-sm">warning</span>
-                                Este cliente no tiene vehículos. <a href="/recepcion/crear_vehiculo" class="font-medium hover:underline">Añadir uno</a>.
-                            </p>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Section 2: Detalles del Servicio -->
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+                <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+                    <span class="flex items-center justify-center w-7 h-7 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-600 text-sm font-bold">2</span>
+                    Detalles del Servicio
+                </h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                    <!-- Fecha de entrada -->
+                    <div class="flex flex-col gap-2">
+                        <label class="text-sm font-medium text-gray-700 dark:text-gray-300" for="fecha_entrada">
+                            Fecha de Ingreso <span class="text-red-500">*</span>
+                        </label>
+                        <input name="fecha_entrada" id="fecha_entrada" type="date" value={new Date().toISOString().split('T')[0]} class="form-input w-full rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:border-primary-500 focus:ring-primary-500 dark:text-gray-200" required/>
+                    </div>
+                    
+                    <!-- Fecha estimada -->
+                    <div class="flex flex-col gap-2">
+                        <label class="text-sm font-medium text-gray-700 dark:text-gray-300" for="fecha_estimada">
+                            Fecha Estimada Entrega
+                        </label>
+                        <input name="fecha_estimada" id="fecha_estimada" type="date" class="form-input w-full rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:border-primary-500 focus:ring-primary-500 dark:text-gray-200"/>
+                    </div>
+                    
+                    <!-- Prioridad -->
+                    <div class="flex flex-col gap-2">
+                        <label class="text-sm font-medium text-gray-700 dark:text-gray-300" for="prioridad">
+                            Prioridad
+                        </label>
+                        <select name="prioridad" id="prioridad" class="form-select w-full rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:border-primary-500 focus:ring-primary-500 dark:text-gray-200">
+                            <option value="baja">🟢 Baja</option>
+                            <option value="normal" selected>🟡 Normal</option>
+                            <option value="alta">🟠 Alta</option>
+                            <option value="urgente">🔴 Urgente</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Descripción del problema -->
+                <div class="flex flex-col gap-2">
+                    <label class="text-sm font-medium text-gray-700 dark:text-gray-300" for="descripcion">
+                        Descripción del Problema / Motivo de Ingreso <span class="text-red-500">*</span>
+                    </label>
+                    <textarea name="descripcion" id="descripcion" class="form-textarea w-full rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:border-primary-500 focus:ring-primary-500 dark:text-gray-200" placeholder="Describa detalladamente el problema reportado por el cliente, síntomas observados, o los servicios solicitados..." rows="4" required></textarea>
+                </div>
+            </div>
+
+            <!-- Section 3: Estado del Vehículo -->
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+                <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+                    <span class="flex items-center justify-center w-7 h-7 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 text-sm font-bold">3</span>
+                    Estado del Vehículo al Ingreso
+                </h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <!-- Kilometraje -->
+                    <div class="flex flex-col gap-2">
+                        <label class="text-sm font-medium text-gray-700 dark:text-gray-300" for="kilometraje_ingreso">
+                            Kilometraje Actual
+                        </label>
+                        <div class="relative">
+                            <input name="kilometraje_ingreso" id="kilometraje_ingreso" type="number" min="0" class="form-input w-full rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:border-primary-500 focus:ring-primary-500 dark:text-gray-200 pr-12" placeholder="Ej: 45000"/>
+                            <span class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">km</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Nivel de combustible -->
+                    <div class="flex flex-col gap-2">
+                        <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Nivel de Combustible
+                        </label>
+                        <div class="flex gap-2">
+                            {[
+                                { value: 'vacio', label: 'E', color: 'red' },
+                                { value: 'cuarto', label: '¼', color: 'orange' },
+                                { value: 'medio', label: '½', color: 'yellow' },
+                                { value: 'tres_cuartos', label: '¾', color: 'lime' },
+                                { value: 'lleno', label: 'F', color: 'green' }
+                            ].map(nivel => (
+                                <label class="flex-1">
+                                    <input type="radio" name="nivel_combustible" value={nivel.value} class="sr-only peer"/>
+                                    <div class={`text-center py-3 rounded-lg border-2 cursor-pointer transition-all peer-checked:border-${nivel.color}-500 peer-checked:bg-${nivel.color}-50 dark:peer-checked:bg-${nivel.color}-900/20 border-gray-200 dark:border-gray-700 hover:border-gray-300`}>
+                                        <span class="font-bold text-gray-700 dark:text-gray-300">{nivel.label}</span>
+                                    </div>
+                                </label>
+                            ))}
                         </div>
                     </div>
                 </div>
 
-                <div class="border-t border-gray-100 dark:border-gray-800"></div>
-
-                <!-- Service Details -->
+                <!-- Daños previos (checklist visual) -->
                 <div>
+                    <label class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3 block">
+                        Daños Previos Observados
+                    </label>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {[
+                            { id: 'rayones', label: 'Rayones', icon: 'gesture' },
+                            { id: 'abolladuras', label: 'Abolladuras', icon: 'warning' },
+                            { id: 'parabrisas', label: 'Parabrisas dañado', icon: 'window' },
+                            { id: 'luces', label: 'Luces rotas', icon: 'lightbulb' },
+                            { id: 'espejos', label: 'Espejos dañados', icon: 'flip' },
+                            { id: 'neumaticos', label: 'Neumáticos gastados', icon: 'tire_repair' },
+                            { id: 'interior', label: 'Daño interior', icon: 'airline_seat_recline_normal' },
+                            { id: 'otros', label: 'Otros daños', icon: 'more_horiz' }
+                        ].map(dano => (
+                            <label class="flex items-center gap-2 p-3 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors has-[:checked]:border-amber-500 has-[:checked]:bg-amber-50 dark:has-[:checked]:bg-amber-900/20">
+                                <input type="checkbox" x-model="danosSeleccionados" value={dano.id} class="rounded border-gray-300 text-amber-600 focus:ring-amber-500"/>
+                                <span class="material-symbols-outlined text-gray-400 text-sm">{dano.icon}</span>
+                                <span class="text-sm text-gray-700 dark:text-gray-300">{dano.label}</span>
+                            </label>
+                        ))}
+                    </div>
+                    <input type="hidden" name="danos_previos" :value="JSON.stringify(danosSeleccionados)"/>
+                </div>
+            </div>
+
+            <!-- Section 4: Asignación -->
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+                <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+                    <span class="flex items-center justify-center w-7 h-7 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-600 text-sm font-bold">4</span>
+                    Asignación
+                    <span class="text-sm font-normal text-gray-400">(opcional)</span>
+                </h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Mecánico -->
+                    <div class="flex flex-col gap-2">
+                        <label class="text-sm font-medium text-gray-700 dark:text-gray-300" for="mecanico">
+                            Mecánico Asignado
+                        </label>
+                        <select name="mecanico" id="mecanico" class="form-select w-full rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:border-primary-500 focus:ring-primary-500 dark:text-gray-200">
+                            <option value="">Sin asignar (se asignará después)</option>
+                            {mecanicos.map((mec: any) => (
+                                <option value={mec.documentId}>
+                                    {mec.nombre} {mec.apellido} {mec.especialidad ? `- ${mec.especialidad}` : ''}
+                                </option>
+                            ))}
+                        </select>
+                        {mecanicos.length === 0 && (
+                            <p class="text-xs text-gray-500 dark:text-gray-400">No hay mecánicos disponibles</p>
+                        )}
+                    </div>
+                    
+                    <!-- Zona -->
+                    <div class="flex flex-col gap-2">
+                        <label class="text-sm font-medium text-gray-700 dark:text-gray-300" for="zona">
+                            Zona de Trabajo
+                        </label>
+                        <select name="zona" id="zona" class="form-select w-full rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 focus:border-primary-500 focus:ring-primary-500 dark:text-gray-200">
+                            <option value="">Sin asignar</option>
+                            {zonas.map((zona: any) => (
+                                <option value={zona.documentId}>{zona.nombre}</option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 5: Servicios -->
+            {servicios.length > 0 && (
+                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
                     <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
-                        <span class="flex items-center justify-center w-6 h-6 rounded-full bg-primary-100 dark:bg-primary-900/30 text-primary-600 text-xs">2</span>
-                        Detalles del Servicio
+                        <span class="flex items-center justify-center w-7 h-7 rounded-full bg-teal-100 dark:bg-teal-900/30 text-teal-600 text-sm font-bold">5</span>
+                        Servicios Solicitados
+                        <span class="text-sm font-normal text-gray-400">(opcional)</span>
                     </h2>
-                    <div class="grid grid-cols-1 gap-6">
-                        <div class="flex flex-col sm:max-w-xs gap-2">
-                            <label class="text-sm font-medium text-gray-700 dark:text-gray-300" for="fecha_entrada">Fecha de Entrada</label>
-                            <input name="fecha_entrada" id="fecha_entrada" x-init="$el.value = new Date().toISOString().split('T')[0]" class="form-input w-full rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 focus:border-primary-500 focus:ring-primary-500 dark:text-gray-200" type="date" required/>
-                        </div>
-                        <div class="flex flex-col gap-2">
-                            <label class="text-sm font-medium text-gray-700 dark:text-gray-300" for="descripcion">Descripción del Problema / Tareas</label>
-                            <textarea name="descripcion" id="descripcion" class="form-textarea w-full rounded-lg border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 focus:border-primary-500 focus:ring-primary-500 dark:text-gray-200 placeholder:text-gray-400" placeholder="Ej: Ruido en el motor al acelerar, revisar frenos, cambio de aceite..." rows="5" required></textarea>
-                        </div>
+                    
+                    <div class="space-y-6">
+                        {categoriasOrden.filter(cat => serviciosPorCategoria[cat]?.length > 0).map(cat => (
+                            <div>
+                                <h3 class="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-3">{categoriasNombres[cat]}</h3>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    {serviciosPorCategoria[cat].map((servicio: Servicio) => (
+                                        <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors has-[:checked]:border-teal-500 has-[:checked]:bg-teal-50 dark:has-[:checked]:bg-teal-900/20">
+                                            <input type="checkbox" name="servicios[]" value={servicio.documentId} class="rounded border-gray-300 text-teal-600 focus:ring-teal-500"/>
+                                            <div class="flex-1">
+                                                <p class="font-medium text-gray-900 dark:text-white">{servicio.nombre}</p>
+                                                {servicio.descripcion && (
+                                                    <p class="text-xs text-gray-500 dark:text-gray-400 truncate">{servicio.descripcion}</p>
+                                                )}
+                                            </div>
+                                            <div class="text-right">
+                                                <p class="font-bold text-gray-900 dark:text-white">${servicio.precio_base.toLocaleString('es-CL')}</p>
+                                                {servicio.tiempo_estimado && (
+                                                    <p class="text-xs text-gray-500 dark:text-gray-400">{servicio.tiempo_estimado} min</p>
+                                                )}
+                                            </div>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
+            )}
 
-                <div class="border-t border-gray-100 dark:border-gray-800"></div>
-
-                <!-- Action Area -->
-                <div class="flex justify-end gap-3 pt-2">
+            <!-- Action Area -->
+            <div class="flex flex-col sm:flex-row justify-between items-center gap-4 pt-4">
+                <div class="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-lg">info</span>
+                    Los campos marcados con <span class="text-red-500">*</span> son obligatorios
+                </div>
+                <div class="flex gap-3">
                     <a href="/recepcion/dash_recep">
                         <Button type="button" variant="secondary">
                             Cancelar
                         </Button>
                     </a>
-                    <Button type="submit" icon="add_task">
-                        Crear Orden
-                    </Button>
+                    <button type="submit" class="inline-flex items-center gap-2 px-6 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors font-medium shadow-lg shadow-primary-600/20">
+                        <span class="material-symbols-outlined">add_task</span>
+                        Crear Orden de Trabajo
+                    </button>
                 </div>
-            </form>
-        </Card>
+            </div>
+        </form>
     </div>
 
     <script define:vars={{ vehiculos, preselectedCliente, preselectedVehiculo }}>
         document.addEventListener('alpine:init', () => {
-            Alpine.data('formController', () => ({
-                message: new URLSearchParams(window.location.search).get('message'),
-                messageType: new URLSearchParams(window.location.search).get('type'),
+            Alpine.data('ordenFormController', () => ({
                 selectedClientId: preselectedCliente ? preselectedCliente.id : null,
                 allVehiculos: vehiculos,
                 filteredVehiculos: [],
+                selectedVehiculo: preselectedVehiculo || null,
+                danosSeleccionados: [],
                 preselectedVehiculoId: preselectedVehiculo ? preselectedVehiculo.documentId : null,
+                
                 init() {
                     // Si hay cliente preseleccionado, filtrar vehículos
                     if (this.selectedClientId) {
                         this.filterVehiculos(this.selectedClientId);
-                        // Seleccionar el cliente en el dropdown
                         const clienteSelect = document.getElementById('cliente');
                         if (clienteSelect) clienteSelect.value = this.selectedClientId;
                     }
-                    // Si hay vehículo preseleccionado, seleccionarlo después de un tick
+                    // Si hay vehículo preseleccionado
                     if (this.preselectedVehiculoId) {
                         this.$nextTick(() => {
                             const vehiculoSelect = document.getElementById('vehiculo');
@@ -223,8 +523,10 @@ if (Astro.request.method === 'POST') {
                         });
                     }
                 },
+                
                 filterVehiculos(clientId) {
                     this.selectedClientId = clientId;
+                    this.selectedVehiculo = null;
                     if (!clientId) {
                         this.filteredVehiculos = [];
                         return;
@@ -232,6 +534,10 @@ if (Astro.request.method === 'POST') {
                     this.filteredVehiculos = this.allVehiculos.filter(
                         (vehiculo) => vehiculo.cliente && vehiculo.cliente.id == clientId
                     );
+                },
+                
+                selectVehiculo(documentId) {
+                    this.selectedVehiculo = this.allVehiculos.find(v => v.documentId === documentId) || null;
                 }
             }));
         });

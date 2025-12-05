@@ -30,6 +30,12 @@
       "required": true,
       "unique": true
     },
+    "direccion": {
+      "type": "string"
+    },
+    "comuna": {
+      "type": "string"
+    },
     "vehiculos": {
       "type": "relation",
       "relation": "oneToMany",

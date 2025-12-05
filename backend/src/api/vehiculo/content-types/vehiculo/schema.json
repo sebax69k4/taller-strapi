@@ -28,6 +28,25 @@
     "numero_de_chasis": {
       "type": "string"
     },
+    "color": {
+      "type": "string"
+    },
+    "tipo_combustible": {
+      "type": "enumeration",
+      "enum": [
+        "bencina",
+        "diesel",
+        "hibrido",
+        "electrico",
+        "gas"
+      ]
+    },
+    "kilometraje": {
+      "type": "integer"
+    },
+    "observaciones": {
+      "type": "text"
+    },
     "cliente": {
       "type": "relation",
       "relation": "manyToOne",

@@ -23,6 +23,7 @@ interface Cliente {
   nombre: string;
   apellido: string;
   rut: string;
+  telefono?: string;
   attributes?: ClienteAttributes;
 }
 
@@ -55,6 +56,10 @@ if (Astro.request.method === 'POST') {
     const modelo = formData.get('modelo')?.toString().trim() || '';
     const anio = formData.get('anio')?.toString() || '';
     const vin = formData.get('vin')?.toString().trim() || '';
+    const color = formData.get('color')?.toString().trim() || '';
+    const tipoCombustible = formData.get('tipo_combustible')?.toString() || '';
+    const kilometraje = formData.get('kilometraje')?.toString() || '';
+    const observaciones = formData.get('observaciones')?.toString().trim() || '';
 
     // Validaciones del servidor
     if (!clienteId) validationErrors.push('Debe seleccionar un cliente');
@@ -68,6 +73,10 @@ if (Astro.request.method === 'POST') {
       modelo,
       ano: parseInt(anio, 10),
       numero_de_chasis: vin || null,
+      color: color || null,
+      tipo_combustible: tipoCombustible || null,
+      kilometraje: kilometraje ? parseInt(kilometraje, 10) : null,
+      observaciones: observaciones || null,
       cliente: parseInt(clienteId, 10)
     });
 
@@ -91,11 +100,21 @@ if (Astro.request.method === 'POST') {
             modelo: initialData.modelo || '',
             anio: initialData.anio || '',
             vin: initialData.vin || '',
+            color: initialData.color || '',
+            tipo_combustible: initialData.tipo_combustible || '',
+            kilometraje: initialData.kilometraje || '',
+            observaciones: initialData.observaciones || '',
             errors: {},
             touched: {},
             serverMessage: initialData.serverMessage || '',
             serverMessageType: initialData.serverMessageType || '',
             isSubmitting: false,
+
+            // Lista de marcas populares para autocompletado
+            marcasPopulares: ['Toyota', 'Chevrolet', 'Hyundai', 'Kia', 'Nissan', 'Mazda', 'Suzuki', 'Ford', 'Volkswagen', 'Honda', 'Mitsubishi', 'Subaru', 'Peugeot', 'Renault', 'Fiat', 'Jeep', 'RAM', 'BMW', 'Mercedes-Benz', 'Audi'],
+            
+            // Lista de colores comunes
+            coloresComunes: ['Blanco', 'Negro', 'Gris', 'Plata', 'Rojo', 'Azul', 'Verde', 'Amarillo', 'Naranja', 'Café', 'Beige', 'Dorado'],
 
             formatPatente(patente) {
                 return patente.toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -105,6 +124,16 @@ if (Astro.request.method === 'POST') {
                 this.patente = this.formatPatente(event.target.value);
                 event.target.value = this.patente;
                 if (this.touched.patente) this.validateField('patente');
+            },
+
+            formatKilometraje(value) {
+                // Remover caracteres no numéricos
+                return value.replace(/[^0-9]/g, '');
+            },
+
+            onKilometrajeInput(event) {
+                this.kilometraje = this.formatKilometraje(event.target.value);
+                event.target.value = this.kilometraje;
             },
 
             validateField(field) {
@@ -151,6 +180,11 @@ if (Astro.request.method === 'POST') {
                             this.errors.anio = `El año no puede ser mayor a ${currentYear + 1}`;
                         }
                         break;
+                    case 'kilometraje':
+                        if (this.kilometraje && parseInt(this.kilometraje) < 0) {
+                            this.errors.kilometraje = 'El kilometraje no puede ser negativo';
+                        }
+                        break;
                 }
                 return !this.errors[field];
             },
@@ -176,7 +210,7 @@ if (Astro.request.method === 'POST') {
         }));
     });
     </script>
-    <div class="w-full max-w-3xl mx-auto" x-data={`vehiculoFormValidator(${JSON.stringify({ cliente: '', patente: '', marca: '', modelo: '', anio: '', vin: '', serverMessage: message || '', serverMessageType: messageType || '' })})`}>
+    <div class="w-full max-w-4xl mx-auto" x-data={`vehiculoFormValidator(${JSON.stringify({ cliente: '', patente: '', marca: '', modelo: '', anio: '', vin: '', color: '', tipo_combustible: '', kilometraje: '', observaciones: '', serverMessage: message || '', serverMessageType: messageType || '' })})`}>
         <div class="flex flex-col gap-2 mb-8">
             <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Añadir Nuevo Vehículo</h1>
             <p class="text-gray-500 dark:text-gray-400">Seleccione un cliente y complete los detalles para registrar un nuevo vehículo.</p>
@@ -210,7 +244,7 @@ if (Astro.request.method === 'POST') {
                         >
                             <option value="" disabled>Seleccione un cliente...</option>
                             {clientes.map((cliente: any) => (
-                                <option value={cliente.id}>{cliente.nombre} {cliente.apellido} ({cliente.rut})</option>
+                                <option value={cliente.id}>{cliente.nombre} {cliente.apellido} ({cliente.rut}) {cliente.telefono ? `- ${cliente.telefono}` : ''}</option>
                             ))}
                         </select>
                         <p x-show="errors.cliente" x-text="errors.cliente" class="mt-1 text-sm text-red-600 dark:text-red-400"></p>
@@ -224,9 +258,9 @@ if (Astro.request.method === 'POST') {
                 <div>
                     <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
                         <span class="flex items-center justify-center w-6 h-6 rounded-full bg-primary-100 dark:bg-primary-900/30 text-primary-600 text-xs">2</span>
-                        Detalles del Vehículo
+                        Identificación del Vehículo
                     </h2>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                         <!-- Patente -->
                         <div>
                             <label for="patente" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Patente <span class="text-red-500">*</span></label>
@@ -239,7 +273,7 @@ if (Astro.request.method === 'POST') {
                                 @blur="validateField('patente')"
                                 placeholder="ABCD12"
                                 maxlength="6"
-                                class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-800 dark:text-white transition-colors uppercase"
+                                class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-800 dark:text-white transition-colors uppercase font-mono text-lg tracking-wider"
                                 :class="errors.patente ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 dark:border-gray-600'"
                                 required
                             />
@@ -260,10 +294,16 @@ if (Astro.request.method === 'POST') {
                                 @blur="validateField('marca')"
                                 @input="touched.marca && validateField('marca')"
                                 placeholder="Ej: Toyota"
+                                list="marcas-list"
                                 class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-800 dark:text-white transition-colors"
                                 :class="errors.marca ? 'border-red-500 focus:ring-red-500' : 'border-gray-300 dark:border-gray-600'"
                                 required
                             />
+                            <datalist id="marcas-list">
+                                <template x-for="m in marcasPopulares" :key="m">
+                                    <option :value="m"></option>
+                                </template>
+                            </datalist>
                             <p x-show="errors.marca" x-text="errors.marca" class="mt-1 text-sm text-red-600 dark:text-red-400"></p>
                         </div>
                         
@@ -304,41 +344,129 @@ if (Astro.request.method === 'POST') {
                             />
                             <p x-show="errors.anio" x-text="errors.anio" class="mt-1 text-sm text-red-600 dark:text-red-400"></p>
                         </div>
+
+                        <!-- Color -->
+                        <div>
+                            <label for="color" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Color</label>
+                            <input 
+                                type="text"
+                                name="color" 
+                                id="color"
+                                x-model="color"
+                                placeholder="Ej: Blanco"
+                                list="colores-list"
+                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-800 dark:text-white transition-colors"
+                            />
+                            <datalist id="colores-list">
+                                <template x-for="c in coloresComunes" :key="c">
+                                    <option :value="c"></option>
+                                </template>
+                            </datalist>
+                        </div>
+
+                        <!-- Tipo de Combustible -->
+                        <div>
+                            <label for="tipo_combustible" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Tipo de Combustible</label>
+                            <select 
+                                name="tipo_combustible" 
+                                id="tipo_combustible"
+                                x-model="tipo_combustible"
+                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-800 dark:text-white transition-colors"
+                            >
+                                <option value="">Seleccionar...</option>
+                                <option value="bencina">🛢️ Bencina</option>
+                                <option value="diesel">⛽ Diesel</option>
+                                <option value="hibrido">🔋 Híbrido</option>
+                                <option value="electrico">⚡ Eléctrico</option>
+                                <option value="gas">💨 Gas (GLP/GNC)</option>
+                            </select>
+                        </div>
                         
                         <!-- VIN -->
-                        <div class="sm:col-span-2">
+                        <div>
                             <label for="vin" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Nº de Chasis (VIN)</label>
                             <input 
                                 type="text"
                                 name="vin" 
                                 id="vin"
                                 x-model="vin"
-                                placeholder="Opcional"
-                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-800 dark:text-white transition-colors"
+                                placeholder="17 caracteres"
+                                maxlength="17"
+                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-800 dark:text-white transition-colors font-mono uppercase"
                             />
                             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Número de identificación del vehículo (opcional)</p>
+                        </div>
+
+                        <!-- Kilometraje -->
+                        <div>
+                            <label for="kilometraje" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Kilometraje Actual</label>
+                            <div class="relative">
+                                <input 
+                                    type="text"
+                                    name="kilometraje" 
+                                    id="kilometraje"
+                                    x-model="kilometraje"
+                                    @input="onKilometrajeInput($event)"
+                                    @blur="validateField('kilometraje')"
+                                    placeholder="Ej: 45000"
+                                    class="w-full px-3 py-2 pr-12 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-800 dark:text-white transition-colors"
+                                    :class="errors.kilometraje ? 'border-red-500 focus:ring-red-500' : ''"
+                                />
+                                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">km</span>
+                            </div>
+                            <p x-show="errors.kilometraje" x-text="errors.kilometraje" class="mt-1 text-sm text-red-600 dark:text-red-400"></p>
                         </div>
                     </div>
                 </div>
 
                 <div class="border-t border-gray-100 dark:border-gray-800"></div>
 
+                <!-- Additional Info -->
+                <div>
+                    <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+                        <span class="flex items-center justify-center w-6 h-6 rounded-full bg-primary-100 dark:bg-primary-900/30 text-primary-600 text-xs">3</span>
+                        Información Adicional
+                    </h2>
+                    
+                    <!-- Observaciones -->
+                    <div>
+                        <label for="observaciones" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Observaciones / Notas</label>
+                        <textarea 
+                            name="observaciones" 
+                            id="observaciones"
+                            x-model="observaciones"
+                            rows="3"
+                            placeholder="Ingrese cualquier observación relevante sobre el vehículo: estado general, detalles cosméticos, historial conocido, etc."
+                            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-800 dark:text-white transition-colors resize-none"
+                        ></textarea>
+                        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Información adicional que pueda ser útil para el taller</p>
+                    </div>
+                </div>
+
+                <div class="border-t border-gray-100 dark:border-gray-800"></div>
+
                 <!-- Action Area -->
-                <div class="flex justify-end gap-3 pt-2">
-                    <a href="/recepcion/dash_recep">
-                        <Button type="button" variant="secondary">
-                            Cancelar
-                        </Button>
-                    </a>
-                    <button 
-                        type="submit" 
-                        :disabled="isSubmitting || Object.keys(errors).length > 0"
-                        class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    >
-                        <span class="material-symbols-outlined text-lg" x-show="!isSubmitting">add_circle</span>
-                        <span class="material-symbols-outlined text-lg animate-spin" x-show="isSubmitting">progress_activity</span>
-                        <span x-text="isSubmitting ? 'Guardando...' : 'Guardar Vehículo'"></span>
-                    </button>
+                <div class="flex flex-col sm:flex-row justify-between items-center gap-4 pt-2">
+                    <div class="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-2">
+                        <span class="material-symbols-outlined text-lg">info</span>
+                        Los campos marcados con <span class="text-red-500">*</span> son obligatorios
+                    </div>
+                    <div class="flex gap-3">
+                        <a href="/recepcion/dash_recep">
+                            <Button type="button" variant="secondary">
+                                Cancelar
+                            </Button>
+                        </a>
+                        <button 
+                            type="submit" 
+                            :disabled="isSubmitting || Object.keys(errors).length > 0"
+                            class="inline-flex items-center gap-2 px-6 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                        >
+                            <span class="material-symbols-outlined text-lg" x-show="!isSubmitting">add_circle</span>
+                            <span class="material-symbols-outlined text-lg animate-spin" x-show="isSubmitting">progress_activity</span>
+                            <span x-text="isSubmitting ? 'Guardando...' : 'Guardar Vehículo'"></span>
+                        </button>
+                    </div>
                 </div>
             </form>
         </Card>
