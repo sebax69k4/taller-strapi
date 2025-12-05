@@ -110,7 +110,7 @@ const estadoColors: Record<string, string> = {
         <p class="text-gray-500 dark:text-gray-400 mt-2">Administra el equipo de mecánicos y su carga de trabajo.</p>
       </div>
       <a 
-        href="/create-mechanic"
+        href="/encargado/crear_mecanico"
         class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2"
       >
         <span class="material-symbols-outlined">person_add</span>
@@ -133,21 +133,44 @@ const estadoColors: Record<string, string> = {
 
     <!-- Stats -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-      <Card class="text-center">
-        <span class="material-symbols-outlined text-3xl text-primary-500 mb-2">engineering</span>
-        <p class="text-3xl font-bold text-gray-900 dark:text-white">{totalMecanicos}</p>
-        <p class="text-sm text-gray-500 dark:text-gray-400">Total Mecánicos</p>
-      </Card>
-      <Card class="text-center">
-        <span class="material-symbols-outlined text-3xl text-green-500 mb-2">check_circle</span>
-        <p class="text-3xl font-bold text-gray-900 dark:text-white">{mecanicosDisponibles}</p>
-        <p class="text-sm text-gray-500 dark:text-gray-400">Disponibles</p>
-      </Card>
-      <Card class="text-center">
-        <span class="material-symbols-outlined text-3xl text-amber-500 mb-2">assignment</span>
-        <p class="text-3xl font-bold text-gray-900 dark:text-white">{totalOrdenesActivas}</p>
-        <p class="text-sm text-gray-500 dark:text-gray-400">Órdenes Activas</p>
-      </Card>
+      <div class="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl p-6 text-white shadow-lg">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-blue-100 text-sm font-medium uppercase tracking-wider">Total Equipo</p>
+            <p class="text-4xl font-bold mt-1">{totalMecanicos}</p>
+            <p class="text-blue-200 text-xs mt-2">Mecánicos registrados</p>
+          </div>
+          <div class="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm">
+            <span class="material-symbols-outlined text-3xl">engineering</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl p-6 text-white shadow-lg">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-green-100 text-sm font-medium uppercase tracking-wider">Disponibles</p>
+            <p class="text-4xl font-bold mt-1">{mecanicosDisponibles}</p>
+            <p class="text-green-200 text-xs mt-2">Listos para asignar</p>
+          </div>
+          <div class="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm">
+            <span class="material-symbols-outlined text-3xl">check_circle</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl p-6 text-white shadow-lg">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-amber-100 text-sm font-medium uppercase tracking-wider">Órdenes Activas</p>
+            <p class="text-4xl font-bold mt-1">{totalOrdenesActivas}</p>
+            <p class="text-amber-200 text-xs mt-2">En proceso actual</p>
+          </div>
+          <div class="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm">
+            <span class="material-symbols-outlined text-3xl">assignment_late</span>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Lista de Mecánicos -->
@@ -257,6 +280,13 @@ const estadoColors: Record<string, string> = {
                   </button>
                 </form>
                 <a 
+                  href={`/encargado/crear_mecanico?edit=${mecanico.documentId}`}
+                  class="p-2 bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-400 rounded-lg transition-colors"
+                  title="Editar mecánico"
+                >
+                  <span class="material-symbols-outlined text-sm">edit</span>
+                </a>
+                <a 
                   href={`/encargado/asig_orden`}
                   class="p-2 bg-primary-100 text-primary-600 hover:bg-primary-200 dark:bg-primary-900/30 dark:text-primary-400 rounded-lg transition-colors"
                   title="Asignar orden"
@@ -277,7 +307,7 @@ const estadoColors: Record<string, string> = {
           <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">No hay mecánicos registrados</h3>
           <p class="text-gray-500 dark:text-gray-400 mb-6">Agrega mecánicos para comenzar a asignar órdenes de trabajo.</p>
           <a 
-            href="/create-mechanic"
+            href="/encargado/crear_mecanico"
             class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
           >
             <span class="material-symbols-outlined">person_add</span>

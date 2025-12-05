@@ -144,6 +144,37 @@ const breadcrumbs = [
             <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Aprobar Facturas</h1>
             <p class="text-gray-600 dark:text-gray-400 mt-2">Órdenes finalizadas por mecánicos con factura generada, pendientes de aprobación para enviar a recepción.</p>
         </div>
+
+        <!-- KPIs -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 print:hidden">
+            <div class="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl p-6 text-white shadow-lg">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-blue-100 text-sm font-medium uppercase tracking-wider">Órdenes Finalizadas</p>
+                        <p class="text-4xl font-bold mt-1">{completedOrders.length}</p>
+                        <p class="text-blue-200 text-xs mt-2">Pendientes de facturación</p>
+                    </div>
+                    <div class="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm">
+                        <span class="material-symbols-outlined text-3xl">receipt_long</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl p-6 text-white shadow-lg">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-green-100 text-sm font-medium uppercase tracking-wider">Monto Total Estimado</p>
+                        <p class="text-4xl font-bold mt-1">
+                            ${completedOrders.reduce((sum, order) => sum + (order.calculatedTotals?.total || 0), 0).toLocaleString('es-CL')}
+                        </p>
+                        <p class="text-green-200 text-xs mt-2">A recaudar</p>
+                    </div>
+                    <div class="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm">
+                        <span class="material-symbols-outlined text-3xl">payments</span>
+                    </div>
+                </div>
+            </div>
+        </div>
         
         {successMessage && (
             <div class="p-4 mb-6 text-sm text-green-700 bg-green-100 rounded-lg dark:bg-green-900/30 dark:text-green-300 print:hidden flex items-center gap-2" role="alert">

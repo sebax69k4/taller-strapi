@@ -1,6 +1,7 @@
 ---
 export const prerender = false;
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import Card from '../../components/ui/Card.astro';
 import { strapiGet } from '../../lib/strapi';
 import '../../styles/global.css';
 
@@ -16,26 +17,19 @@ interface Order {
   descripcion: string;
   fecha_ingreso: string;
   fecha_entrega: string | null;
+  updatedAt: string;
   vehiculo: {
     marca: string;
     modelo: string;
     patente: string;
-    cliente: {
-      nombre: string;
-      apellido: string;
-    } | null;
+    cliente: { nombre: string; apellido: string } | null;
   } | null;
-  mecanico: {
-    nombre: string;
-    apellido: string;
-  } | null;
-  factura: {
-    numero_factura: string;
-    total: number;
-  } | null;
+  mecanico: { nombre: string; apellido: string } | null;
+  factura: { numero_factura: string; total: number; estado: string } | null;
 }
 
 let orders: Order[] = [];
+let stats = { total: 0, entregados: 0, facturados: 0, ingresoTotal: 0, promedioTiempo: 0 };
 let error = '';
 
 // Filtros desde URL
@@ -44,40 +38,67 @@ const searchQuery = Astro.url.searchParams.get('search') || '';
 const fechaDesde = Astro.url.searchParams.get('desde') || '';
 const fechaHasta = Astro.url.searchParams.get('hasta') || '';
 
+// Handle CSV Export
+if (Astro.request.method === 'POST') {
+  try {
+    const formData = await Astro.request.formData();
+    if (formData.get('action') === 'export') {
+      const res = await strapiGet('/api/orden-de-trabajos?populate[vehiculo][populate]=cliente&populate=mecanico&populate=factura&pagination[limit]=1000');
+      const allOrders = res.data || [];
+      
+      const csvHeaders = ['ID', 'Fecha Ingreso', 'Cliente', 'Vehículo', 'Patente', 'Mecánico', 'Estado', 'Factura', 'Total'];
+      const csvRows = allOrders.map((o: any) => [
+        o.id,
+        o.fecha_ingreso || '',
+        o.vehiculo?.cliente ? `${o.vehiculo.cliente.nombre} ${o.vehiculo.cliente.apellido}` : '',
+        o.vehiculo ? `${o.vehiculo.marca} ${o.vehiculo.modelo}` : '',
+        o.vehiculo?.patente || '',
+        o.mecanico ? `${o.mecanico.nombre} ${o.mecanico.apellido || ''}` : '',
+        o.estado,
+        o.factura?.numero_factura || '',
+        o.factura?.total || 0
+      ]);
+      
+      const csvContent = [
+        csvHeaders.join(','),
+        ...csvRows.map(row => row.map(v => `"${v}"`).join(','))
+      ].join('\n');
+      
+      return new Response(csvContent, {
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="historial-ordenes-${new Date().toISOString().split('T')[0]}.csv"`
+        }
+      });
+    }
+  } catch (e) {
+    console.error('Export error:', e);
+  }
+}
+
 try {
-  // Construir query con filtros
-  let queryParams = 'sort[0]=updatedAt:desc&pagination[pageSize]=50';
+  let queryParams = 'sort=updatedAt:desc&pagination[pageSize]=100';
   queryParams += '&populate[vehiculo][populate][cliente][fields][0]=nombre&populate[vehiculo][populate][cliente][fields][1]=apellido';
   queryParams += '&populate[mecanico][fields][0]=nombre&populate[mecanico][fields][1]=apellido';
-  queryParams += '&populate[factura][fields][0]=numero_factura&populate[factura][fields][1]=total';
+  queryParams += '&populate[factura][fields][0]=numero_factura&populate[factura][fields][1]=total&populate[factura][fields][2]=estado';
   
-  // Filtro de estado
   if (estadoFilter) {
     queryParams += `&filters[estado][$eq]=${estadoFilter}`;
   }
-  
-  // Filtro de fecha desde
   if (fechaDesde) {
     queryParams += `&filters[fecha_ingreso][$gte]=${fechaDesde}`;
   }
-  
-  // Filtro de fecha hasta
   if (fechaHasta) {
     queryParams += `&filters[fecha_ingreso][$lte]=${fechaHasta}`;
   }
   
   const data = await strapiGet(`/api/orden-de-trabajos?${queryParams}`);
-  
-  // Mapear datos y filtrar por búsqueda si existe
   orders = (data.data || []).map((order: any) => ({
     ...order,
-    vehiculo: order.vehiculo ? {
-      ...order.vehiculo,
-      cliente: order.vehiculo.cliente || null
-    } : null
+    vehiculo: order.vehiculo ? { ...order.vehiculo, cliente: order.vehiculo.cliente || null } : null
   }));
   
-  // Filtro de búsqueda local (cliente, vehículo, patente)
+  // Filtro de búsqueda local
   if (searchQuery) {
     const query = searchQuery.toLowerCase();
     orders = orders.filter((order: Order) => {
@@ -88,44 +109,49 @@ try {
     });
   }
   
+  // Stats
+  stats.total = orders.length;
+  stats.entregados = orders.filter(o => o.estado === 'entregado').length;
+  stats.facturados = orders.filter(o => o.factura).length;
+  stats.ingresoTotal = orders.reduce((sum, o) => sum + (o.factura?.total || 0), 0);
+
 } catch (e: any) {
   console.error('Error fetching orders:', e);
-  error = 'Error al cargar el historial de órdenes';
+  error = 'Error al cargar el historial';
 }
 
 const estados = [
-  { value: '', label: 'Todos los estados' },
-  { value: 'ingresado', label: 'Ingresado' },
-  { value: 'en_diagnostico', label: 'En Diagnóstico' },
-  { value: 'en_reparacion', label: 'En Reparación' },
-  { value: 'finalizado', label: 'Finalizado' },
-  { value: 'facturado', label: 'Facturado' },
-  { value: 'entregado', label: 'Entregado' }
+  { value: '', label: 'Todos', icon: 'list', color: 'text-gray-500' },
+  { value: 'ingresado', label: 'Ingresado', icon: 'inbox', color: 'text-red-500' },
+  { value: 'en_diagnostico', label: 'Diagnóstico', icon: 'search', color: 'text-purple-500' },
+  { value: 'en_reparacion', label: 'Reparación', icon: 'build', color: 'text-amber-500' },
+  { value: 'finalizado', label: 'Finalizado', icon: 'check_circle', color: 'text-blue-500' },
+  { value: 'facturado', label: 'Facturado', icon: 'receipt', color: 'text-green-500' },
+  { value: 'entregado', label: 'Entregado', icon: 'local_shipping', color: 'text-emerald-500' }
 ];
 
 const getEstadoColor = (estado: string) => {
-  switch (estado) {
-    case 'ingresado': return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
-    case 'en_diagnostico': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
-    case 'en_reparacion': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
-    case 'finalizado': return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
-    case 'facturado': return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300';
-    case 'entregado': return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300';
-    default: return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
-  }
+  const colors: Record<string, string> = {
+    ingresado: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
+    en_diagnostico: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300',
+    en_reparacion: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+    finalizado: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+    facturado: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+    entregado: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+  };
+  return colors[estado] || 'bg-gray-100 text-gray-700';
 };
 
 const formatEstado = (estado: string) => {
-  switch (estado) {
-    case 'ingresado': return 'Ingresado';
-    case 'en_diagnostico': return 'En Diagnóstico';
-    case 'en_reparacion': return 'En Reparación';
-    case 'finalizado': return 'Finalizado';
-    case 'facturado': return 'Facturado';
-    case 'entregado': return 'Entregado';
-    default: return estado;
-  }
+  const labels: Record<string, string> = {
+    ingresado: 'Ingresado', en_diagnostico: 'Diagnóstico', en_reparacion: 'Reparación',
+    finalizado: 'Finalizado', facturado: 'Facturado', entregado: 'Entregado'
+  };
+  return labels[estado] || estado;
 };
+
+const formatCurrency = (amount: number) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(amount);
+const formatDate = (dateStr: string) => dateStr ? new Date(dateStr).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A';
 ---
 
 <DashboardLayout title="Historial de Órdenes" role="encargado" currentPath="/encargado/historial">
@@ -134,23 +160,72 @@ const formatEstado = (estado: string) => {
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
       <div>
         <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Historial de Órdenes</h1>
-        <p class="text-gray-500 dark:text-gray-400 mt-1">Consulta el historial completo de órdenes de trabajo del taller.</p>
+        <p class="text-gray-500 dark:text-gray-400 mt-1">Consulta todas las órdenes de trabajo del taller</p>
       </div>
-      <div class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-        <span class="material-symbols-outlined text-lg">list_alt</span>
-        <span>{orders.length} órdenes encontradas</span>
+      <div class="flex gap-2">
+        <form method="POST" class="inline">
+          <input type="hidden" name="action" value="export" />
+          <button type="submit" class="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 transition-colors flex items-center gap-2">
+            <span class="material-symbols-outlined">download</span>
+            Exportar CSV
+          </button>
+        </form>
+        <a href="/encargado/trabajos_en_curso" class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2">
+          <span class="material-symbols-outlined">pending_actions</span>
+          Ver En Curso
+        </a>
       </div>
     </div>
 
     {error && (
-      <div class="p-4 mb-6 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg text-red-800 dark:text-red-200 flex items-center gap-2">
+      <div class="p-4 mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-red-800 dark:text-red-200 flex items-center gap-2">
         <span class="material-symbols-outlined">error</span>
-        <p>{error}</p>
+        <span>{error}</span>
       </div>
     )}
 
+    <!-- KPIs -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div class="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl p-5 text-white">
+        <div class="flex justify-between items-start">
+          <div>
+            <p class="text-blue-100 text-xs uppercase">Total Órdenes</p>
+            <p class="text-3xl font-bold mt-1">{stats.total}</p>
+          </div>
+          <span class="material-symbols-outlined text-blue-200 text-2xl">list_alt</span>
+        </div>
+      </div>
+      <div class="bg-gradient-to-br from-emerald-500 to-green-600 rounded-2xl p-5 text-white">
+        <div class="flex justify-between items-start">
+          <div>
+            <p class="text-emerald-100 text-xs uppercase">Entregados</p>
+            <p class="text-3xl font-bold mt-1">{stats.entregados}</p>
+          </div>
+          <span class="material-symbols-outlined text-emerald-200 text-2xl">local_shipping</span>
+        </div>
+      </div>
+      <div class="bg-gradient-to-br from-purple-500 to-pink-600 rounded-2xl p-5 text-white">
+        <div class="flex justify-between items-start">
+          <div>
+            <p class="text-purple-100 text-xs uppercase">Facturados</p>
+            <p class="text-3xl font-bold mt-1">{stats.facturados}</p>
+          </div>
+          <span class="material-symbols-outlined text-purple-200 text-2xl">receipt</span>
+        </div>
+      </div>
+      <div class="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl p-5 text-white">
+        <div class="flex justify-between items-start">
+          <div>
+            <p class="text-amber-100 text-xs uppercase">Ingresos</p>
+            <p class="text-xl font-bold mt-1">{formatCurrency(stats.ingresoTotal)}</p>
+          </div>
+          <span class="material-symbols-outlined text-amber-200 text-2xl">payments</span>
+        </div>
+      </div>
+    </div>
+
     <!-- Filtros -->
-    <form method="GET" class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4 mb-6">
+    <form method="GET" class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-4 mb-6">
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <!-- Búsqueda -->
         <div class="lg:col-span-2">
@@ -161,8 +236,8 @@ const formatEstado = (estado: string) => {
               type="text" 
               name="search" 
               value={searchQuery}
-              placeholder="Cliente, vehículo, patente o descripción..."
-              class="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              placeholder="Cliente, vehículo, patente..."
+              class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
             />
           </div>
         </div>
@@ -172,7 +247,7 @@ const formatEstado = (estado: string) => {
           <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estado</label>
           <select 
             name="estado"
-            class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            class="w-full px-3 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
           >
             {estados.map(e => (
               <option value={e.value} selected={estadoFilter === e.value}>{e.label}</option>
@@ -187,7 +262,7 @@ const formatEstado = (estado: string) => {
             type="date" 
             name="desde" 
             value={fechaDesde}
-            class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            class="w-full px-3 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
           />
         </div>
         
@@ -198,122 +273,130 @@ const formatEstado = (estado: string) => {
             type="date" 
             name="hasta" 
             value={fechaHasta}
-            class="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            class="w-full px-3 py-2.5 rounded-xl border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
           />
         </div>
       </div>
       
-      <div class="flex justify-end gap-2 mt-4">
-        <a 
-          href="/encargado/historial" 
-          class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-        >
+      <div class="flex justify-end gap-2 mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+        <a href="/encargado/historial" class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
           Limpiar
         </a>
-        <button 
-          type="submit"
-          class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2"
-        >
-          <span class="material-symbols-outlined text-lg">filter_alt</span>
+        <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2">
+          <span class="material-symbols-outlined text-base">filter_alt</span>
           Filtrar
         </button>
       </div>
     </form>
 
     <!-- Tabla de Órdenes -->
-    <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
       <div class="overflow-x-auto">
         <table class="w-full text-left">
           <thead class="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
             <tr>
-              <th class="px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Orden</th>
-              <th class="px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Cliente</th>
-              <th class="px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Vehículo</th>
-              <th class="px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Mecánico</th>
-              <th class="px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Fecha</th>
-              <th class="px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Estado</th>
-              <th class="px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Factura</th>
-              <th class="px-6 py-3 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Acciones</th>
+              <th class="px-4 py-3 text-xs font-bold text-gray-500 uppercase">Orden</th>
+              <th class="px-4 py-3 text-xs font-bold text-gray-500 uppercase">Cliente</th>
+              <th class="px-4 py-3 text-xs font-bold text-gray-500 uppercase">Vehículo</th>
+              <th class="px-4 py-3 text-xs font-bold text-gray-500 uppercase">Mecánico</th>
+              <th class="px-4 py-3 text-xs font-bold text-gray-500 uppercase">Fecha</th>
+              <th class="px-4 py-3 text-xs font-bold text-gray-500 uppercase">Estado</th>
+              <th class="px-4 py-3 text-xs font-bold text-gray-500 uppercase">Factura</th>
+              <th class="px-4 py-3 text-xs font-bold text-gray-500 uppercase text-right">Acciones</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
             {orders.length > 0 ? orders.map((order: Order) => (
               <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                <td class="px-6 py-4">
-                  <div class="flex flex-col">
+                <td class="px-4 py-4">
+                  <div>
                     <span class="font-bold text-gray-900 dark:text-white">OT-{order.id}</span>
-                    <span class="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[200px]">{order.descripcion || 'Sin descripción'}</span>
+                    <p class="text-xs text-gray-500 truncate max-w-[150px]">{order.descripcion || 'Sin descripción'}</p>
                   </div>
                 </td>
-                <td class="px-6 py-4 text-gray-600 dark:text-gray-300">
+                <td class="px-4 py-4 text-gray-600 dark:text-gray-300">
                   {order.vehiculo?.cliente 
                     ? `${order.vehiculo.cliente.nombre} ${order.vehiculo.cliente.apellido}`
                     : <span class="text-gray-400 italic">N/A</span>
                   }
                 </td>
-                <td class="px-6 py-4">
+                <td class="px-4 py-4">
                   {order.vehiculo ? (
-                    <div class="flex flex-col">
+                    <div>
                       <span class="text-gray-900 dark:text-white">{order.vehiculo.marca} {order.vehiculo.modelo}</span>
-                      <span class="text-xs text-gray-500 dark:text-gray-400">{order.vehiculo.patente}</span>
+                      <p class="text-xs text-gray-500 font-mono">{order.vehiculo.patente}</p>
                     </div>
                   ) : <span class="text-gray-400 italic">N/A</span>}
                 </td>
-                <td class="px-6 py-4 text-gray-600 dark:text-gray-300">
+                <td class="px-4 py-4 text-gray-600 dark:text-gray-300">
                   {order.mecanico 
                     ? `${order.mecanico.nombre} ${order.mecanico.apellido || ''}`
                     : <span class="text-gray-400 italic">Sin asignar</span>
                   }
                 </td>
-                <td class="px-6 py-4">
-                  <div class="flex flex-col">
-                    <span class="text-gray-900 dark:text-white text-sm">
-                      {order.fecha_ingreso ? new Date(order.fecha_ingreso).toLocaleDateString('es-ES') : 'N/A'}
-                    </span>
+                <td class="px-4 py-4">
+                  <div>
+                    <span class="text-sm text-gray-900 dark:text-white">{formatDate(order.fecha_ingreso)}</span>
                     {order.fecha_entrega && (
-                      <span class="text-xs text-green-600 dark:text-green-400">
-                        Entrega: {new Date(order.fecha_entrega).toLocaleDateString('es-ES')}
-                      </span>
+                      <p class="text-xs text-green-600">Entrega: {formatDate(order.fecha_entrega)}</p>
                     )}
                   </div>
                 </td>
-                <td class="px-6 py-4">
-                  <span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getEstadoColor(order.estado)}`}>
+                <td class="px-4 py-4">
+                  <span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${getEstadoColor(order.estado)}`}>
                     {formatEstado(order.estado)}
                   </span>
                 </td>
-                <td class="px-6 py-4">
+                <td class="px-4 py-4">
                   {order.factura ? (
-                    <div class="flex flex-col">
-                      <span class="text-gray-900 dark:text-white text-sm font-medium">{order.factura.numero_factura}</span>
-                      <span class="text-xs text-green-600 dark:text-green-400">${order.factura.total?.toLocaleString('es-CL')}</span>
+                    <div>
+                      <span class="font-medium text-gray-900 dark:text-white text-sm">{order.factura.numero_factura}</span>
+                      <p class="text-xs text-green-600 font-bold">{formatCurrency(order.factura.total)}</p>
                     </div>
                   ) : <span class="text-gray-400 italic text-sm">Sin factura</span>}
                 </td>
-                <td class="px-6 py-4">
-                  <a 
-                    href={`/encargado/detalles_de_orden?id=${order.documentId}`}
-                    class="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/40 transition-colors"
-                  >
-                    <span class="material-symbols-outlined text-lg">visibility</span>
-                    Ver
-                  </a>
+                <td class="px-4 py-4 text-right">
+                  <div class="flex justify-end gap-1">
+                    <a 
+                      href={`/encargado/detalles_de_orden?id=${order.documentId}`}
+                      class="p-2 rounded-lg text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-900/30 transition-colors"
+                      title="Ver detalles"
+                    >
+                      <span class="material-symbols-outlined text-base">visibility</span>
+                    </a>
+                    {order.factura && (
+                      <a 
+                        href={`/encargado/ver_factura?id=${order.factura.numero_factura}`}
+                        class="p-2 rounded-lg text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 transition-colors"
+                        title="Ver factura"
+                      >
+                        <span class="material-symbols-outlined text-base">receipt</span>
+                      </a>
+                    )}
+                  </div>
                 </td>
               </tr>
             )) : (
               <tr>
-                <td colspan="8" class="px-6 py-12 text-center">
-                  <div class="flex flex-col items-center gap-2">
-                    <span class="material-symbols-outlined text-4xl text-gray-300 dark:text-gray-600">search_off</span>
-                    <p class="text-gray-500 dark:text-gray-400">No se encontraron órdenes con los filtros aplicados.</p>
-                    <a href="/encargado/historial" class="text-primary-600 dark:text-primary-400 hover:underline text-sm">Ver todas las órdenes</a>
-                  </div>
+                <td colspan="8" class="px-4 py-16 text-center">
+                  <span class="material-symbols-outlined text-5xl text-gray-300 mb-4">search_off</span>
+                  <h3 class="font-bold text-gray-900 dark:text-white">No se encontraron órdenes</h3>
+                  <p class="text-gray-500 mt-1">Intenta con otros filtros de búsqueda</p>
+                  <a href="/encargado/historial" class="mt-4 inline-block text-primary-600 hover:underline">Limpiar filtros</a>
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
+      
+      <!-- Footer con info -->
+      {orders.length > 0 && (
+        <div class="px-4 py-3 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-200 dark:border-gray-700 flex justify-between items-center text-sm text-gray-500">
+          <span>Mostrando {orders.length} órdenes</span>
+          <span>Total facturado: <span class="font-bold text-gray-900 dark:text-white">{formatCurrency(stats.ingresoTotal)}</span></span>
+        </div>
+      )}
     </div>
   </div>
 </DashboardLayout>

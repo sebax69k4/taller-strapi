@@ -2,188 +2,211 @@
 export const prerender = false;
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
 import { strapiGet, strapiPut } from '../../lib/strapi';
-import '../../styles/global.css';
 
 const userRole = Astro.cookies.get('user_role')?.value;
+if (!userRole) {
+  return Astro.redirect('/login');
+}
 
-let lowStockItems: any[] = [];
-let totalCritical = 0;
+interface Repuesto {
+  id: number;
+  documentId: string;
+  nombre: string;
+  sku: string;
+  stock: number;
+  stock_minimo?: number;
+  precio: number;
+}
+
+let lowStockItems: Repuesto[] = [];
+let stats = { criticos: 0, bajos: 0, valorFaltante: 0 };
 let successMessage = '';
 let errorMessage = '';
 
-if (userRole) {
-  try {
-    // Handle Restock POST
-    if (Astro.request.method === 'POST') {
-      const formData = await Astro.request.formData();
-      const repuestoId = formData.get('repuestoId');
-      const addAmount = parseInt(formData.get('amount')?.toString() || '0');
+try {
+  if (Astro.request.method === 'POST') {
+    const formData = await Astro.request.formData();
+    const repuestoId = formData.get('repuestoId');
+    const addAmount = parseInt(formData.get('amount')?.toString() || '0');
 
-      if (repuestoId && addAmount > 0) {
-        try {
-          // Get current stock
-          const currentRes = await strapiGet(`/api/repuestos/${repuestoId}`);
-          const currentStock = currentRes.data?.stock || 0;
-          const itemName = currentRes.data?.nombre || 'repuesto';
-          const newStock = currentStock + addAmount;
+    if (repuestoId && addAmount > 0) {
+      const currentRes = await strapiGet(`/api/repuestos/${repuestoId}`);
+      const currentStock = currentRes.data?.stock || 0;
+      const itemName = currentRes.data?.nombre || 'repuesto';
+      const newStock = currentStock + addAmount;
 
-          // Update stock
-          await strapiPut(`/api/repuestos/${repuestoId}`, { stock: newStock });
-          
-          successMessage = `Se agregaron ${addAmount} unidades de ${itemName}. Stock actualizado: ${newStock}`;
-        } catch (updateError) {
-          console.error('Error updating stock:', updateError);
-          errorMessage = 'Error al actualizar el stock';
-        }
-      }
+      await strapiPut(`/api/repuestos/${repuestoId}`, { stock: newStock });
+      successMessage = `+${addAmount} unidades de ${itemName}. Stock actual: ${newStock}`;
     }
-
-    // Fetch all repuestos
-    const repuestosRes = await strapiGet('/api/repuestos');
-    const allRepuestos = repuestosRes.data || [];
-
-    // Filter low stock items (stock <= stock_minimo)
-    lowStockItems = allRepuestos.filter((item: any) => {
-      const stock = item.stock || 0;
-      const min = item.stock_minimo || 5;
-      return stock <= min;
-    });
-
-    totalCritical = lowStockItems.length;
-
-  } catch (e) {
-    console.error('Error fetching stock alerts:', e);
-    errorMessage = 'Error al cargar las alertas de stock';
   }
-} else {
-  return Astro.redirect('/login');
+
+  const repuestosRes = await strapiGet('/api/repuestos?sort=stock:asc');
+  const allRepuestos: Repuesto[] = repuestosRes.data || [];
+
+  lowStockItems = allRepuestos.filter((item) => {
+    const stock = item.stock || 0;
+    const min = item.stock_minimo || 5;
+    return stock <= min;
+  });
+
+  stats.criticos = lowStockItems.filter(i => i.stock === 0).length;
+  stats.bajos = lowStockItems.filter(i => i.stock > 0).length;
+  stats.valorFaltante = lowStockItems.reduce((acc, item) => {
+    const faltante = (item.stock_minimo || 5) - item.stock;
+    return acc + (faltante * item.precio);
+  }, 0);
+
+} catch (e) {
+  errorMessage = 'Error al cargar las alertas de stock';
 }
+
+const formatCurrency = (amount: number) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(amount);
 ---
 
 <DashboardLayout title="Alertas de Stock" role="encargado" currentPath="/encargado/alert_stock">
   <div class="max-w-7xl mx-auto">
-    
-    <!-- Messages -->
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+      <div>
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Alertas de Stock</h1>
+        <p class="text-gray-500 dark:text-gray-400 mt-1">Repuestos que requieren reabastecimiento</p>
+      </div>
+      <a href="/encargado/inventario" class="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 flex items-center gap-2">
+        <span class="material-symbols-outlined">inventory_2</span>
+        Ver Inventario Completo
+      </a>
+    </div>
+
+    <!-- Mensajes -->
     {successMessage && (
-      <div class="mb-4 p-4 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700 rounded-lg text-green-800 dark:text-green-200">
-        <p class="flex items-center gap-2">
-          <span class="material-symbols-outlined">check_circle</span>
-          {successMessage}
-        </p>
+      <div class="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl text-green-800 flex items-center gap-3">
+        <span class="material-symbols-outlined">check_circle</span>
+        <span class="font-medium">{successMessage}</span>
       </div>
     )}
     {errorMessage && (
-      <div class="mb-4 p-4 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg text-red-800 dark:text-red-200">
-        <p class="flex items-center gap-2">
-          <span class="material-symbols-outlined">error</span>
-          {errorMessage}
-        </p>
+      <div class="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-800 flex items-center gap-3">
+        <span class="material-symbols-outlined">error</span>
+        <span>{errorMessage}</span>
       </div>
     )}
 
-    <!-- Page Header -->
-    <div class="flex flex-wrap justify-between items-center gap-4 mb-6">
-      <div class="flex flex-col gap-2">
-        <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Inventario: Alerta de Bajo Stock</h1>
-        <p class="text-gray-500 dark:text-gray-400 text-base">Gestiona y reabastece los repuestos que están por debajo del umbral mínimo.</p>
-      </div>
-    </div>
-
-    <!-- Stats -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-      <div class="flex flex-col gap-2 rounded-xl p-6 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
-        <p class="text-gray-500 dark:text-gray-400 text-base font-medium">Total de Repuestos Críticos</p>
-        <p class="text-gray-900 dark:text-white text-3xl font-bold">{totalCritical}</p>
-      </div>
-      <div class="flex flex-col gap-2 rounded-xl p-6 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shadow-sm">
-        <p class="text-gray-500 dark:text-gray-400 text-base font-medium">Pedidos Pendientes</p>
-        <p class="text-gray-900 dark:text-white text-3xl font-bold">0</p>
-      </div>
-    </div>
-
-    <!-- Search Bar -->
-    <div class="mb-6" x-data="{ searchQuery: '' }">
-      <div class="relative">
-        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <span class="material-symbols-outlined text-gray-400">search</span>
+    <!-- KPIs de Alerta -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div class="bg-gradient-to-br from-red-500 to-rose-600 rounded-xl p-6 text-white">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-red-100 text-sm font-medium">Sin Stock</p>
+            <p class="text-4xl font-bold mt-1">{stats.criticos}</p>
+            <p class="text-red-200 text-xs mt-2">Requieren acción URGENTE</p>
+          </div>
+          <div class="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center">
+            <span class="material-symbols-outlined text-3xl">error</span>
+          </div>
         </div>
-        <input 
-          x-model="searchQuery" 
-          class="block w-full pl-10 pr-3 py-2.5 border border-gray-200 dark:border-gray-700 rounded-lg leading-5 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 sm:text-sm transition duration-150 ease-in-out" 
-          placeholder="Buscar por nombre o código del repuesto..." 
-          type="text"
-        />
+      </div>
+      <div class="bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl p-6 text-white">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-amber-100 text-sm font-medium">Bajo Stock</p>
+            <p class="text-4xl font-bold mt-1">{stats.bajos}</p>
+            <p class="text-amber-200 text-xs mt-2">Por debajo del mínimo</p>
+          </div>
+          <div class="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center">
+            <span class="material-symbols-outlined text-3xl">warning</span>
+          </div>
+        </div>
+      </div>
+      <div class="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl p-6 text-white">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-blue-100 text-sm font-medium">Inversión Estimada</p>
+            <p class="text-2xl font-bold mt-1">{formatCurrency(stats.valorFaltante)}</p>
+            <p class="text-blue-200 text-xs mt-2">Para alcanzar stock mínimo</p>
+          </div>
+          <div class="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center">
+            <span class="material-symbols-outlined text-3xl">payments</span>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- Table -->
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-      <div class="overflow-x-auto">
-        <table class="w-full text-left text-sm text-gray-500 dark:text-gray-400">
-          <thead class="bg-gray-50 dark:bg-gray-900/50 text-xs uppercase text-gray-700 dark:text-gray-300">
-            <tr>
-              <th class="px-6 py-3 font-semibold">Estado</th>
-              <th class="px-6 py-3 font-semibold">Repuesto</th>
-              <th class="px-6 py-3 font-semibold text-center">Stock Actual</th>
-              <th class="px-6 py-3 font-semibold text-center">Umbral Mínimo</th>
-              <th class="px-6 py-3 font-semibold">Proveedor</th>
-              <th class="px-6 py-3 font-semibold text-right">Acciones</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-            {lowStockItems.length > 0 ? (
-              lowStockItems.map((item: any) => (
-                <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                  <td class="px-6 py-4">
-                    <span class={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                      item.stock === 0 
-                        ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' 
-                        : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
-                    }`}>
-                      <span class={`h-1.5 w-1.5 rounded-full ${item.stock === 0 ? 'bg-red-500' : 'bg-yellow-500'}`}></span>
-                      {item.stock === 0 ? 'Crítico' : 'Bajo'}
+    <!-- Lista de Items -->
+    <div class="space-y-3">
+      {lowStockItems.length > 0 ? (
+        lowStockItems.map((item) => {
+          const isCritical = item.stock === 0;
+          const min = item.stock_minimo || 5;
+          const faltante = min - item.stock;
+          
+          return (
+            <div class={`bg-white dark:bg-gray-800 rounded-xl border-l-4 ${isCritical ? 'border-red-500' : 'border-amber-500'} border border-gray-200 dark:border-gray-700 p-4`}>
+              <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="flex items-center gap-4">
+                  <div class={`w-12 h-12 rounded-xl flex items-center justify-center ${isCritical ? 'bg-red-100 dark:bg-red-900/30' : 'bg-amber-100 dark:bg-amber-900/30'}`}>
+                    <span class={`material-symbols-outlined ${isCritical ? 'text-red-600' : 'text-amber-600'}`}>
+                      {isCritical ? 'error' : 'warning'}
                     </span>
-                  </td>
-                  <td class="px-6 py-4">
-                    <div class="font-medium text-gray-900 dark:text-white">{item.nombre}</div>
-                    {item.sku && <div class="text-xs text-gray-500">{item.sku}</div>}
-                  </td>
-                  <td class="px-6 py-4 text-center font-bold text-red-600 dark:text-red-400">{item.stock}</td>
-                  <td class="px-6 py-4 text-center">{item.stock_minimo || 5}</td>
-                  <td class="px-6 py-4">{item.proveedor || 'N/A'}</td>
-                  <td class="px-6 py-4 text-right">
-                    <form method="POST" class="flex items-center justify-end gap-2">
-                      <input type="hidden" name="repuestoId" value={item.documentId || item.id} />
-                      <input 
-                        type="number" 
-                        name="amount" 
-                        value="10" 
-                        min="1" 
-                        class="w-20 rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 text-sm focus:ring-primary-500 focus:border-primary-500" 
-                      />
-                      <button 
-                        type="submit" 
-                        class="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 text-sm font-medium hover:underline"
-                      >
-                        Reabastecer
-                      </button>
-                    </form>
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td colspan="6" class="px-6 py-12 text-center">
-                  <div class="flex flex-col items-center justify-center text-gray-500 dark:text-gray-400">
-                    <span class="material-symbols-outlined text-4xl mb-2 text-gray-300 dark:text-gray-600">inventory_2</span>
-                    <span>No hay repuestos con stock bajo.</span>
                   </div>
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+                  <div>
+                    <div class="flex items-center gap-2">
+                      <h3 class="font-bold text-gray-900 dark:text-white">{item.nombre}</h3>
+                      <span class={`px-2 py-0.5 rounded text-xs font-bold ${isCritical ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {isCritical ? 'CRÍTICO' : 'BAJO'}
+                      </span>
+                    </div>
+                    <p class="text-sm text-gray-500">SKU: {item.sku}</p>
+                  </div>
+                </div>
+                
+                <div class="flex items-center gap-6">
+                  <div class="text-center">
+                    <p class="text-xs text-gray-500">Stock Actual</p>
+                    <p class={`text-2xl font-bold ${isCritical ? 'text-red-600' : 'text-amber-600'}`}>{item.stock}</p>
+                  </div>
+                  <div class="text-center">
+                    <p class="text-xs text-gray-500">Mínimo</p>
+                    <p class="text-2xl font-bold text-gray-400">{min}</p>
+                  </div>
+                  <div class="text-center">
+                    <p class="text-xs text-gray-500">Faltan</p>
+                    <p class="text-2xl font-bold text-blue-600">{faltante}</p>
+                  </div>
+                  
+                  <form method="POST" class="flex items-center gap-2">
+                    <input type="hidden" name="repuestoId" value={item.documentId} />
+                    <input 
+                      type="number" 
+                      name="amount" 
+                      value={faltante} 
+                      min="1" 
+                      class="w-20 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-center font-bold bg-white dark:bg-gray-700" 
+                    />
+                    <button 
+                      type="submit" 
+                      class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 font-medium"
+                    >
+                      <span class="material-symbols-outlined text-base">add</span>
+                      Agregar
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </div>
+          );
+        })
+      ) : (
+        <div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-16 text-center">
+          <div class="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <span class="material-symbols-outlined text-4xl text-green-600">check_circle</span>
+          </div>
+          <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-2">¡Todo en orden!</h3>
+          <p class="text-gray-500">No hay repuestos con stock bajo en este momento.</p>
+          <a href="/encargado/inventario" class="inline-block mt-4 text-primary-600 hover:underline">
+            Ver inventario completo →
+          </a>
+        </div>
+      )}
     </div>
   </div>
 </DashboardLayout>

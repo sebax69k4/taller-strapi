@@ -1,8 +1,8 @@
 ---
 export const prerender = false;
-import { strapiGet } from '../../lib/strapi';
-import '../../styles/global.css';
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
+import { strapiGet, strapiPut, strapiPost } from '../../lib/strapi';
+import '../../styles/global.css';
 
 const userRole = Astro.cookies.get('user_role')?.value;
 if (!userRole) {
@@ -10,17 +10,48 @@ if (!userRole) {
 }
 
 const orderId = Astro.url.searchParams.get('id');
-let order = null;
+let order: any = null;
+let successMessage = '';
+let error = '';
 
 if (!orderId) {
   return Astro.redirect('/encargado/trabajos_en_curso');
 }
 
+// Handle POST actions
+if (Astro.request.method === 'POST') {
+  try {
+    const formData = await Astro.request.formData();
+    const action = formData.get('action');
+    
+    if (action === 'cambiar_estado') {
+      const nuevoEstado = formData.get('nuevo_estado') as string;
+      await strapiPut(`/api/orden-de-trabajos/${orderId}`, { estado: nuevoEstado });
+      successMessage = 'Estado actualizado correctamente';
+    }
+    
+    if (action === 'agregar_nota') {
+      const procedimientos = formData.get('procedimientos') as string;
+      const observaciones = formData.get('observaciones') as string;
+      
+      // Usar directamente orderId que ya es el documentId (corrección Strapi v5)
+      await strapiPost('/api/bitacoras', {
+        procedimientos,
+        observaciones,
+        fecha: new Date().toISOString().split('T')[0],
+        orden_de_trabajo: orderId
+      });
+      successMessage = 'Nota agregada a la bitácora';
+    }
+  } catch (e: any) {
+    error = e.message || 'Error al procesar la acción';
+  }
+}
+
 try {
-  const data = await strapiGet(`/api/orden-de-trabajos/${orderId}?populate[vehiculo][populate][cliente][fields][0]=nombre&populate[vehiculo][populate][cliente][fields][1]=apellido&populate[vehiculo][populate][cliente][fields][2]=email&populate[vehiculo][populate][cliente][fields][3]=telefono&populate[mecanico][fields][0]=nombre&populate[mecanico][fields][1]=apellido&populate[repuestos][fields][0]=nombre&populate[repuestos][fields][1]=precio&populate[repuestos][fields][2]=sku&populate[bitacoras][populate][mecanico][fields][0]=nombre&populate[bitacoras][fields][0]=procedimientos&populate[bitacoras][fields][1]=fecha&populate[bitacoras][fields][2]=observaciones&populate[presupuesto][fields][0]=monto_total&populate[zona][fields][0]=nombre`);
+  const data = await strapiGet(`/api/orden-de-trabajos/${orderId}?populate[vehiculo][populate][cliente]=*&populate=mecanico&populate=repuestos&populate[bitacoras][populate]=mecanico&populate=presupuesto&populate=zona&populate[servicios]=*&populate=factura`);
   order = data.data;
-  // Mapear cliente desde vehiculo
-  if (order && order.vehiculo?.cliente) {
+  if (order?.vehiculo?.cliente) {
     order.cliente = order.vehiculo.cliente;
   }
 } catch (e) {
@@ -33,228 +64,375 @@ if (!order) {
 
 const formatDate = (dateString: string) => {
   if (!dateString) return 'N/A';
-  return new Date(dateString).toLocaleDateString('es-ES', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
+  return new Date(dateString).toLocaleDateString('es-CL', {
+    year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
   });
 };
 
+const formatCurrency = (amount: number) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(amount);
+
+// Estados config
+const estadoConfig = {
+  ingresado: { label: 'Ingresado', icon: 'inbox', index: 0 },
+  en_diagnostico: { label: 'Diagnóstico', icon: 'search', index: 1 },
+  en_reparacion: { label: 'Reparación', icon: 'build', index: 2 },
+  finalizado: { label: 'Finalizado', icon: 'check_circle', index: 3 },
+  facturado: { label: 'Facturado', icon: 'receipt', index: 4 },
+  entregado: { label: 'Entregado', icon: 'local_shipping', index: 5 }
+} as const;
+
+type EstadoKey = keyof typeof estadoConfig;
+const currentConfig = estadoConfig[order.estado as EstadoKey] || estadoConfig.ingresado;
+const currentIndex = currentConfig.index;
+
+// Next estado
+const estadosOrden: EstadoKey[] = ['ingresado', 'en_diagnostico', 'en_reparacion', 'finalizado', 'facturado', 'entregado'];
+const nextEstado = estadosOrden[currentIndex + 1] || null;
+
 const getStatusColor = (status: string) => {
-    switch (status) {
-        case 'ingresado': return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
-        case 'en_diagnostico': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
-        case 'en_reparacion': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
-        case 'finalizado': return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
-        case 'entregado': return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300';
-        default: return 'bg-gray-100 text-gray-800';
-    }
+  const colors: Record<string, string> = {
+    ingresado: 'bg-red-100 text-red-700',
+    en_diagnostico: 'bg-purple-100 text-purple-700',
+    en_reparacion: 'bg-amber-100 text-amber-700',
+    finalizado: 'bg-green-100 text-green-700',
+    facturado: 'bg-blue-100 text-blue-700',
+    entregado: 'bg-emerald-100 text-emerald-700'
+  };
+  return colors[status] || 'bg-gray-100 text-gray-700';
 };
 
-const getStatusLabel = (status: string) => {
-    return status ? status.replace('_', ' ').toUpperCase() : 'DESCONOCIDO';
-};
-
-// Calculate total from parts and labor
+// Calculate totals
 const partsTotal = order.repuestos?.reduce((acc: number, part: any) => acc + (part.precio || 0), 0) || 0;
-// Use budget total if available to derive labor, or use default labor cost
-const budgetTotal = order.presupuesto?.monto_total;
-const laborCost = budgetTotal ? (budgetTotal - partsTotal) : 75000; 
-// If budget exists, we assume it's the subtotal before tax or the total. 
-// Let's assume for consistency with other pages: Total = Parts + Labor + Tax
-// If budget is present, we treat it as the "Subtotal" (Parts + Labor).
-const subtotal = partsTotal + laborCost;
-const iva = subtotal * 0.19; // 19% IVA
+const servicesTotal = order.servicios?.reduce((acc: number, s: any) => acc + (s.precio || 0), 0) || 0;
+const subtotal = partsTotal + servicesTotal;
+const iva = subtotal * 0.19;
 const grandTotal = subtotal + iva;
+---
 
---- 
-
-<DashboardLayout title="Detalles de Orden" role="encargado" currentPath="/encargado/detalles_de_orden">
-    <div class="mx-auto max-w-6xl">
-        <!-- Header Bar -->
-        <header class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6 print:hidden">
-            <div>
-                <!-- Breadcrumbs -->
-                <div class="flex flex-wrap items-center gap-2">
-                    <a class="text-gray-500 dark:text-gray-400 text-base font-medium leading-normal hover:text-primary-600 dark:hover:text-primary-400" href="/encargado/trabajos_en_curso">Órdenes</a>
-                    <span class="text-gray-400 dark:text-gray-500 text-base font-medium leading-normal">/</span>
-                    <span class="text-gray-800 dark:text-gray-200 text-base font-medium leading-normal">Orden #{order.documentId.slice(0, 6)}</span>
-                </div>
-                <div class="flex items-center gap-3 mt-2">
-                    <h1 class="text-3xl font-bold text-gray-900 dark:text-white">Orden de Trabajo #{order.documentId.slice(0, 6)}</h1>
-                    <!-- Chip -->
-                    <div class={`flex h-8 shrink-0 items-center justify-center gap-x-2 rounded-full px-3 ${getStatusColor(order.estado)}`}>
-                        <span class="w-2 h-2 rounded-full bg-current"></span>
-                        <p class="text-sm font-medium leading-normal">{getStatusLabel(order.estado)}</p>
-                    </div>
-                </div>
-            </div>
-            <!-- Toolbar -->
-            <div class="flex gap-2">
-                <a href={`/encargado/asignar_orden_zona?id=${order.documentId}`} class="flex items-center justify-center gap-2 p-2 h-10 w-10 rounded-lg text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-sm transition-colors">
-                    <span class="material-symbols-outlined">edit</span>
-                </a>
-                <button onclick="window.print()" class="flex items-center justify-center gap-2 p-2 h-10 w-10 rounded-lg text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-sm transition-colors">
-                    <span class="material-symbols-outlined">print</span>
-                </button>
-            </div>
-        </header>
-
-        <!-- Grid Layout for Content -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <!-- Left Column: Details -->
-            <div class="lg:col-span-2 flex flex-col gap-6">
-                <!-- Customer & Vehicle Card -->
-                <div class="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-                    <h2 class="text-xl font-bold text-gray-900 dark:text-white pb-4 border-b border-gray-200 dark:border-gray-700">Información del Cliente y Vehículo</h2>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-                        <div>
-                            <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">Cliente</h3>
-                            <p class="font-bold text-gray-900 dark:text-white text-lg">{order.cliente?.nombre} {order.cliente?.apellido}</p>
-                            <div class="flex items-center gap-2 mt-1 text-gray-600 dark:text-gray-300">
-                                <span class="material-symbols-outlined text-sm">email</span>
-                                <p>{order.cliente?.email}</p>
-                            </div>
-                            <div class="flex items-center gap-2 mt-1 text-gray-600 dark:text-gray-300">
-                                <span class="material-symbols-outlined text-sm">phone</span>
-                                <p>{order.cliente?.telefono}</p>
-                            </div>
-                        </div>
-                        <div>
-                            <h3 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">Vehículo</h3>
-                            <p class="font-bold text-gray-900 dark:text-white text-lg">{order.vehiculo?.marca} {order.vehiculo?.modelo} <span class="text-gray-500 font-normal">({order.vehiculo?.ano})</span></p>
-                            <div class="flex items-center gap-2 mt-1 text-gray-600 dark:text-gray-300">
-                                <span class="material-symbols-outlined text-sm">pin</span>
-                                <p>Matrícula: {order.vehiculo?.patente}</p>
-                            </div>
-                            <div class="flex items-center gap-2 mt-1 text-gray-600 dark:text-gray-300">
-                                <span class="material-symbols-outlined text-sm">fingerprint</span>
-                                <p>VIN: {order.vehiculo?.vin || 'N/A'}</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Parts & Labor Card -->
-                <div class="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-                    <h2 class="text-xl font-bold text-gray-900 dark:text-white pb-4 mb-4 border-b border-gray-200 dark:border-gray-700">Repuestos y Servicios</h2>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left">
-                            <thead>
-                                <tr class="text-sm text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700">
-                                    <th class="py-3 font-medium">Descripción</th>
-                                    <th class="py-3 font-medium text-center">Cantidad</th>
-                                    <th class="py-3 font-medium text-right">Precio Unitario</th>
-                                    <th class="py-3 font-medium text-right">Total</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                                {order.repuestos?.map((part: any) => (
-                                    <tr>
-                                        <td class="py-4 text-gray-900 dark:text-white">{part.nombre}</td>
-                                        <td class="py-4 text-center text-gray-600 dark:text-gray-300">1</td>
-                                        <td class="py-4 text-right text-gray-600 dark:text-gray-300">€{part.precio}</td>
-                                        <td class="py-4 text-right font-medium text-gray-900 dark:text-white">€{part.precio}</td>
-                                    </tr>
-                                ))}
-                                <tr>
-                                    <td class="py-4 text-gray-900 dark:text-white">Mano de Obra / Servicios</td>
-                                    <td class="py-4 text-center text-gray-600 dark:text-gray-300">1</td>
-                                    <td class="py-4 text-right text-gray-600 dark:text-gray-300">€{laborCost}</td>
-                                    <td class="py-4 text-right font-medium text-gray-900 dark:text-white">€{laborCost}</td>
-                                </tr>
-                            </tbody>
-                            <tfoot>
-                                <tr>
-                                    <td class="pt-6 text-right font-medium text-gray-600 dark:text-gray-300" colspan="3">Subtotal</td>
-                                    <td class="pt-6 text-right font-medium text-gray-900 dark:text-white">€{subtotal.toFixed(2)}</td>
-                                </tr>
-                                <tr>
-                                    <td class="py-2 text-right font-medium text-gray-600 dark:text-gray-300" colspan="3">IVA (19%)</td>
-                                    <td class="py-2 text-right font-medium text-gray-900 dark:text-white">€{iva.toFixed(2)}</td>
-                                </tr>
-                                <tr>
-                                    <td class="pt-4 text-right text-lg font-bold text-gray-900 dark:text-white" colspan="3">Total</td>
-                                    <td class="pt-4 text-right text-lg font-bold text-primary-600 dark:text-primary-400">€{grandTotal.toFixed(2)}</td>
-                                </tr>
-                            </tfoot>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Right Column: Summary & History -->
-            <div class="lg:col-span-1 flex flex-col gap-6">
-                <!-- Summary Card -->
-                <div class="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-                    <h2 class="text-xl font-bold text-gray-900 dark:text-white pb-4 mb-4 border-b border-gray-200 dark:border-gray-700">Resumen de la Orden</h2>
-                    <div class="space-y-4 text-sm">
-                        <div class="flex justify-between items-center">
-                            <span class="text-gray-500 dark:text-gray-400">Fecha de Ingreso</span>
-                            <span class="font-medium text-gray-900 dark:text-white">{formatDate(order.fecha_ingreso)}</span>
-                        </div>
-                        <div class="flex justify-between items-center">
-                            <span class="text-gray-500 dark:text-gray-400">Mecánico Asignado</span>
-                            <span class="font-medium text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
-                                {order.mecanico ? `${order.mecanico.nombre} ${order.mecanico.apellido}` : 'Sin asignar'}
-                            </span>
-                        </div>
-                        <div class="flex justify-between items-center">
-                            <span class="text-gray-500 dark:text-gray-400">Inicio Planificado</span>
-                            <span class="font-medium text-gray-900 dark:text-white">{formatDate(order.fecha_inicio_planificada)}</span>
-                        </div>
-                        <div class="flex justify-between items-center">
-                            <span class="text-gray-500 dark:text-gray-400">Fin Planificado</span>
-                            <span class="font-medium text-gray-900 dark:text-white">{formatDate(order.fecha_fin_planificada)}</span>
-                        </div>
-                        <div class="flex justify-between items-center">
-                            <span class="text-gray-500 dark:text-gray-400">Entrega Estimada</span>
-                            <span class="font-medium text-gray-900 dark:text-white">{formatDate(order.fecha_estimada)}</span>
-                        </div>
-                        <div class="pt-4 border-t border-gray-100 dark:border-gray-700">
-                            <span class="text-gray-500 dark:text-gray-400 block mb-2">Descripción del Problema</span>
-                            <p class="font-medium text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-900/50 p-3 rounded-lg border border-gray-100 dark:border-gray-700 text-sm leading-relaxed">
-                                {order.descripcion}
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Timeline Component -->
-                <div class="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
-                    <h2 class="text-xl font-bold text-gray-900 dark:text-white pb-4 border-b border-gray-200 dark:border-gray-700">Historial y Bitácora</h2>
-                    <div class="mt-6 space-y-8 relative">
-                        <!-- Vertical line -->
-                        <div class="absolute left-[11px] top-2 bottom-2 w-0.5 bg-gray-200 dark:bg-gray-700"></div>
-
-                        {order.bitacoras?.map((bitacora: any) => (
-                            <div class="relative flex gap-4">
-                                <div class="z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-500 text-white ring-4 ring-white dark:ring-gray-800">
-                                    <span class="material-symbols-outlined !text-[14px]">history</span>
-                                </div>
-                                <div class="flex-1 -mt-1">
-                                    <p class="font-bold text-gray-900 dark:text-white text-sm">{bitacora.procedimientos}</p>
-                                    <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">{formatDate(bitacora.fecha)}</p>
-                                    <p class="text-sm text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-gray-900/50 p-2 rounded border border-gray-100 dark:border-gray-700">{bitacora.observaciones}</p>
-                                </div>
-                            </div>
-                        ))}
-
-                        <div class="relative flex gap-4">
-                            <div class="z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-green-500 text-white ring-4 ring-white dark:ring-gray-800">
-                                <span class="material-symbols-outlined !text-[14px]">add</span>
-                            </div>
-                            <div class="flex-1 -mt-1">
-                                <p class="font-bold text-gray-900 dark:text-white text-sm">Orden Creada</p>
-                                <p class="text-xs text-gray-500 dark:text-gray-400 mb-1">{formatDate(order.createdAt)}</p>
-                                <p class="text-sm text-gray-600 dark:text-gray-300">Vehículo recibido en el taller.</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+<DashboardLayout title="Detalle de Orden" role="encargado" currentPath="/encargado/detalles_de_orden">
+  <div class="max-w-6xl mx-auto" x-data="{ showNoteModal: false, showStatusModal: false }">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+      <div>
+        <div class="flex items-center gap-2 text-sm text-gray-500 mb-2">
+          <a href="/encargado/trabajos_en_curso" class="hover:text-primary-600">Órdenes</a>
+          <span>/</span>
+          <span class="text-gray-900 dark:text-white">OT-{order.id}</span>
         </div>
+        <div class="flex items-center gap-4 flex-wrap">
+          <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Orden #{order.id}</h1>
+          <span class={`px-3 py-1.5 rounded-full text-sm font-bold ${getStatusColor(order.estado)}`}>
+            {currentConfig.label}
+          </span>
+          {order.prioridad === 'urgente' && (
+            <span class="px-3 py-1.5 bg-red-500 text-white rounded-full text-sm font-bold">URGENTE</span>
+          )}
+        </div>
+      </div>
+      <div class="flex gap-2 flex-wrap">
+        <button @click="showNoteModal = true" class="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 flex items-center gap-2">
+          <span class="material-symbols-outlined">note_add</span>
+          Agregar Nota
+        </button>
+        <button onclick="window.print()" class="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 flex items-center gap-2">
+          <span class="material-symbols-outlined">print</span>
+        </button>
+        {nextEstado && (
+          <button @click="showStatusModal = true" class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center gap-2">
+            <span class="material-symbols-outlined">arrow_forward</span>
+            Avanzar a {estadoConfig[nextEstado].label}
+          </button>
+        )}
+      </div>
     </div>
+
+    <!-- Mensajes -->
+    {successMessage && (
+      <div class="mb-6 p-4 bg-green-50 border border-green-200 rounded-xl text-green-800 flex items-center gap-3">
+        <span class="material-symbols-outlined">check_circle</span>
+        <span class="font-medium">{successMessage}</span>
+      </div>
+    )}
+    {error && (
+      <div class="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-800 flex items-center gap-3">
+        <span class="material-symbols-outlined">error</span>
+        <span>{error}</span>
+      </div>
+    )}
+
+    <!-- Timeline de Estado -->
+    <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-4 mb-6 overflow-x-auto">
+      <div class="flex items-center min-w-max">
+        <div class="flex flex-col items-center px-3">
+          <div class={`w-10 h-10 rounded-full flex items-center justify-center ${0 <= currentIndex ? 'bg-primary-500' : 'bg-gray-200'} ${order.estado === 'ingresado' ? 'ring-4 ring-primary-200' : ''}`}>
+            <span class={`material-symbols-outlined ${0 <= currentIndex ? 'text-white' : 'text-gray-400'}`}>inbox</span>
+          </div>
+          <span class={`text-xs mt-2 ${order.estado === 'ingresado' ? 'font-bold text-gray-900' : 'text-gray-500'}`}>Ingresado</span>
+        </div>
+        <div class={`w-8 h-1 rounded ${0 < currentIndex ? 'bg-primary-500' : 'bg-gray-200'}`}></div>
+        
+        <div class="flex flex-col items-center px-3">
+          <div class={`w-10 h-10 rounded-full flex items-center justify-center ${1 <= currentIndex ? 'bg-primary-500' : 'bg-gray-200'} ${order.estado === 'en_diagnostico' ? 'ring-4 ring-primary-200' : ''}`}>
+            <span class={`material-symbols-outlined ${1 <= currentIndex ? 'text-white' : 'text-gray-400'}`}>search</span>
+          </div>
+          <span class={`text-xs mt-2 ${order.estado === 'en_diagnostico' ? 'font-bold text-gray-900' : 'text-gray-500'}`}>Diagnóstico</span>
+        </div>
+        <div class={`w-8 h-1 rounded ${1 < currentIndex ? 'bg-primary-500' : 'bg-gray-200'}`}></div>
+        
+        <div class="flex flex-col items-center px-3">
+          <div class={`w-10 h-10 rounded-full flex items-center justify-center ${2 <= currentIndex ? 'bg-primary-500' : 'bg-gray-200'} ${order.estado === 'en_reparacion' ? 'ring-4 ring-primary-200' : ''}`}>
+            <span class={`material-symbols-outlined ${2 <= currentIndex ? 'text-white' : 'text-gray-400'}`}>build</span>
+          </div>
+          <span class={`text-xs mt-2 ${order.estado === 'en_reparacion' ? 'font-bold text-gray-900' : 'text-gray-500'}`}>Reparación</span>
+        </div>
+        <div class={`w-8 h-1 rounded ${2 < currentIndex ? 'bg-primary-500' : 'bg-gray-200'}`}></div>
+        
+        <div class="flex flex-col items-center px-3">
+          <div class={`w-10 h-10 rounded-full flex items-center justify-center ${3 <= currentIndex ? 'bg-primary-500' : 'bg-gray-200'} ${order.estado === 'finalizado' ? 'ring-4 ring-primary-200' : ''}`}>
+            <span class={`material-symbols-outlined ${3 <= currentIndex ? 'text-white' : 'text-gray-400'}`}>check_circle</span>
+          </div>
+          <span class={`text-xs mt-2 ${order.estado === 'finalizado' ? 'font-bold text-gray-900' : 'text-gray-500'}`}>Finalizado</span>
+        </div>
+        <div class={`w-8 h-1 rounded ${3 < currentIndex ? 'bg-primary-500' : 'bg-gray-200'}`}></div>
+        
+        <div class="flex flex-col items-center px-3">
+          <div class={`w-10 h-10 rounded-full flex items-center justify-center ${4 <= currentIndex ? 'bg-primary-500' : 'bg-gray-200'} ${order.estado === 'facturado' ? 'ring-4 ring-primary-200' : ''}`}>
+            <span class={`material-symbols-outlined ${4 <= currentIndex ? 'text-white' : 'text-gray-400'}`}>receipt</span>
+          </div>
+          <span class={`text-xs mt-2 ${order.estado === 'facturado' ? 'font-bold text-gray-900' : 'text-gray-500'}`}>Facturado</span>
+        </div>
+        <div class={`w-8 h-1 rounded ${4 < currentIndex ? 'bg-primary-500' : 'bg-gray-200'}`}></div>
+        
+        <div class="flex flex-col items-center px-3">
+          <div class={`w-10 h-10 rounded-full flex items-center justify-center ${5 <= currentIndex ? 'bg-primary-500' : 'bg-gray-200'} ${order.estado === 'entregado' ? 'ring-4 ring-primary-200' : ''}`}>
+            <span class={`material-symbols-outlined ${5 <= currentIndex ? 'text-white' : 'text-gray-400'}`}>local_shipping</span>
+          </div>
+          <span class={`text-xs mt-2 ${order.estado === 'entregado' ? 'font-bold text-gray-900' : 'text-gray-500'}`}>Entregado</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Grid principal -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- Columna izquierda -->
+      <div class="lg:col-span-2 space-y-6">
+        <!-- Cliente y Vehículo -->
+        <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
+          <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary-500">info</span>
+            Información Principal
+          </h2>
+          
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-xl">
+              <div class="flex items-center gap-3 mb-4">
+                <div class="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center text-white text-lg font-bold">
+                  {(order.cliente?.nombre || 'C').charAt(0)}{(order.cliente?.apellido || '').charAt(0)}
+                </div>
+                <div>
+                  <p class="font-bold text-gray-900 dark:text-white text-lg">{order.cliente?.nombre} {order.cliente?.apellido}</p>
+                  <p class="text-sm text-gray-500">Cliente</p>
+                </div>
+              </div>
+              <div class="space-y-2 text-sm">
+                {order.cliente?.email && (
+                  <div class="flex items-center gap-2 text-gray-600">
+                    <span class="material-symbols-outlined text-base">email</span>
+                    <span>{order.cliente.email}</span>
+                  </div>
+                )}
+                {order.cliente?.telefono && (
+                  <div class="flex items-center gap-2 text-gray-600">
+                    <span class="material-symbols-outlined text-base">phone</span>
+                    <span>{order.cliente.telefono}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            <div class="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-xl">
+              <div class="flex items-center gap-3 mb-4">
+                <div class="w-12 h-12 rounded-full bg-amber-500 flex items-center justify-center text-white">
+                  <span class="material-symbols-outlined">directions_car</span>
+                </div>
+                <div>
+                  <p class="font-bold text-gray-900 dark:text-white text-lg">{order.vehiculo?.marca} {order.vehiculo?.modelo}</p>
+                  <p class="text-sm text-gray-500">{order.vehiculo?.ano || ''}</p>
+                </div>
+              </div>
+              <div class="space-y-2 text-sm">
+                <div class="flex items-center gap-2 text-gray-600">
+                  <span class="material-symbols-outlined text-base">pin</span>
+                  <span class="font-mono font-bold">{order.vehiculo?.patente}</span>
+                </div>
+                {order.vehiculo?.vin && (
+                  <div class="flex items-center gap-2 text-gray-600">
+                    <span class="material-symbols-outlined text-base">fingerprint</span>
+                    <span class="font-mono text-xs">{order.vehiculo.vin}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+          
+          <div class="mt-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 rounded-xl">
+            <h3 class="font-bold text-amber-800 mb-2 flex items-center gap-2">
+              <span class="material-symbols-outlined">report_problem</span>
+              Descripción del Problema
+            </h3>
+            <p class="text-amber-700">{order.descripcion || 'Sin descripción'}</p>
+          </div>
+        </div>
+
+        <!-- Repuestos y Servicios -->
+        <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
+          <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary-500">build</span>
+            Repuestos y Servicios
+          </h2>
+          
+          <table class="w-full text-left">
+            <thead>
+              <tr class="text-sm text-gray-500 border-b border-gray-200">
+                <th class="py-3 font-medium">Descripción</th>
+                <th class="py-3 font-medium text-center">Cant.</th>
+                <th class="py-3 font-medium text-right">Precio</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              {order.repuestos?.map((part: any) => (
+                <tr>
+                  <td class="py-3 text-gray-900">{part.nombre}</td>
+                  <td class="py-3 text-center text-gray-600">1</td>
+                  <td class="py-3 text-right font-medium">{formatCurrency(part.precio || 0)}</td>
+                </tr>
+              ))}
+              {order.servicios?.map((s: any) => (
+                <tr>
+                  <td class="py-3 text-gray-900">{s.nombre} <span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded ml-2">Servicio</span></td>
+                  <td class="py-3 text-center text-gray-600">1</td>
+                  <td class="py-3 text-right font-medium">{formatCurrency(s.precio || 0)}</td>
+                </tr>
+              ))}
+            </tbody>
+            {(partsTotal > 0 || servicesTotal > 0) && (
+              <tfoot class="border-t-2 border-gray-200">
+                <tr><td colspan="2" class="pt-4 text-right font-medium text-gray-600">Subtotal</td><td class="pt-4 text-right font-medium">{formatCurrency(subtotal)}</td></tr>
+                <tr><td colspan="2" class="py-1 text-right font-medium text-gray-600">IVA (19%)</td><td class="py-1 text-right font-medium">{formatCurrency(iva)}</td></tr>
+                <tr><td colspan="2" class="pt-2 text-right text-lg font-bold">Total</td><td class="pt-2 text-right text-lg font-bold text-primary-600">{formatCurrency(grandTotal)}</td></tr>
+              </tfoot>
+            )}
+          </table>
+          {(!order.repuestos?.length && !order.servicios?.length) && (
+            <p class="py-8 text-center text-gray-500">No hay repuestos ni servicios registrados</p>
+          )}
+        </div>
+      </div>
+
+      <!-- Columna derecha -->
+      <div class="space-y-6">
+        <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
+          <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4">Resumen</h2>
+          <div class="space-y-4 text-sm">
+            <div class="flex justify-between">
+              <span class="text-gray-500">Fecha de Ingreso</span>
+              <span class="font-medium text-gray-900">{formatDate(order.fecha_ingreso)}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-gray-500">Mecánico</span>
+              <span class="font-medium text-gray-900">
+                {order.mecanico ? `${order.mecanico.nombre} ${order.mecanico.apellido || ''}` : 'Sin asignar'}
+              </span>
+            </div>
+            {order.zona && (
+              <div class="flex justify-between">
+                <span class="text-gray-500">Zona</span>
+                <span class="font-medium text-gray-900">{order.zona.nombre}</span>
+              </div>
+            )}
+          </div>
+          
+          <div class="mt-6 pt-6 border-t border-gray-100 space-y-2">
+            <a href={`/encargado/reasignar_orden?orden=${order.documentId}`} class="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center justify-center gap-2">
+              <span class="material-symbols-outlined text-base">swap_horiz</span>
+              Reasignar Mecánico
+            </a>
+            {order.estado === 'finalizado' && !order.factura && (
+              <a href={`/encargado/gen_factura?orden=${order.documentId}`} class="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center justify-center gap-2">
+                <span class="material-symbols-outlined text-base">receipt_long</span>
+                Generar Factura
+              </a>
+            )}
+          </div>
+        </div>
+
+        <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6">
+          <div class="flex justify-between items-center mb-4">
+            <h2 class="text-lg font-bold text-gray-900 dark:text-white">Bitácora</h2>
+            <button @click="showNoteModal = true" class="text-sm text-primary-600 hover:underline">+ Agregar</button>
+          </div>
+          
+          <div class="space-y-4">
+            {order.bitacoras?.slice().reverse().map((bitacora: any) => (
+              <div class="flex gap-3 border-l-2 border-blue-500 pl-3">
+                <div class="flex-1">
+                  <p class="font-medium text-gray-900 text-sm">{bitacora.procedimientos}</p>
+                  <p class="text-xs text-gray-500">{formatDate(bitacora.fecha)}</p>
+                  {bitacora.observaciones && (
+                    <p class="text-sm text-gray-600 bg-gray-50 p-2 rounded mt-1">{bitacora.observaciones}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+            <div class="flex gap-3 border-l-2 border-green-500 pl-3">
+              <div>
+                <p class="font-medium text-gray-900 text-sm">Orden Creada</p>
+                <p class="text-xs text-gray-500">{formatDate(order.createdAt)}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Cambiar Estado -->
+    <div x-show="showStatusModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+      <div class="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl" @click.outside="showStatusModal = false">
+        <h3 class="text-xl font-bold text-gray-900 mb-4">Cambiar Estado</h3>
+        <p class="text-gray-600 mb-6">¿Confirma avanzar la orden al siguiente estado?</p>
+        <form method="POST" class="flex gap-3">
+          <input type="hidden" name="action" value="cambiar_estado" />
+          <input type="hidden" name="nuevo_estado" value={nextEstado || ''} />
+          <button type="button" @click="showStatusModal = false" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancelar</button>
+          <button type="submit" class="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700">Confirmar</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal: Agregar Nota -->
+    <div x-show="showNoteModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+      <div class="bg-white rounded-2xl p-6 max-w-lg w-full shadow-2xl" @click.outside="showNoteModal = false">
+        <h3 class="text-xl font-bold text-gray-900 mb-4">Agregar Nota</h3>
+        <form method="POST" class="space-y-4">
+          <input type="hidden" name="action" value="agregar_nota" />
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Procedimiento</label>
+            <input type="text" name="procedimientos" required placeholder="Ej: Revisión de frenos" class="w-full px-4 py-2 border border-gray-300 rounded-lg" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Observaciones</label>
+            <textarea name="observaciones" rows="3" placeholder="Detalles..." class="w-full px-4 py-2 border border-gray-300 rounded-lg"></textarea>
+          </div>
+          <div class="flex gap-3">
+            <button type="button" @click="showNoteModal = false" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50">Cancelar</button>
+            <button type="submit" class="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700">Guardar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    [x-cloak] { display: none !important; }
+  </style>
 </DashboardLayout>

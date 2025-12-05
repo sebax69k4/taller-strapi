@@ -13,71 +13,114 @@ if (!userRole) {
 
 // Handle Export Actions
 if (Astro.request.method === 'POST') {
-    try {
-        const formData = await Astro.request.formData();
-        const reportType = formData.get('type');
-        
-        let data: any[] = [];
-        let filename = '';
-        let headers: string[] = [];
+  try {
+    const formData = await Astro.request.formData();
+    const reportType = formData.get('type');
+    
+    let data: any[] = [];
+    let filename = '';
+    let headers: string[] = [];
 
-        if (reportType === 'ventas') {
-            const res = await strapiGet('/api/facturas?populate=*&pagination[limit]=-1');
-            data = res.data.map((f: any) => ({
-                id: f.id,
-                fecha: f.fecha_emision,
-                cliente: f.orden_de_trabajo?.vehiculo?.cliente?.nombre || 'N/A',
-                monto: f.monto_total,
-                metodo: f.metodo_pago,
-                estado: f.estado
-            }));
-            headers = ['ID', 'Fecha', 'Cliente', 'Monto', 'Método', 'Estado'];
-            filename = `reporte-ventas-${new Date().toISOString().split('T')[0]}.csv`;
-        } else if (reportType === 'inventario') {
-            const res = await strapiGet('/api/repuestos?pagination[limit]=-1');
-            data = res.data.map((r: any) => ({
-                nombre: r.nombre,
-                sku: r.sku,
-                stock: r.stock,
-                precio: r.precio,
-                ubicacion: r.ubicacion
-            }));
-            headers = ['Nombre', 'SKU', 'Stock', 'Precio', 'Ubicación'];
-            filename = `reporte-inventario-${new Date().toISOString().split('T')[0]}.csv`;
-        }
-
-        // Convert to CSV
-        const csvContent = [
-            headers.join(','),
-            ...data.map((row: any) => Object.values(row).map(v => `"${v}"`).join(','))
-        ].join('\n');
-
-        return new Response(csvContent, {
-            status: 200,
-            headers: {
-                'Content-Type': 'text/csv',
-                'Content-Disposition': `attachment; filename="${filename}"`
-            }
-        });
-
-    } catch (e) {
-        console.error('Error generating report:', e);
+    if (reportType === 'ventas') {
+      const res = await strapiGet('/api/facturas?populate[orden_de_trabajo][populate][vehiculo][populate]=cliente&pagination[limit]=1000');
+      data = (res.data || []).map((f: any) => ({
+        id: f.id,
+        numero: f.numero_factura || `F-${f.id}`,
+        fecha: f.fecha_emision,
+        cliente: f.orden_de_trabajo?.vehiculo?.cliente?.nombre || 'N/A',
+        vehiculo: f.orden_de_trabajo?.vehiculo?.patente || 'N/A',
+        subtotal: f.subtotal || 0,
+        iva: f.iva || 0,
+        total: f.total || 0,
+        metodo: f.metodo_pago || 'N/A',
+        estado: f.estado
+      }));
+      headers = ['ID', 'Número', 'Fecha', 'Cliente', 'Vehículo', 'Subtotal', 'IVA', 'Total', 'Método', 'Estado'];
+      filename = `reporte-ventas-${new Date().toISOString().split('T')[0]}.csv`;
+    } else if (reportType === 'inventario') {
+      const res = await strapiGet('/api/repuestos?pagination[limit]=1000');
+      data = (res.data || []).map((r: any) => ({
+        id: r.id,
+        nombre: r.nombre,
+        sku: r.sku || 'N/A',
+        stock: r.stock || 0,
+        stock_minimo: r.stock_minimo || 0,
+        precio: r.precio || 0,
+        ubicacion: r.ubicacion || 'N/A',
+        estado: (r.stock || 0) <= (r.stock_minimo || 5) ? 'BAJO' : 'OK'
+      }));
+      headers = ['ID', 'Nombre', 'SKU', 'Stock', 'Mínimo', 'Precio', 'Ubicación', 'Estado'];
+      filename = `reporte-inventario-${new Date().toISOString().split('T')[0]}.csv`;
+    } else if (reportType === 'ordenes') {
+      const res = await strapiGet('/api/orden-de-trabajos?populate[vehiculo][populate]=cliente&populate=mecanico&pagination[limit]=1000');
+      data = (res.data || []).map((o: any) => ({
+        id: o.id,
+        fecha_ingreso: o.fecha_ingreso,
+        cliente: o.vehiculo?.cliente ? `${o.vehiculo.cliente.nombre} ${o.vehiculo.cliente.apellido || ''}` : 'N/A',
+        vehiculo: o.vehiculo ? `${o.vehiculo.marca} ${o.vehiculo.modelo}` : 'N/A',
+        patente: o.vehiculo?.patente || 'N/A',
+        mecanico: o.mecanico ? `${o.mecanico.nombre} ${o.mecanico.apellido || ''}` : 'Sin asignar',
+        estado: o.estado,
+        prioridad: o.prioridad || 'normal'
+      }));
+      headers = ['ID', 'Fecha Ingreso', 'Cliente', 'Vehículo', 'Patente', 'Mecánico', 'Estado', 'Prioridad'];
+      filename = `reporte-ordenes-${new Date().toISOString().split('T')[0]}.csv`;
+    } else if (reportType === 'mecanicos') {
+      const res = await strapiGet('/api/mecenicos?populate[orden_de_trabajos][populate]=factura');
+      data = (res.data || []).map((m: any) => {
+        const ordenes = m.orden_de_trabajos || [];
+        const completadas = ordenes.filter((o: any) => o.estado === 'entregado').length;
+        const activas = ordenes.filter((o: any) => !['entregado', 'facturado'].includes(o.estado)).length;
+        const ingresos = ordenes.reduce((sum: number, o: any) => sum + (o.factura?.total || 0), 0);
+        return {
+          id: m.id,
+          nombre: `${m.nombre} ${m.apellido || ''}`,
+          especialidad: m.especialidad || 'General',
+          estado: m.estado || 'N/A',
+          ordenes_completadas: completadas,
+          ordenes_activas: activas,
+          ingresos_generados: ingresos
+        };
+      });
+      headers = ['ID', 'Nombre', 'Especialidad', 'Estado', 'Completadas', 'Activas', 'Ingresos'];
+      filename = `reporte-mecanicos-${new Date().toISOString().split('T')[0]}.csv`;
     }
+
+    // Convert to CSV
+    const csvContent = [
+      headers.join(','),
+      ...data.map((row: any) => Object.values(row).map(v => `"${v}"`).join(','))
+    ].join('\n');
+
+    return new Response(csvContent, {
+      status: 200,
+      headers: {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': `attachment; filename="${filename}"`
+      }
+    });
+
+  } catch (e) {
+    console.error('Error generating report:', e);
+  }
 }
 
-// Fechas para filtros
+// Fechas
 const today = new Date();
 const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
 const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0];
-const startOfWeek = new Date(today.setDate(today.getDate() - today.getDay())).toISOString().split('T')[0];
+const startOfLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1).toISOString().split('T')[0];
+const endOfLastMonth = new Date(today.getFullYear(), today.getMonth(), 0).toISOString().split('T')[0];
 
 interface Stats {
   ordenesCompletadas: number;
   ordenesActivas: number;
   ingresosMes: number;
+  ingresosUltimoMes: number;
   ticketPromedio: number;
   mecanicosActivos: number;
   clientesNuevos: number;
+  tiempoPromedio: number;
 }
 
 interface MecanicoRendimiento {
@@ -87,6 +130,7 @@ interface MecanicoRendimiento {
   ordenesCompletadas: number;
   ordenesActivas: number;
   ingresos: number;
+  eficiencia: number;
 }
 
 interface OrdenReciente {
@@ -95,6 +139,7 @@ interface OrdenReciente {
   estado: string;
   total: number;
   cliente: string;
+  vehiculo: string;
   fecha: string;
 }
 
@@ -102,77 +147,102 @@ let stats: Stats = {
   ordenesCompletadas: 0,
   ordenesActivas: 0,
   ingresosMes: 0,
+  ingresosUltimoMes: 0,
   ticketPromedio: 0,
   mecanicosActivos: 0,
-  clientesNuevos: 0
+  clientesNuevos: 0,
+  tiempoPromedio: 0
 };
 
 let mecanicosRendimiento: MecanicoRendimiento[] = [];
 let ordenesRecientes: OrdenReciente[] = [];
 let estadoDistribucion: Record<string, number> = {};
+let serviciosPopulares: { nombre: string; cantidad: number }[] = [];
 
 try {
-  // Órdenes completadas este mes
-  const completadasRes = await strapiGet(`/api/orden-de-trabajos?filters[estado][$eq]=entregado&filters[updatedAt][$gte]=${startOfMonth}`);
+  const [
+    completadasRes,
+    completadasLastMonthRes,
+    activasRes,
+    facturasRes,
+    facturasLastMonthRes,
+    mecanicosRes,
+    clientesRes,
+    todasOrdenesRes,
+    ordenesFacturadas,
+    serviciosRes
+  ] = await Promise.all([
+    strapiGet(`/api/orden-de-trabajos?filters[estado][$eq]=entregado&filters[updatedAt][$gte]=${startOfMonth}`),
+    strapiGet(`/api/orden-de-trabajos?filters[estado][$eq]=entregado&filters[updatedAt][$gte]=${startOfLastMonth}&filters[updatedAt][$lte]=${endOfLastMonth}`),
+    strapiGet('/api/orden-de-trabajos?filters[estado][$notIn][0]=entregado&filters[estado][$notIn][1]=facturado'),
+    strapiGet(`/api/facturas?filters[fecha_emision][$gte]=${startOfMonth}&filters[fecha_emision][$lte]=${endOfMonth}`),
+    strapiGet(`/api/facturas?filters[fecha_emision][$gte]=${startOfLastMonth}&filters[fecha_emision][$lte]=${endOfLastMonth}`),
+    strapiGet('/api/mecenicos?populate[orden_de_trabajos][populate]=factura'),
+    strapiGet(`/api/clientes?filters[createdAt][$gte]=${startOfMonth}`),
+    strapiGet('/api/orden-de-trabajos?pagination[limit]=1000'),
+    strapiGet('/api/orden-de-trabajos?filters[estado][$in][0]=facturado&filters[estado][$in][1]=entregado&populate[vehiculo][populate]=cliente&populate=factura&sort=updatedAt:desc&pagination[limit]=10'),
+    strapiGet('/api/servicios?populate[orden_de_trabajos][fields][0]=id')
+  ]);
+
   stats.ordenesCompletadas = completadasRes.meta?.pagination?.total || 0;
-
-  // Órdenes activas
-  const activasRes = await strapiGet('/api/orden-de-trabajos?filters[estado][$notIn][0]=entregado&filters[estado][$notIn][1]=facturado');
+  const completadasLastMonth = completadasLastMonthRes.meta?.pagination?.total || 0;
   stats.ordenesActivas = activasRes.meta?.pagination?.total || 0;
-
-  // Facturas del mes para calcular ingresos
-  const facturasRes = await strapiGet(`/api/facturas?filters[fecha_emision][$gte]=${startOfMonth}&filters[fecha_emision][$lte]=${endOfMonth}`);
+  
   const facturas = facturasRes.data || [];
+  const facturasLastMonth = facturasLastMonthRes.data || [];
   stats.ingresosMes = facturas.reduce((sum: number, f: any) => sum + (f.total || 0), 0);
+  stats.ingresosUltimoMes = facturasLastMonth.reduce((sum: number, f: any) => sum + (f.total || 0), 0);
   stats.ticketPromedio = facturas.length > 0 ? Math.round(stats.ingresosMes / facturas.length) : 0;
 
-  // Mecánicos activos
-  const mecanicosRes = await strapiGet('/api/mecenicos?populate[orden_de_trabajos][fields][0]=estado&populate[orden_de_trabajos][fields][1]=id');
   const mecanicos = mecanicosRes.data || [];
   stats.mecanicosActivos = mecanicos.filter((m: any) => {
-    const activas = m.orden_de_trabajos?.filter((o: any) => 
-      !['entregado', 'facturado'].includes(o.estado)
-    ).length || 0;
+    const activas = (m.orden_de_trabajos || []).filter((o: any) => !['entregado', 'facturado'].includes(o.estado)).length;
     return activas > 0;
   }).length;
 
-  // Calcular rendimiento por mecánico
   mecanicosRendimiento = mecanicos.map((m: any) => {
     const ordenes = m.orden_de_trabajos || [];
     const completadas = ordenes.filter((o: any) => o.estado === 'entregado').length;
     const activas = ordenes.filter((o: any) => !['entregado', 'facturado'].includes(o.estado)).length;
+    const ingresos = ordenes.reduce((sum: number, o: any) => sum + (o.factura?.total || 0), 0);
+    const total = completadas + activas;
     return {
       id: m.id,
       nombre: m.nombre,
       apellido: m.apellido || '',
       ordenesCompletadas: completadas,
       ordenesActivas: activas,
-      ingresos: 0 // Se calcularía con facturas relacionadas
+      ingresos: ingresos,
+      eficiencia: total > 0 ? Math.round((completadas / total) * 100) : 0
     };
-  }).sort((a: MecanicoRendimiento, b: MecanicoRendimiento) => b.ordenesCompletadas - a.ordenesCompletadas);
+  }).sort((a, b) => b.ordenesCompletadas - a.ordenesCompletadas);
 
-  // Clientes nuevos este mes
-  const clientesRes = await strapiGet(`/api/clientes?filters[createdAt][$gte]=${startOfMonth}`);
   stats.clientesNuevos = clientesRes.meta?.pagination?.total || 0;
 
-  // Distribución por estado
-  const todasOrdenesRes = await strapiGet('/api/orden-de-trabajos?pagination[limit]=1000');
   const todasOrdenes = todasOrdenesRes.data || [];
   estadoDistribucion = todasOrdenes.reduce((acc: Record<string, number>, o: any) => {
     acc[o.estado] = (acc[o.estado] || 0) + 1;
     return acc;
   }, {});
 
-  // Órdenes recientes con factura
-  const ordenesFacturadas = await strapiGet('/api/orden-de-trabajos?filters[estado][$in][0]=facturado&filters[estado][$in][1]=entregado&populate[vehiculo][populate][cliente][fields][0]=nombre&populate[vehiculo][populate][cliente][fields][1]=apellido&populate[factura][fields][0]=total&sort[0]=updatedAt:desc&pagination[limit]=10');
   ordenesRecientes = (ordenesFacturadas.data || []).map((o: any) => ({
     id: o.id,
     documentId: o.documentId,
     estado: o.estado,
     total: o.factura?.total || 0,
-    cliente: o.vehiculo?.cliente ? `${o.vehiculo.cliente.nombre} ${o.vehiculo.cliente.apellido}` : 'N/A',
+    cliente: o.vehiculo?.cliente ? `${o.vehiculo.cliente.nombre} ${o.vehiculo.cliente.apellido || ''}` : 'N/A',
+    vehiculo: o.vehiculo ? `${o.vehiculo.marca} ${o.vehiculo.modelo}` : 'N/A',
     fecha: o.updatedAt
   }));
+
+  // Servicios populares
+  serviciosPopulares = (serviciosRes.data || [])
+    .map((s: any) => ({
+      nombre: s.nombre,
+      cantidad: s.orden_de_trabajos?.length || 0
+    }))
+    .sort((a: any, b: any) => b.cantidad - a.cantidad)
+    .slice(0, 5);
 
 } catch (e) {
   console.error('Error fetching report data:', e);
@@ -188,27 +258,19 @@ const estadoLabels: Record<string, string> = {
 };
 
 const estadoColors: Record<string, string> = {
-  'ingresado': 'bg-red-500',
-  'en_diagnostico': 'bg-purple-500',
-  'en_reparacion': 'bg-amber-500',
-  'finalizado': 'bg-blue-500',
-  'facturado': 'bg-green-500',
-  'entregado': 'bg-gray-500'
+  'ingresado': 'from-red-500 to-rose-600',
+  'en_diagnostico': 'from-purple-500 to-indigo-600',
+  'en_reparacion': 'from-amber-500 to-orange-500',
+  'finalizado': 'from-blue-500 to-cyan-600',
+  'facturado': 'from-green-500 to-emerald-600',
+  'entregado': 'from-gray-500 to-gray-600'
 };
 
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(amount);
-}
-
-function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString('es-CL', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric'
-  });
-}
+const formatCurrency = (amount: number) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(amount);
+const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' });
 
 const totalOrdenes = Object.values(estadoDistribucion).reduce((a, b) => a + b, 0);
+const cambioIngresos = stats.ingresosUltimoMes > 0 ? Math.round(((stats.ingresosMes - stats.ingresosUltimoMes) / stats.ingresosUltimoMes) * 100) : 0;
 ---
 
 <DashboardLayout title="Reportes y Estadísticas" role="encargado" currentPath="/encargado/reportes">
@@ -217,188 +279,250 @@ const totalOrdenes = Object.values(estadoDistribucion).reduce((a, b) => a + b, 0
     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
       <div>
         <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Reportes y Estadísticas</h1>
-        <p class="text-gray-500 dark:text-gray-400 mt-2">Resumen del rendimiento del taller este mes</p>
+        <p class="text-gray-500 dark:text-gray-400 mt-1">
+          Resumen de {new Date().toLocaleDateString('es-CL', { month: 'long', year: 'numeric' })}
+        </p>
       </div>
       <div class="flex gap-2">
-        <button onclick="window.print()" class="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-2">
+        <button onclick="window.print()" class="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-2">
           <span class="material-symbols-outlined text-sm">print</span>
           Imprimir
         </button>
         <div class="relative" x-data="{ open: false }">
-            <button @click="open = !open" @click.outside="open = false" class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2">
-                <span class="material-symbols-outlined text-sm">download</span>
-                Exportar
-            </button>
-            <div x-show="open" class="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg py-1 z-10 border border-gray-100 dark:border-gray-700" style="display: none;">
-                <form method="POST" class="block">
-                    <input type="hidden" name="type" value="ventas" />
-                    <button type="submit" class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
-                        Reporte de Ventas
-                    </button>
-                </form>
-                <form method="POST" class="block">
-                    <input type="hidden" name="type" value="inventario" />
-                    <button type="submit" class="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
-                        Inventario Actual
-                    </button>
-                </form>
-            </div>
+          <button @click="open = !open" @click.outside="open = false" class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2 shadow-lg shadow-primary-600/20">
+            <span class="material-symbols-outlined text-sm">download</span>
+            Exportar CSV
+          </button>
+          <div x-show="open" class="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-xl shadow-xl py-2 z-10 border border-gray-100 dark:border-gray-700" style="display: none;">
+            <form method="POST">
+              <input type="hidden" name="type" value="ventas" />
+              <button type="submit" class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2">
+                <span class="material-symbols-outlined text-green-500">payments</span>
+                Reporte de Ventas
+              </button>
+            </form>
+            <form method="POST">
+              <input type="hidden" name="type" value="ordenes" />
+              <button type="submit" class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2">
+                <span class="material-symbols-outlined text-blue-500">assignment</span>
+                Reporte de Órdenes
+              </button>
+            </form>
+            <form method="POST">
+              <input type="hidden" name="type" value="inventario" />
+              <button type="submit" class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2">
+                <span class="material-symbols-outlined text-amber-500">inventory_2</span>
+                Inventario Actual
+              </button>
+            </form>
+            <form method="POST">
+              <input type="hidden" name="type" value="mecanicos" />
+              <button type="submit" class="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2">
+                <span class="material-symbols-outlined text-purple-500">engineering</span>
+                Productividad Mecánicos
+              </button>
+            </form>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- KPIs -->
-    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
-      <Card class="text-center">
-        <span class="material-symbols-outlined text-3xl text-green-500 mb-2">task_alt</span>
-        <p class="text-3xl font-bold text-gray-900 dark:text-white">{stats.ordenesCompletadas}</p>
-        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Completadas (Mes)</p>
-      </Card>
+    <!-- KPIs Principales -->
+    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-8">
+      <div class="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl p-5 text-white shadow-lg">
+        <span class="material-symbols-outlined text-green-200 text-2xl">task_alt</span>
+        <p class="text-3xl font-bold mt-2">{stats.ordenesCompletadas}</p>
+        <p class="text-green-100 text-xs mt-1">Completadas (Mes)</p>
+      </div>
       
-      <Card class="text-center">
-        <span class="material-symbols-outlined text-3xl text-amber-500 mb-2">pending</span>
-        <p class="text-3xl font-bold text-gray-900 dark:text-white">{stats.ordenesActivas}</p>
-        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">En Proceso</p>
-      </Card>
+      <div class="bg-gradient-to-br from-amber-500 to-orange-500 rounded-2xl p-5 text-white shadow-lg">
+        <span class="material-symbols-outlined text-amber-200 text-2xl">pending</span>
+        <p class="text-3xl font-bold mt-2">{stats.ordenesActivas}</p>
+        <p class="text-amber-100 text-xs mt-1">En Proceso</p>
+      </div>
       
-      <Card class="text-center">
-        <span class="material-symbols-outlined text-3xl text-blue-500 mb-2">payments</span>
-        <p class="text-2xl font-bold text-gray-900 dark:text-white">{formatCurrency(stats.ingresosMes)}</p>
-        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Ingresos (Mes)</p>
-      </Card>
+      <div class="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl p-5 text-white shadow-lg">
+        <span class="material-symbols-outlined text-blue-200 text-2xl">payments</span>
+        <p class="text-xl font-bold mt-2">{formatCurrency(stats.ingresosMes)}</p>
+        <p class="text-blue-100 text-xs mt-1 flex items-center gap-1">
+          Ingresos
+          {cambioIngresos !== 0 && (
+            <span class={`flex items-center ${cambioIngresos > 0 ? 'text-green-300' : 'text-red-300'}`}>
+              {cambioIngresos > 0 ? '↑' : '↓'}{Math.abs(cambioIngresos)}%
+            </span>
+          )}
+        </p>
+      </div>
       
-      <Card class="text-center">
-        <span class="material-symbols-outlined text-3xl text-purple-500 mb-2">receipt</span>
-        <p class="text-2xl font-bold text-gray-900 dark:text-white">{formatCurrency(stats.ticketPromedio)}</p>
-        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Ticket Promedio</p>
-      </Card>
+      <div class="bg-gradient-to-br from-purple-500 to-pink-600 rounded-2xl p-5 text-white shadow-lg">
+        <span class="material-symbols-outlined text-purple-200 text-2xl">receipt</span>
+        <p class="text-xl font-bold mt-2">{formatCurrency(stats.ticketPromedio)}</p>
+        <p class="text-purple-100 text-xs mt-1">Ticket Promedio</p>
+      </div>
       
-      <Card class="text-center">
-        <span class="material-symbols-outlined text-3xl text-primary-500 mb-2">engineering</span>
-        <p class="text-3xl font-bold text-gray-900 dark:text-white">{stats.mecanicosActivos}</p>
-        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Mecánicos Activos</p>
-      </Card>
+      <div class="bg-gradient-to-br from-teal-500 to-cyan-600 rounded-2xl p-5 text-white shadow-lg">
+        <span class="material-symbols-outlined text-teal-200 text-2xl">engineering</span>
+        <p class="text-3xl font-bold mt-2">{stats.mecanicosActivos}</p>
+        <p class="text-teal-100 text-xs mt-1">Mecánicos Activos</p>
+      </div>
       
-      <Card class="text-center">
-        <span class="material-symbols-outlined text-3xl text-teal-500 mb-2">person_add</span>
-        <p class="text-3xl font-bold text-gray-900 dark:text-white">{stats.clientesNuevos}</p>
-        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Clientes Nuevos</p>
-      </Card>
+      <div class="bg-gradient-to-br from-rose-500 to-red-600 rounded-2xl p-5 text-white shadow-lg">
+        <span class="material-symbols-outlined text-rose-200 text-2xl">person_add</span>
+        <p class="text-3xl font-bold mt-2">{stats.clientesNuevos}</p>
+        <p class="text-rose-100 text-xs mt-1">Clientes Nuevos</p>
+      </div>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-      <!-- Distribución por Estado -->
+    <!-- Gráficos principales -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+      <!-- Distribución por Estado (Visual mejorado) -->
       <Card>
-        <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+        <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
           <span class="material-symbols-outlined text-primary-500">pie_chart</span>
           Distribución por Estado
         </h3>
-        <div class="space-y-3">
+        <div class="grid grid-cols-3 gap-3">
           {Object.entries(estadoDistribucion).map(([estado, cantidad]) => {
             const porcentaje = totalOrdenes > 0 ? Math.round((cantidad / totalOrdenes) * 100) : 0;
             return (
-              <div>
-                <div class="flex justify-between text-sm mb-1">
-                  <span class="text-gray-700 dark:text-gray-300">{estadoLabels[estado] || estado}</span>
-                  <span class="font-bold text-gray-900 dark:text-white">{cantidad} ({porcentaje}%)</span>
-                </div>
-                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                  <div 
-                    class={`h-2 rounded-full ${estadoColors[estado] || 'bg-gray-500'}`}
-                    style={`width: ${porcentaje}%`}
-                  ></div>
-                </div>
+              <div class={`bg-gradient-to-br ${estadoColors[estado] || 'from-gray-500 to-gray-600'} rounded-xl p-4 text-white`}>
+                <p class="text-2xl font-bold">{cantidad}</p>
+                <p class="text-xs opacity-80">{estadoLabels[estado]}</p>
+                <p class="text-lg font-bold mt-1">{porcentaje}%</p>
               </div>
             );
           })}
         </div>
-        {totalOrdenes > 0 && (
-          <p class="text-sm text-gray-500 dark:text-gray-400 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-            Total: {totalOrdenes} órdenes
-          </p>
-        )}
+        <p class="text-sm text-gray-500 mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 text-center">
+          Total: <span class="font-bold text-gray-900 dark:text-white">{totalOrdenes}</span> órdenes
+        </p>
       </Card>
 
-      <!-- Rendimiento de Mecánicos -->
-      <Card class="lg:col-span-2">
-        <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-          <span class="material-symbols-outlined text-primary-500">leaderboard</span>
-          Rendimiento de Mecánicos
+      <!-- Servicios Populares -->
+      <Card>
+        <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary-500">star</span>
+          Servicios Más Solicitados
         </h3>
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead class="border-b border-gray-200 dark:border-gray-700">
-              <tr>
-                <th class="text-left py-2 text-gray-500 dark:text-gray-400 font-medium">Mecánico</th>
-                <th class="text-center py-2 text-gray-500 dark:text-gray-400 font-medium">Completadas</th>
-                <th class="text-center py-2 text-gray-500 dark:text-gray-400 font-medium">Activas</th>
-                <th class="text-right py-2 text-gray-500 dark:text-gray-400 font-medium">Rendimiento</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-              {mecanicosRendimiento.slice(0, 5).map((mec, index) => {
-                const total = mec.ordenesCompletadas + mec.ordenesActivas;
-                const rendimiento = total > 0 ? Math.round((mec.ordenesCompletadas / total) * 100) : 0;
-                return (
-                  <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
-                    <td class="py-3">
-                      <div class="flex items-center gap-3">
-                        <div class={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${
-                          index === 0 ? 'bg-amber-500' : index === 1 ? 'bg-gray-400' : index === 2 ? 'bg-amber-700' : 'bg-gray-300'
-                        }`}>
-                          {index + 1}
-                        </div>
-                        <span class="font-medium text-gray-900 dark:text-white">{mec.nombre} {mec.apellido}</span>
-                      </div>
-                    </td>
-                    <td class="text-center py-3">
-                      <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
-                        {mec.ordenesCompletadas}
-                      </span>
-                    </td>
-                    <td class="text-center py-3">
-                      <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-                        {mec.ordenesActivas}
-                      </span>
-                    </td>
-                    <td class="text-right py-3">
-                      <div class="flex items-center justify-end gap-2">
-                        <div class="w-16 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
-                          <div 
-                            class="h-1.5 rounded-full bg-primary-500"
-                            style={`width: ${rendimiento}%`}
-                          ></div>
-                        </div>
-                        <span class="text-sm font-bold text-gray-900 dark:text-white">{rendimiento}%</span>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        {mecanicosRendimiento.length === 0 && (
-          <p class="text-center text-gray-500 dark:text-gray-400 py-8">No hay datos de mecánicos</p>
+        {serviciosPopulares.length > 0 ? (
+          <div class="space-y-4">
+            {serviciosPopulares.map((servicio, index) => (
+              <div class="flex items-center gap-3">
+                <div class={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${
+                  index === 0 ? 'bg-amber-500' : index === 1 ? 'bg-gray-400' : index === 2 ? 'bg-amber-700' : 'bg-gray-300'
+                }`}>
+                  {index + 1}
+                </div>
+                <div class="flex-1">
+                  <p class="font-medium text-gray-900 dark:text-white">{servicio.nombre}</p>
+                  <div class="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-2 mt-1">
+                    <div 
+                      class="h-2 rounded-full bg-primary-500"
+                      style={`width: ${serviciosPopulares[0].cantidad > 0 ? (servicio.cantidad / serviciosPopulares[0].cantidad) * 100 : 0}%`}
+                    ></div>
+                  </div>
+                </div>
+                <span class="text-lg font-bold text-gray-900 dark:text-white">{servicio.cantidad}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p class="text-center text-gray-500 py-8">No hay datos de servicios</p>
         )}
       </Card>
     </div>
 
-    <!-- Últimas Transacciones -->
-    <Card>
-      <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-        <span class="material-symbols-outlined text-primary-500">history</span>
-        Últimas Transacciones
-      </h3>
+    <!-- Rendimiento de Mecánicos -->
+    <Card class="mb-8">
+      <div class="flex items-center justify-between mb-6">
+        <h3 class="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary-500">leaderboard</span>
+          Ranking de Mecánicos
+        </h3>
+        <a href="/encargado/disp_mec" class="text-sm text-primary-600 hover:underline">Ver todos →</a>
+      </div>
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead class="border-b border-gray-200 dark:border-gray-700">
             <tr>
-              <th class="text-left py-3 text-gray-500 dark:text-gray-400 font-medium">Orden</th>
-              <th class="text-left py-3 text-gray-500 dark:text-gray-400 font-medium">Cliente</th>
-              <th class="text-left py-3 text-gray-500 dark:text-gray-400 font-medium">Fecha</th>
-              <th class="text-left py-3 text-gray-500 dark:text-gray-400 font-medium">Estado</th>
-              <th class="text-right py-3 text-gray-500 dark:text-gray-400 font-medium">Total</th>
+              <th class="text-left py-3 text-gray-500 dark:text-gray-400 font-medium">Posición</th>
+              <th class="text-left py-3 text-gray-500 dark:text-gray-400 font-medium">Mecánico</th>
+              <th class="text-center py-3 text-gray-500 dark:text-gray-400 font-medium">Completadas</th>
+              <th class="text-center py-3 text-gray-500 dark:text-gray-400 font-medium">Activas</th>
+              <th class="text-right py-3 text-gray-500 dark:text-gray-400 font-medium">Ingresos Generados</th>
+              <th class="text-right py-3 text-gray-500 dark:text-gray-400 font-medium">Eficiencia</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+            {mecanicosRendimiento.slice(0, 6).map((mec, index) => (
+              <tr class="hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                <td class="py-4">
+                  <div class={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold ${
+                    index === 0 ? 'bg-gradient-to-br from-amber-400 to-amber-600' : 
+                    index === 1 ? 'bg-gradient-to-br from-gray-300 to-gray-500' : 
+                    index === 2 ? 'bg-gradient-to-br from-amber-600 to-amber-800' : 'bg-gray-200 text-gray-600'
+                  }`}>
+                    {index === 0 && '🥇'}
+                    {index === 1 && '🥈'}
+                    {index === 2 && '🥉'}
+                    {index > 2 && (index + 1)}
+                  </div>
+                </td>
+                <td class="py-4">
+                  <span class="font-medium text-gray-900 dark:text-white">{mec.nombre} {mec.apellido}</span>
+                </td>
+                <td class="text-center py-4">
+                  <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300">
+                    {mec.ordenesCompletadas}
+                  </span>
+                </td>
+                <td class="text-center py-4">
+                  <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                    {mec.ordenesActivas}
+                  </span>
+                </td>
+                <td class="text-right py-4 font-bold text-gray-900 dark:text-white">
+                  {formatCurrency(mec.ingresos)}
+                </td>
+                <td class="text-right py-4">
+                  <div class="flex items-center justify-end gap-2">
+                    <div class="w-20 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                      <div 
+                        class={`h-2 rounded-full ${mec.eficiencia >= 80 ? 'bg-green-500' : mec.eficiencia >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
+                        style={`width: ${mec.eficiencia}%`}
+                      ></div>
+                    </div>
+                    <span class="font-bold text-gray-900 dark:text-white w-12 text-right">{mec.eficiencia}%</span>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {mecanicosRendimiento.length === 0 && (
+        <p class="text-center text-gray-500 py-8">No hay datos de mecánicos</p>
+      )}
+    </Card>
+
+    <!-- Últimas Transacciones -->
+    <Card class="mb-8">
+      <div class="flex items-center justify-between mb-6">
+        <h3 class="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary-500">history</span>
+          Últimas Transacciones
+        </h3>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="border-b border-gray-200 dark:border-gray-700">
+            <tr>
+              <th class="text-left py-3 text-gray-500 font-medium">Orden</th>
+              <th class="text-left py-3 text-gray-500 font-medium">Cliente</th>
+              <th class="text-left py-3 text-gray-500 font-medium">Vehículo</th>
+              <th class="text-left py-3 text-gray-500 font-medium">Fecha</th>
+              <th class="text-left py-3 text-gray-500 font-medium">Estado</th>
+              <th class="text-right py-3 text-gray-500 font-medium">Total</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
@@ -410,13 +534,13 @@ const totalOrdenes = Object.values(estadoDistribucion).reduce((a, b) => a + b, 0
                   </a>
                 </td>
                 <td class="py-3 text-gray-700 dark:text-gray-300">{orden.cliente}</td>
-                <td class="py-3 text-gray-500 dark:text-gray-400">{formatDate(orden.fecha)}</td>
+                <td class="py-3 text-gray-500">{orden.vehiculo}</td>
+                <td class="py-3 text-gray-500">{formatDate(orden.fecha)}</td>
                 <td class="py-3">
-                  <span class={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                    orden.estado === 'entregado' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' :
-                    'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+                  <span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+                    orden.estado === 'entregado' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
                   }`}>
-                    {estadoLabels[orden.estado] || orden.estado}
+                    {estadoLabels[orden.estado]}
                   </span>
                 </td>
                 <td class="py-3 text-right font-bold text-gray-900 dark:text-white">
@@ -428,77 +552,75 @@ const totalOrdenes = Object.values(estadoDistribucion).reduce((a, b) => a + b, 0
         </table>
       </div>
       {ordenesRecientes.length === 0 && (
-        <p class="text-center text-gray-500 dark:text-gray-400 py-8">No hay transacciones recientes</p>
+        <p class="text-center text-gray-500 py-8">No hay transacciones recientes</p>
       )}
     </Card>
 
-    <!-- Export Zone -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
-        <!-- Ventas -->
-        <Card>
-            <div class="flex flex-col h-full">
-                <div class="w-12 h-12 rounded-lg bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 flex items-center justify-center mb-4">
-                    <span class="material-symbols-outlined text-2xl">payments</span>
-                </div>
-                <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-2">Reporte de Ventas</h3>
-                <p class="text-sm text-gray-500 dark:text-gray-400 mb-6 flex-1">
-                    Exporta el historial completo de facturas emitidas, incluyendo montos y métodos de pago.
-                </p>
-                <form method="POST">
-                    <input type="hidden" name="type" value="ventas" />
-                    <Button type="submit" variant="outline" class="w-full" icon="download">
-                        Descargar CSV
-                    </Button>
-                </form>
-            </div>
-        </Card>
+    <!-- Export Cards -->
+    <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+      <span class="material-symbols-outlined text-primary-500">download</span>
+      Exportar Reportes
+    </h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <Card class="hover:shadow-lg transition-shadow">
+        <div class="w-12 h-12 rounded-xl bg-green-100 dark:bg-green-900/30 text-green-600 flex items-center justify-center mb-4">
+          <span class="material-symbols-outlined text-2xl">payments</span>
+        </div>
+        <h4 class="font-bold text-gray-900 dark:text-white mb-2">Reporte de Ventas</h4>
+        <p class="text-sm text-gray-500 mb-4">Historial de facturas con montos y métodos de pago.</p>
+        <form method="POST">
+          <input type="hidden" name="type" value="ventas" />
+          <Button type="submit" variant="outline" class="w-full" icon="download">CSV</Button>
+        </form>
+      </Card>
 
-        <!-- Inventario -->
-        <Card>
-            <div class="flex flex-col h-full">
-                <div class="w-12 h-12 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-4">
-                    <span class="material-symbols-outlined text-2xl">inventory_2</span>
-                </div>
-                <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-2">Inventario Actual</h3>
-                <p class="text-sm text-gray-500 dark:text-gray-400 mb-6 flex-1">
-                    Descarga la lista completa de repuestos con sus niveles de stock y precios actuales.
-                </p>
-                <form method="POST">
-                    <input type="hidden" name="type" value="inventario" />
-                    <Button type="submit" variant="outline" class="w-full" icon="download">
-                        Descargar CSV
-                    </Button>
-                </form>
-            </div>
-        </Card>
+      <Card class="hover:shadow-lg transition-shadow">
+        <div class="w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900/30 text-blue-600 flex items-center justify-center mb-4">
+          <span class="material-symbols-outlined text-2xl">assignment</span>
+        </div>
+        <h4 class="font-bold text-gray-900 dark:text-white mb-2">Reporte de Órdenes</h4>
+        <p class="text-sm text-gray-500 mb-4">todas las órdenes de trabajo con detalles.</p>
+        <form method="POST">
+          <input type="hidden" name="type" value="ordenes" />
+          <Button type="submit" variant="outline" class="w-full" icon="download">CSV</Button>
+        </form>
+      </Card>
 
-        <!-- Mecánicos (Placeholder) -->
-        <Card>
-            <div class="flex flex-col h-full opacity-60">
-                <div class="w-12 h-12 rounded-lg bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 flex items-center justify-center mb-4">
-                    <span class="material-symbols-outlined text-2xl">engineering</span>
-                </div>
-                <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-2">Productividad (Pronto)</h3>
-                <p class="text-sm text-gray-500 dark:text-gray-400 mb-6 flex-1">
-                    Próximamente: Reporte detallado de horas trabajadas por cada mecánico.
-                </p>
-                <Button type="button" variant="secondary" class="w-full" disabled>
-                    No disponible
-                </Button>
-            </div>
-        </Card>
+      <Card class="hover:shadow-lg transition-shadow">
+        <div class="w-12 h-12 rounded-xl bg-amber-100 dark:bg-amber-900/30 text-amber-600 flex items-center justify-center mb-4">
+          <span class="material-symbols-outlined text-2xl">inventory_2</span>
+        </div>
+        <h4 class="font-bold text-gray-900 dark:text-white mb-2">Inventario Actual</h4>
+        <p class="text-sm text-gray-500 mb-4">Lista de repuestos con stock y precios.</p>
+        <form method="POST">
+          <input type="hidden" name="type" value="inventario" />
+          <Button type="submit" variant="outline" class="w-full" icon="download">CSV</Button>
+        </form>
+      </Card>
+
+      <Card class="hover:shadow-lg transition-shadow">
+        <div class="w-12 h-12 rounded-xl bg-purple-100 dark:bg-purple-900/30 text-purple-600 flex items-center justify-center mb-4">
+          <span class="material-symbols-outlined text-2xl">engineering</span>
+        </div>
+        <h4 class="font-bold text-gray-900 dark:text-white mb-2">Productividad</h4>
+        <p class="text-sm text-gray-500 mb-4">Rendimiento de mecánicos con ingresos.</p>
+        <form method="POST">
+          <input type="hidden" name="type" value="mecanicos" />
+          <Button type="submit" variant="outline" class="w-full" icon="download">CSV</Button>
+        </form>
+      </Card>
     </div>
   </div>
 </DashboardLayout>
 
 <style>
   @media print {
-    :global(aside), :global(nav), :global(button) {
+    :global(aside), :global(nav), :global(button), :global(form) {
       display: none !important;
     }
     :global(main) {
       margin: 0 !important;
-      padding: 0 !important;
+      padding: 1rem !important;
     }
   }
 </style>

@@ -1,199 +1,236 @@
 ---
 export const prerender = false;
+import DashboardLayout from '../../layouts/DashboardLayout.astro';
 import { strapiGet } from '../../lib/strapi';
 import '../../styles/global.css';
-import DashboardLayout from '../../layouts/DashboardLayout.astro';
 
 const userRole = Astro.cookies.get('user_role')?.value;
 if (!userRole) {
   return Astro.redirect('/login');
 }
 
-let activeOrders = [];
+interface Order {
+  id: number;
+  documentId: string;
+  descripcion: string;
+  estado: string;
+  prioridad?: string;
+  fecha_ingreso?: string;
+  updatedAt?: string;
+  vehiculo?: {
+    marca: string;
+    modelo: string;
+    patente: string;
+    cliente?: { nombre: string; apellido: string };
+  };
+  mecanico?: { nombre: string; apellido?: string };
+}
+
+let activeOrders: Order[] = [];
+let stats = { total: 0, ingresados: 0, enDiagnostico: 0, enReparacion: 0, finalizados: 0, facturados: 0, urgentes: 0, sinAsignar: 0 };
 
 try {
-  // Obtener órdenes en curso (excluir entregado y facturado) con cliente anidado en vehiculo
-  const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$notIn][0]=entregado&filters[estado][$notIn][1]=facturado&populate[vehiculo][populate][cliente][fields][0]=nombre&populate[vehiculo][populate][cliente][fields][1]=apellido&populate[mecanico][fields][0]=nombre&populate[mecanico][fields][1]=apellido&sort[0]=updatedAt:desc');
+  // Solo excluir 'entregado'
+  const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$ne]=entregado&populate[vehiculo][populate]=cliente&populate=mecanico&sort=prioridad:asc,updatedAt:desc');
   activeOrders = data.data || [];
+  stats.total = activeOrders.length;
+  stats.ingresados = activeOrders.filter(o => o.estado === 'ingresado').length;
+  stats.enDiagnostico = activeOrders.filter(o => o.estado === 'en_diagnostico').length;
+  stats.enReparacion = activeOrders.filter(o => o.estado === 'en_reparacion').length;
+  stats.finalizados = activeOrders.filter(o => o.estado === 'finalizado').length;
+  stats.facturados = activeOrders.filter(o => o.estado === 'facturado').length;
+  stats.urgentes = activeOrders.filter(o => o.prioridad === 'urgente').length;
+  stats.sinAsignar = activeOrders.filter(o => !o.mecanico).length;
 } catch (e) {
   console.error('Error fetching active orders:', e);
 }
+
+const getProgress = (s: string) => ({ ingresado: 15, en_diagnostico: 35, en_reparacion: 65, finalizado: 85, facturado: 95 }[s] || 0);
+const getStatusColor = (s: string) => ({
+  ingresado: 'bg-red-100 text-red-700',
+  en_diagnostico: 'bg-purple-100 text-purple-700',
+  en_reparacion: 'bg-amber-100 text-amber-700',
+  finalizado: 'bg-green-100 text-green-700',
+  facturado: 'bg-blue-100 text-blue-700'
+}[s] || 'bg-gray-100 text-gray-700');
+const getStatusLabel = (s: string) => ({ ingresado: 'Ingresado', en_diagnostico: 'Diagnóstico', en_reparacion: 'Reparación', finalizado: 'Finalizado', facturado: 'Facturado' }[s] || s);
+const getProgressColor = (s: string) => ({ ingresado: 'bg-red-500', en_diagnostico: 'bg-purple-500', en_reparacion: 'bg-amber-500', finalizado: 'bg-green-500', facturado: 'bg-blue-500' }[s] || 'bg-gray-500');
 ---
 
-<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-
-<script define:vars={{ activeOrders }}>
-    document.addEventListener('alpine:init', () => {
-        Alpine.data('trabajosEnCurso', () => ({
-            searchQuery: '',
-            orders: activeOrders,
-            currentPage: 1,
-            itemsPerPage: 10,
-            
-            getProgress(status) {
-                switch(status) {
-                    case 'ingresado': return 10;
-                    case 'en_diagnostico': return 30;
-                    case 'en_reparacion': return 60;
-                    case 'finalizado': return 90;
-                    case 'facturado': return 95;
-                    case 'entregado': return 100;
-                    default: return 0;
-                }
-            },
-
-            getStatusColor(status) {
-                switch(status) {
-                    case 'ingresado': return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300';
-                    case 'en_diagnostico': return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300';
-                    case 'en_reparacion': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
-                    case 'finalizado': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
-                    case 'facturado': return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
-                    case 'entregado': return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
-                    default: return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
-                }
-            },
-
-            getStatusLabel(status) {
-                switch(status) {
-                    case 'ingresado': return 'Ingresado';
-                    case 'en_diagnostico': return 'En Diagnóstico';
-                    case 'en_reparacion': return 'En Reparación';
-                    case 'finalizado': return 'Finalizado';
-                    case 'facturado': return 'Facturado';
-                    case 'entregado': return 'Entregado';
-                    default: return status;
-                }
-            },
-
-            getCliente(order) {
-                // El cliente viene anidado en vehiculo.cliente
-                return order.vehiculo?.cliente || null;
-            },
-
-            get filteredOrders() {
-                if (!this.searchQuery) return this.orders;
-                const query = this.searchQuery.toLowerCase();
-                return this.orders.filter(order => {
-                    const cliente = this.getCliente(order);
-                    return (cliente && (cliente.nombre?.toLowerCase().includes(query) || cliente.apellido?.toLowerCase().includes(query))) ||
-                        (order.vehiculo && (order.vehiculo.marca?.toLowerCase().includes(query) || order.vehiculo.modelo?.toLowerCase().includes(query))) ||
-                        (order.mecanico && order.mecanico.nombre?.toLowerCase().includes(query)) ||
-                        (order.documentId && order.documentId.toLowerCase().includes(query));
-                });
-            },
-            get paginatedOrders() {
-                const start = (this.currentPage - 1) * this.itemsPerPage;
-                const end = start + this.itemsPerPage;
-                return this.filteredOrders.slice(start, end);
-            },
-            get totalPages() {
-                return Math.ceil(this.filteredOrders.length / this.itemsPerPage);
-            },
-            nextPage() {
-                if (this.currentPage < this.totalPages) this.currentPage++;
-            },
-            prevPage() {
-                if (this.currentPage > 1) this.currentPage--;
-            },
-            goToPage(page) {
-                this.currentPage = page;
-            }
-        }));
-    });
-</script>
-
-<DashboardLayout title="Trabajos en Curso" role="encargado" currentPath="/encargado/trabajos_en_curso">
-    <div class="max-w-7xl mx-auto" x-data="trabajosEnCurso">
-        
-        <!-- PageHeading -->
-        <header class="flex flex-wrap justify-between items-center gap-4 mb-6">
-            <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Órdenes de Trabajo en Progreso</h1>
-            <a href="/recepcion/crear_orden" class="flex items-center justify-center gap-2 h-10 px-5 bg-primary-600 text-white rounded-lg text-sm font-bold shadow-sm hover:bg-primary-700 transition-colors">
-                <span class="material-symbols-outlined text-base">add_circle</span>
-                <span>Crear Nueva Orden</span>
-            </a>
-        </header>
-
-        <!-- SearchBar -->
-        <div class="mb-6">
-            <div class="relative">
-                <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">search</span>
-                <input x-model="searchQuery" class="form-input w-full h-12 pl-12 pr-4 rounded-lg bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 placeholder:text-gray-400 dark:placeholder:text-gray-500 text-gray-900 dark:text-white" placeholder="Buscar por cliente, vehículo o mecánico..." type="text"/>
-            </div>
-        </div>
-
-        <!-- Table -->
-        <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden border border-gray-200 dark:border-gray-700">
-            <div class="overflow-x-auto">
-                <table class="w-full text-sm text-left">
-                    <thead class="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
-                        <tr>
-                            <th class="px-6 py-3 font-bold uppercase text-xs tracking-wider text-gray-500 dark:text-gray-400">Nº Orden</th>
-                            <th class="px-6 py-3 font-bold uppercase text-xs tracking-wider text-gray-500 dark:text-gray-400">Cliente</th>
-                            <th class="px-6 py-3 font-bold uppercase text-xs tracking-wider text-gray-500 dark:text-gray-400">Vehículo</th>
-                            <th class="px-6 py-3 font-bold uppercase text-xs tracking-wider text-gray-500 dark:text-gray-400">Mecánico Asignado</th>
-                            <th class="px-6 py-3 font-bold uppercase text-xs tracking-wider text-gray-500 dark:text-gray-400">Estado</th>
-                            <th class="px-6 py-3 font-bold uppercase text-xs tracking-wider text-gray-500 dark:text-gray-400">Progreso</th>
-                            <th class="px-6 py-3 font-bold uppercase text-xs tracking-wider text-gray-500 dark:text-gray-400 text-right">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                        <template x-if="paginatedOrders.length > 0">
-                            <template x-for="order in paginatedOrders" :key="order.documentId">
-                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                                    <td class="px-6 py-4 whitespace-nowrap font-medium text-gray-900 dark:text-white">#<span x-text="order.documentId.slice(0, 6)"></span></td>
-                                    <td class="px-6 py-4 whitespace-nowrap font-semibold text-gray-900 dark:text-white" x-text="getCliente(order) ? `${getCliente(order).nombre} ${getCliente(order).apellido}` : 'N/A'"></td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-400" x-text="order.vehiculo ? `${order.vehiculo.marca} ${order.vehiculo.modelo}` : 'N/A'"></td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-gray-600 dark:text-gray-400" x-text="order.mecanico ? order.mecanico.nombre : 'Sin asignar'"></td>
-                                    <td class="px-6 py-4 whitespace-nowrap">
-                                        <span :class="`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(order.estado)}`" x-text="getStatusLabel(order.estado)"></span>
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap">
-                                        <div class="flex items-center gap-3">
-                                            <div class="w-24 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
-                                                <div :class="`h-1.5 rounded-full ${order.estado === 'ingresado' ? 'bg-red-500' : order.estado === 'en_diagnostico' ? 'bg-purple-500' : order.estado === 'en_reparacion' ? 'bg-yellow-500' : 'bg-blue-500'}`" :style="`width: ${getProgress(order.estado)}%`"></div>
-                                            </div>
-                                            <span class="font-medium text-xs text-gray-600 dark:text-gray-400" x-text="`${getProgress(order.estado)}%`"></span>
-                                        </div>
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-right">
-                                        <a class="font-bold text-primary-600 hover:text-primary-700 hover:underline" :href="`/encargado/detalles_de_orden?id=${order.documentId}`">Ver Detalles</a>
-                                    </td>
-                                </tr>
-                            </template>
-                        </template>
-                        <template x-if="paginatedOrders.length === 0">
-                            <tr>
-                                <td colspan="7" class="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
-                                    <span class="material-symbols-outlined text-4xl mb-2 opacity-50">search_off</span>
-                                    <p x-text="orders.length > 0 ? 'No se encontraron órdenes que coincidan con la búsqueda.' : 'No hay órdenes en curso.'"></p>
-                                </td>
-                            </tr>
-                        </template>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Pagination -->
-        <div class="flex items-center justify-between pt-6" x-show="totalPages > 1">
-            <div class="text-sm text-gray-600 dark:text-gray-400">
-                Mostrando <span x-text="(currentPage - 1) * itemsPerPage + 1"></span> a <span x-text="Math.min(currentPage * itemsPerPage, filteredOrders.length)"></span> de <span x-text="filteredOrders.length"></span> órdenes
-            </div>
-            <nav class="flex items-center gap-1">
-                <button @click="prevPage()" :disabled="currentPage === 1" class="flex size-9 items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-gray-600 dark:text-gray-400">
-                    <span class="material-symbols-outlined text-lg">chevron_left</span>
-                </button>
-                <template x-for="page in totalPages" :key="page">
-                    <button @click="goToPage(page)" class="text-sm font-bold flex size-9 items-center justify-center rounded-lg transition-colors" :class="{'bg-primary-600 text-white': currentPage === page, 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400': currentPage !== page}">
-                        <span x-text="page"></span>
-                    </button>
-                </template>
-                <button @click="nextPage()" :disabled="currentPage === totalPages" class="flex size-9 items-center justify-center rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-gray-600 dark:text-gray-400">
-                    <span class="material-symbols-outlined text-lg">chevron_right</span>
-                </button>
-            </nav>
-        </div>
+<DashboardLayout title="Órdenes en Curso" role="encargado" currentPath="/encargado/trabajos_en_curso">
+  <div class="max-w-7xl mx-auto">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+      <div>
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Órdenes en Curso</h1>
+        <p class="text-gray-500 dark:text-gray-400 mt-1">Gestiona las órdenes activas del taller</p>
+      </div>
+      <div class="flex gap-2">
+        <a href="/encargado/asig_orden" class="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 flex items-center gap-2">
+          <span class="material-symbols-outlined">assignment_ind</span>
+          Asignar
+        </a>
+        <a href="/recepcion/crear_orden" class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center gap-2">
+          <span class="material-symbols-outlined">add_circle</span>
+          Nueva Orden
+        </a>
+      </div>
     </div>
+
+    <!-- Alertas -->
+    {stats.urgentes > 0 && (
+      <div class="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-4">
+        <div class="w-10 h-10 bg-red-500 rounded-full flex items-center justify-center animate-pulse">
+          <span class="material-symbols-outlined text-white">priority_high</span>
+        </div>
+        <div class="flex-1">
+          <p class="font-bold text-red-800">{stats.urgentes} orden{stats.urgentes > 1 ? 'es' : ''} urgente{stats.urgentes > 1 ? 's' : ''}</p>
+          <p class="text-sm text-red-600">Requieren atención inmediata</p>
+        </div>
+      </div>
+    )}
+
+    <!-- KPIs -->
+    <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 mb-6">
+      <div class="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl p-4 text-white">
+        <p class="text-2xl font-bold">{stats.total}</p>
+        <p class="text-blue-100 text-xs">Total</p>
+      </div>
+      <div class="bg-gradient-to-br from-red-500 to-rose-600 rounded-xl p-4 text-white">
+        <p class="text-2xl font-bold">{stats.ingresados}</p>
+        <p class="text-red-100 text-xs">Ingresados</p>
+      </div>
+      <div class="bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl p-4 text-white">
+        <p class="text-2xl font-bold">{stats.enDiagnostico}</p>
+        <p class="text-purple-100 text-xs">Diagnóstico</p>
+      </div>
+      <div class="bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl p-4 text-white">
+        <p class="text-2xl font-bold">{stats.enReparacion}</p>
+        <p class="text-amber-100 text-xs">Reparación</p>
+      </div>
+      <div class="bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl p-4 text-white">
+        <p class="text-2xl font-bold">{stats.finalizados}</p>
+        <p class="text-green-100 text-xs">Finalizados</p>
+      </div>
+      <div class="bg-gradient-to-br from-cyan-500 to-blue-600 rounded-xl p-4 text-white">
+        <p class="text-2xl font-bold">{stats.facturados}</p>
+        <p class="text-cyan-100 text-xs">Facturados</p>
+      </div>
+      <div class="bg-gradient-to-br from-rose-600 to-pink-600 rounded-xl p-4 text-white">
+        <p class="text-2xl font-bold">{stats.urgentes}</p>
+        <p class="text-rose-100 text-xs">Urgentes</p>
+      </div>
+      <div class="bg-gradient-to-br from-gray-500 to-gray-600 rounded-xl p-4 text-white">
+        <p class="text-2xl font-bold">{stats.sinAsignar}</p>
+        <p class="text-gray-200 text-xs">Sin Asignar</p>
+      </div>
+    </div>
+
+    <!-- Vista Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="orders-grid">
+      {activeOrders.map((order) => (
+        <article 
+          class="order-card bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden hover:shadow-lg transition-all"
+          data-estado={order.estado}
+          data-prioridad={order.prioridad || 'normal'}
+          data-mecanico={order.mecanico ? 'asignado' : 'sin_asignar'}
+          data-busqueda={`${order.vehiculo?.marca || ''} ${order.vehiculo?.modelo || ''} ${order.vehiculo?.patente || ''} ${order.vehiculo?.cliente?.nombre || ''} ${order.vehiculo?.cliente?.apellido || ''}`.toLowerCase()}
+        >
+          <div class={`px-4 py-2 flex items-center justify-between ${order.prioridad === 'urgente' ? 'bg-red-500' : 'bg-gray-100 dark:bg-gray-700/50'}`}>
+            <span class={`font-bold ${order.prioridad === 'urgente' ? 'text-white' : 'text-gray-700 dark:text-gray-300'}`}>
+              OT-{order.id}
+            </span>
+            {order.prioridad === 'urgente' && (
+              <span class="text-white text-xs font-bold">URGENTE</span>
+            )}
+          </div>
+          
+          <div class="p-4">
+            <div class="flex items-center gap-3 mb-3">
+              <div class="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                <span class="material-symbols-outlined text-gray-500">directions_car</span>
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="font-bold text-gray-900 dark:text-white truncate">
+                  {order.vehiculo ? `${order.vehiculo.marca} ${order.vehiculo.modelo}` : 'N/A'}
+                </p>
+                <p class="text-sm text-gray-500 font-mono">{order.vehiculo?.patente}</p>
+              </div>
+            </div>
+            
+            {order.vehiculo?.cliente && (
+              <div class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mb-3">
+                <span class="material-symbols-outlined text-base">person</span>
+                <span>{order.vehiculo.cliente.nombre} {order.vehiculo.cliente.apellido}</span>
+              </div>
+            )}
+            
+            <p class="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 mb-4">{order.descripcion || 'Sin descripción'}</p>
+            
+            <div class="space-y-2 mb-4">
+              <div class="flex items-center justify-between">
+                <span class={`px-2.5 py-1 rounded-full text-xs font-bold ${getStatusColor(order.estado)}`}>
+                  {getStatusLabel(order.estado)}
+                </span>
+                <span class="text-sm font-bold text-gray-700 dark:text-gray-300">{getProgress(order.estado)}%</span>
+              </div>
+              <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                <div class={`h-2 rounded-full ${getProgressColor(order.estado)}`} style={`width: ${getProgress(order.estado)}%`}></div>
+              </div>
+            </div>
+            
+            <div class="flex items-center gap-2 pt-3 border-t border-gray-100 dark:border-gray-700">
+              <span class="material-symbols-outlined text-gray-400 text-base">engineering</span>
+              <span class="text-sm text-gray-600 dark:text-gray-400">
+                {order.mecanico ? `${order.mecanico.nombre} ${order.mecanico.apellido || ''}` : 'Sin asignar'}
+              </span>
+            </div>
+          </div>
+          
+          <div class="px-4 py-3 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-100 dark:border-gray-700 flex justify-between items-center">
+            <a 
+              href={`/encargado/detalles_de_orden?id=${order.documentId}`} 
+              class="text-sm font-medium text-primary-600 hover:underline inline-flex items-center gap-1"
+            >
+              <span class="material-symbols-outlined text-base">visibility</span>
+              Ver detalle
+            </a>
+            <div class="flex gap-2">
+              <a href={`/encargado/reasignar_orden?orden=${order.documentId}`} class="p-1.5 rounded-lg text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700" title="Reasignar">
+                <span class="material-symbols-outlined text-base">swap_horiz</span>
+              </a>
+              {order.estado === 'finalizado' && (
+                <a href={`/encargado/gen_factura?orden=${order.documentId}`} class="p-1.5 rounded-lg text-green-600 hover:bg-green-100" title="Facturar">
+                  <span class="material-symbols-outlined text-base">receipt_long</span>
+                </a>
+              )}
+              {order.estado === 'facturado' && (
+                <a href={`/encargado/ver_factura?orden=${order.documentId}`} class="p-1.5 rounded-lg text-blue-600 hover:bg-blue-100" title="Ver Factura">
+                  <span class="material-symbols-outlined text-base">receipt</span>
+                </a>
+              )}
+            </div>
+          </div>
+        </article>
+      ))}
+      
+      {activeOrders.length === 0 && (
+        <div class="col-span-full text-center py-16 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+          <span class="material-symbols-outlined text-6xl text-gray-300 mb-4">inbox</span>
+          <h3 class="text-xl font-bold text-gray-900 dark:text-white">No hay órdenes activas</h3>
+          <p class="text-gray-500 mt-2">Todas las órdenes han sido completadas</p>
+          <a href="/recepcion/crear_orden" class="mt-4 inline-block text-primary-600 hover:underline">Crear nueva orden</a>
+        </div>
+      )}
+    </div>
+  </div>
 </DashboardLayout>
+
+<style>
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+</style>

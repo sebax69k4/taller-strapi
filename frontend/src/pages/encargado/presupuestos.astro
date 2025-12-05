@@ -174,6 +174,48 @@ const ordenesSinPresupuesto = ordenes.filter(o => !o.presupuesto);
       </div>
     </div>
 
+    <!-- KPIs -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+      <div class="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl p-6 text-white shadow-lg">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-amber-100 text-sm font-medium uppercase tracking-wider">Sin Presupuesto</p>
+            <p class="text-4xl font-bold mt-1">{ordenesSinPresupuesto.length}</p>
+            <p class="text-amber-200 text-xs mt-2">Órdenes pendientes</p>
+          </div>
+          <div class="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm">
+            <span class="material-symbols-outlined text-3xl">pending_actions</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl p-6 text-white shadow-lg">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-blue-100 text-sm font-medium uppercase tracking-wider">Pendientes Aprobación</p>
+            <p class="text-4xl font-bold mt-1">{ordenesConPresupuesto.filter(o => o.presupuesto?.estado_aprobacion === 'pendiente').length}</p>
+            <p class="text-blue-200 text-xs mt-2">Esperando cliente</p>
+          </div>
+          <div class="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm">
+            <span class="material-symbols-outlined text-3xl">hourglass_top</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl p-6 text-white shadow-lg">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-green-100 text-sm font-medium uppercase tracking-wider">Aprobados</p>
+            <p class="text-4xl font-bold mt-1">{ordenesConPresupuesto.filter(o => o.presupuesto?.estado_aprobacion === 'aprobado').length}</p>
+            <p class="text-green-200 text-xs mt-2">Listos para trabajar</p>
+          </div>
+          <div class="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm">
+            <span class="material-symbols-outlined text-3xl">check_circle</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     {message && (
       <div class={`p-4 mb-6 rounded-lg border flex items-center gap-3 ${messageType === 'success' ? 'bg-green-50 border-green-200 text-green-800 dark:bg-green-900/30 dark:border-green-800 dark:text-green-300' : messageType === 'warning' ? 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-900/30 dark:border-amber-800 dark:text-amber-300' : 'bg-red-50 border-red-200 text-red-800 dark:bg-red-900/30 dark:border-red-800 dark:text-red-300'}`}>
         <span class="material-symbols-outlined">{messageType === 'success' ? 'check_circle' : messageType === 'warning' ? 'warning' : 'error'}</span>

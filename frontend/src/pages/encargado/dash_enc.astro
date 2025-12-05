@@ -2,252 +2,491 @@
 export const prerender = false;
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
 import Card from '../../components/ui/Card.astro';
-import KPICard from '../../components/ui/KPICard.astro';
-import Table from '../../components/ui/Table.astro';
 import Badge from '../../components/ui/Badge.astro';
-import EmptyState from '../../components/ui/EmptyState.astro';
 import { strapiGet } from '../../lib/strapi';
 import '../../styles/global.css';
 
 const userRole = Astro.cookies.get('user_role')?.value;
-const userName = Astro.cookies.get('user_name')?.value;
+const userName = Astro.cookies.get('user_name')?.value || 'Encargado';
 
-let activeOrdersCount = 0;
-let completedTodayCount = 0;
-let lowStockCount = 0;
-let recentOrders: any[] = [];
-let lowStockItems: any[] = [];
-
-const today = new Date().toISOString().split('T')[0];
-
-if (userRole) {
-  try {
-    // Active Orders (excluding 'entregado' and 'facturado')
-    const activeRes = await strapiGet('/api/orden-de-trabajos?filters[estado][$notIn][0]=entregado&filters[estado][$notIn][1]=facturado');
-    activeOrdersCount = activeRes.meta?.pagination?.total || 0;
-
-    // Completed Today
-    const completedRes = await strapiGet(`/api/orden-de-trabajos?filters[estado][$eq]=entregado&filters[updatedAt][$gte]=${today}`);
-    completedTodayCount = completedRes.meta?.pagination?.total || 0;
-
-    // Low Stock - fetch all and filter where stock <= stock_minimo
-    const allRepuestosRes = await strapiGet('/api/repuestos');
-    const allRepuestos = allRepuestosRes.data || [];
-    lowStockItems = allRepuestos.filter((item: any) => {
-      const stock = item.stock || 0;
-      const min = item.stock_minimo || 5;
-      return stock <= min;
-    });
-    lowStockCount = lowStockItems.length;
-
-    // Recent Activity - cliente viene anidado en vehiculo
-    const recentRes = await strapiGet('/api/orden-de-trabajos?sort[0]=updatedAt:desc&pagination[limit]=5&populate[vehiculo][populate][cliente][fields][0]=nombre&populate[vehiculo][populate][cliente][fields][1]=apellido&populate[mecanico][fields][0]=nombre&populate[mecanico][fields][1]=apellido');
-    // Mapear para tener cliente accesible
-    recentOrders = (recentRes.data || []).map((order: any) => ({
-      ...order,
-      cliente: order.vehiculo?.cliente || null
-    }));
-
-  } catch (e) {
-    console.error('Error fetching dashboard data:', e);
-  }
-} else {
+if (!userRole) {
   return Astro.redirect('/login');
 }
 
+// Fechas
+const today = new Date();
+const todayStr = today.toISOString().split('T')[0];
+const startOfWeek = new Date(today);
+startOfWeek.setDate(today.getDate() - today.getDay() + 1);
+const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+const lastWeekStart = new Date(startOfWeek);
+lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+
+// Stats
+let activeOrdersCount = 0;
+let completedTodayCount = 0;
+let lowStockCount = 0;
+let pendingInvoices = 0;
+let recentOrders: any[] = [];
+let lowStockItems: any[] = [];
+let mecanicosDisponibles: any[] = [];
+let ordenesUrgentes: any[] = [];
+let facturasHoy = 0;
+let ingresosSemana = 0;
+let ingresosSemanaPasada = 0;
+let ordenesPorEstado: Record<string, number> = {};
+let ordenesHoy = 0;
+let ordenesAyer = 0;
+let error = '';
+
+// Saludo
+const getGreeting = () => {
+  const hour = new Date().getHours();
+  if (hour < 12) return '¡Buenos días';
+  if (hour < 18) return '¡Buenas tardes';
+  return '¡Buenas noches';
+};
+
+try {
+  const [
+    activeRes,
+    completedRes,
+    allRepuestosRes,
+    recentRes,
+    mecanicosRes,
+    urgentesRes,
+    facturasRes,
+    pendingInvoicesRes,
+    ingresadosRes,
+    enDiagnosticoRes,
+    enReparacionRes,
+    finalizadosRes,
+    facturadosRes,
+    ordenesHoyRes,
+    ordenesAyerRes
+  ] = await Promise.all([
+    strapiGet('/api/orden-de-trabajos?filters[estado][$notIn][0]=entregado&filters[estado][$notIn][1]=facturado'),
+    strapiGet(`/api/orden-de-trabajos?filters[estado][$eq]=entregado&filters[updatedAt][$gte]=${todayStr}`),
+    strapiGet('/api/repuestos?pagination[limit]=100'),
+    strapiGet('/api/orden-de-trabajos?sort=updatedAt:desc&pagination[limit]=8&populate[vehiculo][populate]=cliente&populate=mecanico'),
+    strapiGet('/api/mecenicos?populate[orden_de_trabajos][filters][estado][$notIn][0]=entregado&populate[orden_de_trabajos][filters][estado][$notIn][1]=facturado'),
+    strapiGet('/api/orden-de-trabajos?filters[prioridad][$eq]=urgente&filters[estado][$notIn][0]=entregado&filters[estado][$notIn][1]=facturado&populate=vehiculo'),
+    strapiGet(`/api/facturas?filters[fecha_emision][$gte]=${startOfWeek.toISOString().split('T')[0]}&filters[estado][$eq]=pagado`),
+    strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=finalizado'),
+    strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=ingresado&pagination[pageSize]=1'),
+    strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=en_diagnostico&pagination[pageSize]=1'),
+    strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=en_reparacion&pagination[pageSize]=1'),
+    strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=finalizado&pagination[pageSize]=1'),
+    strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=facturado&pagination[pageSize]=1'),
+    strapiGet(`/api/orden-de-trabajos?filters[createdAt][$gte]=${todayStr}&pagination[pageSize]=1`),
+    strapiGet(`/api/orden-de-trabajos?filters[createdAt][$gte]=${new Date(today.getTime() - 86400000).toISOString().split('T')[0]}&filters[createdAt][$lt]=${todayStr}&pagination[pageSize]=1`)
+  ]);
+
+  activeOrdersCount = activeRes.meta?.pagination?.total || 0;
+  completedTodayCount = completedRes.meta?.pagination?.total || 0;
+  ordenesHoy = ordenesHoyRes.meta?.pagination?.total || 0;
+  ordenesAyer = ordenesAyerRes.meta?.pagination?.total || 0;
+
+  // Low stock
+  const allRepuestos = allRepuestosRes.data || [];
+  lowStockItems = allRepuestos.filter((item: any) => (item.stock || 0) <= (item.stock_minimo || 5)).slice(0, 5);
+  lowStockCount = lowStockItems.length;
+
+  // Recent orders
+  recentOrders = (recentRes.data || []).map((order: any) => ({
+    ...order,
+    cliente: order.vehiculo?.cliente || null
+  }));
+
+  // Mecánicos
+  mecanicosDisponibles = (mecanicosRes.data || []).map((m: any) => ({
+    ...m,
+    ordenesActivas: m.orden_de_trabajos?.length || 0
+  })).sort((a: any, b: any) => a.ordenesActivas - b.ordenesActivas);
+
+  // Órdenes urgentes
+  ordenesUrgentes = urgentesRes.data || [];
+
+  // Pending invoices
+  pendingInvoices = pendingInvoicesRes.meta?.pagination?.total || 0;
+
+  // Ingresos semana
+  ingresosSemana = (facturasRes.data || []).reduce((sum: number, f: any) => sum + (f.total || 0), 0);
+  facturasHoy = (facturasRes.data || []).filter((f: any) => f.fecha_emision === todayStr).length;
+
+  // Estados
+  ordenesPorEstado = {
+    ingresado: ingresadosRes.meta?.pagination?.total || 0,
+    en_diagnostico: enDiagnosticoRes.meta?.pagination?.total || 0,
+    en_reparacion: enReparacionRes.meta?.pagination?.total || 0,
+    finalizado: finalizadosRes.meta?.pagination?.total || 0,
+    facturado: facturadosRes.meta?.pagination?.total || 0
+  };
+
+} catch (e: any) {
+  console.error('Error fetching dashboard data:', e);
+  error = e.message;
+}
+
+const totalOrdenesTaller = Object.values(ordenesPorEstado).reduce((a, b) => a + b, 0);
+const cambioOrdenes = ordenesAyer > 0 ? Math.round(((ordenesHoy - ordenesAyer) / ordenesAyer) * 100) : 0;
+
+const formatCurrency = (amount: number) => new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP' }).format(amount);
+
 const getStatusVariant = (status: string) => {
-  switch (status) {
-    case 'entregado': return 'success';
-    case 'facturado': return 'info';
-    case 'finalizado': return 'info';
-    case 'ingresado': return 'error';
-    default: return 'warning';
-  }
+  const variants: Record<string, string> = {
+    entregado: 'success', facturado: 'info', finalizado: 'success',
+    ingresado: 'warning', en_diagnostico: 'info', en_reparacion: 'info'
+  };
+  return variants[status] || 'default';
 };
 
 const formatStatus = (status: string) => {
   const map: Record<string, string> = {
-    ingresado: 'Ingresado',
-    en_diagnostico: 'En Diagnóstico',
-    en_reparacion: 'En Reparación',
-    finalizado: 'Finalizado',
-    facturado: 'Facturado',
-    entregado: 'Entregado'
+    ingresado: 'Ingresado', en_diagnostico: 'Diagnóstico', en_reparacion: 'Reparación',
+    finalizado: 'Finalizado', facturado: 'Facturado', entregado: 'Entregado'
   };
   return map[status] || status;
+};
+
+const getStatusColor = (status: string) => {
+  const colors: Record<string, string> = {
+    ingresado: 'bg-red-500', en_diagnostico: 'bg-purple-500', en_reparacion: 'bg-amber-500',
+    finalizado: 'bg-green-500', facturado: 'bg-blue-500'
+  };
+  return colors[status] || 'bg-gray-500';
 };
 ---
 
 <DashboardLayout title="Dashboard Encargado" role="encargado" currentPath={Astro.url.pathname}>
   <div class="max-w-7xl mx-auto">
-    <!-- Page Header -->
-    <div class="flex flex-col gap-2 mb-8">
-      <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Dashboard del Encargado</h1>
-      <p class="text-gray-500 dark:text-gray-400">Bienvenido {userName}, aquí tienes un resumen de la actividad del taller.</p>
+    {error && (
+      <div class="p-4 mb-6 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800 rounded-xl text-red-700 dark:text-red-300 flex items-center gap-2">
+        <span class="material-symbols-outlined">error</span>
+        <span>Error cargando datos: {error}</span>
+      </div>
+    )}
+
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+      <div>
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">
+          {getGreeting()}, {userName}!
+        </h1>
+        <p class="text-gray-500 dark:text-gray-400 flex items-center gap-2 mt-1">
+          <span class="material-symbols-outlined text-sm">calendar_today</span>
+          {new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+        </p>
+      </div>
+      <div class="flex gap-3">
+        <a href="/encargado/asig_orden" class="px-4 py-2.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-2">
+          <span class="material-symbols-outlined">assignment_ind</span>
+          Asignar
+        </a>
+        <a href="/encargado/gen_factura" class="px-4 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors flex items-center gap-2 shadow-lg shadow-primary-600/20">
+          <span class="material-symbols-outlined">receipt_long</span>
+          Facturar
+        </a>
+      </div>
     </div>
 
-    <!-- Stats Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-      <KPICard 
-        title="Órdenes Activas" 
-        value={activeOrdersCount} 
-        icon="build_circle" 
-        color="primary"
-        trend={{ value: 12, label: 'vs semana pasada', direction: 'up' }}
-      />
-      <KPICard 
-        title="Completadas Hoy" 
-        value={completedTodayCount} 
-        icon="task_alt" 
-        color="secondary"
-      />
-      <KPICard 
-        title="Stock Bajo Mínimo" 
-        value={lowStockCount} 
-        icon="inventory_2" 
-        color="error"
-        trend={lowStockCount > 0 ? { value: lowStockCount, label: 'items críticos', direction: 'down' } : undefined}
-      />
+    <!-- Alertas Urgentes -->
+    {(ordenesUrgentes.length > 0 || lowStockCount > 3) && (
+      <div class="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+        {ordenesUrgentes.length > 0 && (
+          <div class="bg-gradient-to-r from-red-500 to-rose-600 rounded-2xl p-4 text-white flex items-center gap-4 animate-pulse-slow">
+            <div class="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+              <span class="material-symbols-outlined text-2xl">priority_high</span>
+            </div>
+            <div class="flex-1">
+              <p class="font-bold">{ordenesUrgentes.length} Orden{ordenesUrgentes.length > 1 ? 'es' : ''} Urgente{ordenesUrgentes.length > 1 ? 's' : ''}</p>
+              <p class="text-sm text-red-100">Requieren atención inmediata</p>
+            </div>
+            <a href="/encargado/trabajos_en_curso" class="px-4 py-2 bg-white/20 rounded-lg text-sm font-medium hover:bg-white/30 transition-colors">
+              Ver ahora
+            </a>
+          </div>
+        )}
+        {lowStockCount > 3 && (
+          <div class="bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl p-4 text-white flex items-center gap-4">
+            <div class="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+              <span class="material-symbols-outlined text-2xl">inventory_2</span>
+            </div>
+            <div class="flex-1">
+              <p class="font-bold">{lowStockCount} Repuestos Bajos</p>
+              <p class="text-sm text-amber-100">Stock por debajo del mínimo</p>
+            </div>
+            <a href="/encargado/inventario" class="px-4 py-2 bg-white/20 rounded-lg text-sm font-medium hover:bg-white/30 transition-colors">
+              Revisar
+            </a>
+          </div>
+        )}
+      </div>
+    )}
+
+    <!-- KPIs principales -->
+    <div class="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+      <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-5 text-white shadow-lg">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-blue-100 text-xs font-medium uppercase tracking-wide">Órdenes Activas</span>
+          <span class="material-symbols-outlined text-blue-200">build_circle</span>
+        </div>
+        <p class="text-3xl font-bold">{activeOrdersCount}</p>
+        <p class="text-blue-200 text-xs mt-1">en taller</p>
+      </div>
+
+      <div class="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl p-5 text-white shadow-lg">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-green-100 text-xs font-medium uppercase tracking-wide">Completadas Hoy</span>
+          <span class="material-symbols-outlined text-green-200">task_alt</span>
+        </div>
+        <p class="text-3xl font-bold">{completedTodayCount}</p>
+        <p class="text-green-200 text-xs mt-1">entregas</p>
+      </div>
+
+      <div class="bg-gradient-to-br from-amber-500 to-orange-500 rounded-2xl p-5 text-white shadow-lg">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-amber-100 text-xs font-medium uppercase tracking-wide">Por Facturar</span>
+          <span class="material-symbols-outlined text-amber-200">receipt_long</span>
+        </div>
+        <p class="text-3xl font-bold">{pendingInvoices}</p>
+        <p class="text-amber-200 text-xs mt-1">finalizadas</p>
+      </div>
+
+      <div class="bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl p-5 text-white shadow-lg">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-purple-100 text-xs font-medium uppercase tracking-wide">Ingresos Semana</span>
+          <span class="material-symbols-outlined text-purple-200">payments</span>
+        </div>
+        <p class="text-2xl font-bold">{formatCurrency(ingresosSemana)}</p>
+        <p class="text-purple-200 text-xs mt-1">{facturasHoy} hoy</p>
+      </div>
+
+      <div class="bg-gradient-to-br from-rose-500 to-pink-600 rounded-2xl p-5 text-white shadow-lg relative overflow-hidden">
+        {lowStockCount > 0 && <div class="absolute top-2 right-2 w-3 h-3 bg-white rounded-full animate-ping"></div>}
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-rose-100 text-xs font-medium uppercase tracking-wide">Stock Bajo</span>
+          <span class="material-symbols-outlined text-rose-200">warning</span>
+        </div>
+        <p class="text-3xl font-bold">{lowStockCount}</p>
+        <p class="text-rose-200 text-xs mt-1">repuestos</p>
+      </div>
     </div>
 
-    <!-- Quick Access -->
+    <!-- Contenido principal -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+      <!-- Estado de Órdenes (Distribución) -->
+      <div class="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+        <div class="flex items-center justify-between mb-6">
+          <h2 class="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary-600">donut_large</span>
+            Distribución de Órdenes
+          </h2>
+          <span class="text-sm text-gray-500">Total: {totalOrdenesTaller}</span>
+        </div>
+        
+        <div class="space-y-4">
+          {Object.entries(ordenesPorEstado).map(([estado, count]) => {
+            const porcentaje = totalOrdenesTaller > 0 ? Math.round((count / totalOrdenesTaller) * 100) : 0;
+            return (
+              <div>
+                <div class="flex justify-between items-center mb-2">
+                  <span class="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                    <span class={`w-3 h-3 rounded-full ${getStatusColor(estado)}`}></span>
+                    {formatStatus(estado)}
+                  </span>
+                  <span class="text-sm font-bold text-gray-900 dark:text-white">{count} <span class="text-gray-400 font-normal">({porcentaje}%)</span></span>
+                </div>
+                <div class="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
+                  <div class={`h-full rounded-full transition-all duration-500 ${getStatusColor(estado)}`} style={`width: ${porcentaje}%`}></div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div class="mt-6 pt-4 border-t border-gray-100 dark:border-gray-700 flex items-center justify-between text-sm">
+          <span class="text-gray-500">Nuevas hoy: <span class="font-bold text-gray-900 dark:text-white">{ordenesHoy}</span></span>
+          {cambioOrdenes !== 0 && (
+            <span class={`flex items-center gap-1 ${cambioOrdenes > 0 ? 'text-green-600' : 'text-red-600'}`}>
+              <span class="material-symbols-outlined text-sm">{cambioOrdenes > 0 ? 'trending_up' : 'trending_down'}</span>
+              {Math.abs(cambioOrdenes)}% vs ayer
+            </span>
+          )}
+        </div>
+      </div>
+
+      <!-- Mecánicos Panel -->
+      <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
+        <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary-600">engineering</span>
+          Carga de Mecánicos
+        </h2>
+        <div class="space-y-3">
+          {mecanicosDisponibles.slice(0, 5).map((mec: any) => (
+            <div class="flex items-center justify-between p-3 rounded-xl bg-gray-50 dark:bg-gray-700/50">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-primary-600 dark:text-primary-400 font-bold">
+                  {mec.nombre?.charAt(0) || 'M'}
+                </div>
+                <div>
+                  <p class="font-medium text-gray-900 dark:text-white">{mec.nombre} {mec.apellido || ''}</p>
+                  <p class="text-xs text-gray-500">{mec.especialidad || 'General'}</p>
+                </div>
+              </div>
+              <div class={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                mec.ordenesActivas === 0 ? 'bg-green-100 text-green-700' :
+                mec.ordenesActivas <= 2 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
+              }`}>
+                {mec.ordenesActivas} orden{mec.ordenesActivas !== 1 ? 'es' : ''}
+              </div>
+            </div>
+          ))}
+          {mecanicosDisponibles.length === 0 && (
+            <p class="text-center text-gray-500 py-4">No hay mecánicos registrados</p>
+          )}
+        </div>
+        <a href="/encargado/disp_mec" class="mt-4 block text-center text-sm text-primary-600 hover:underline">
+          Ver todos los mecánicos →
+        </a>
+      </div>
+    </div>
+
+    <!-- Accesos Rápidos -->
     <section class="mb-8">
-      <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+      <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
         <span class="material-symbols-outlined text-primary-600">rocket_launch</span>
         Accesos Rápidos
       </h2>
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <a href="/encargado/inventario" class="group">
-          <Card class="h-full hover:border-primary-500 hover:shadow-md transition-all duration-200 group-hover:-translate-y-1">
-            <div class="flex flex-col gap-3">
-              <div class="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                <span class="material-symbols-outlined">inventory</span>
-              </div>
-              <div>
-                <h3 class="font-bold text-gray-900 dark:text-white group-hover:text-blue-600 transition-colors">Inventario</h3>
-                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Gestionar repuestos</p>
-              </div>
-            </div>
-          </Card>
+      <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+        <a href="/encargado/inventario" class="group bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-100 dark:border-gray-700 hover:border-blue-300 hover:shadow-lg hover:-translate-y-1 transition-all">
+          <div class="w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900/30 text-blue-600 flex items-center justify-center mb-3 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+            <span class="material-symbols-outlined">inventory</span>
+          </div>
+          <h3 class="font-bold text-gray-900 dark:text-white text-sm">Inventario</h3>
         </a>
-        <a href="/encargado/gen_factura" class="group">
-          <Card class="h-full hover:border-primary-500 hover:shadow-md transition-all duration-200 group-hover:-translate-y-1">
-            <div class="flex flex-col gap-3">
-              <div class="w-10 h-10 rounded-lg bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 flex items-center justify-center group-hover:bg-green-600 group-hover:text-white transition-colors">
-                <span class="material-symbols-outlined">receipt_long</span>
-              </div>
-              <div>
-                <h3 class="font-bold text-gray-900 dark:text-white group-hover:text-green-600 transition-colors">Facturación</h3>
-                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Aprobar y facturar</p>
-              </div>
-            </div>
-          </Card>
+        <a href="/encargado/gen_factura" class="group bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-100 dark:border-gray-700 hover:border-green-300 hover:shadow-lg hover:-translate-y-1 transition-all">
+          <div class="w-12 h-12 rounded-xl bg-green-100 dark:bg-green-900/30 text-green-600 flex items-center justify-center mb-3 group-hover:bg-green-600 group-hover:text-white transition-colors">
+            <span class="material-symbols-outlined">receipt_long</span>
+          </div>
+          <h3 class="font-bold text-gray-900 dark:text-white text-sm">Facturar</h3>
         </a>
-        <a href="/encargado/asig_orden" class="group">
-          <Card class="h-full hover:border-primary-500 hover:shadow-md transition-all duration-200 group-hover:-translate-y-1">
-            <div class="flex flex-col gap-3">
-              <div class="w-10 h-10 rounded-lg bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 flex items-center justify-center group-hover:bg-purple-600 group-hover:text-white transition-colors">
-                <span class="material-symbols-outlined">assignment_ind</span>
-              </div>
-              <div>
-                <h3 class="font-bold text-gray-900 dark:text-white group-hover:text-purple-600 transition-colors">Asignar Orden</h3>
-                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Distribuir trabajo</p>
-              </div>
-            </div>
-          </Card>
+        <a href="/encargado/asig_orden" class="group bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-100 dark:border-gray-700 hover:border-purple-300 hover:shadow-lg hover:-translate-y-1 transition-all">
+          <div class="w-12 h-12 rounded-xl bg-purple-100 dark:bg-purple-900/30 text-purple-600 flex items-center justify-center mb-3 group-hover:bg-purple-600 group-hover:text-white transition-colors">
+            <span class="material-symbols-outlined">assignment_ind</span>
+          </div>
+          <h3 class="font-bold text-gray-900 dark:text-white text-sm">Asignar</h3>
         </a>
-        <a href="/encargado/reportes" class="group">
-          <Card class="h-full hover:border-primary-500 hover:shadow-md transition-all duration-200 group-hover:-translate-y-1">
-            <div class="flex flex-col gap-3">
-              <div class="w-10 h-10 rounded-lg bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 flex items-center justify-center group-hover:bg-orange-600 group-hover:text-white transition-colors">
-                <span class="material-symbols-outlined">analytics</span>
-              </div>
-              <div>
-                <h3 class="font-bold text-gray-900 dark:text-white group-hover:text-orange-600 transition-colors">Reportes</h3>
-                <p class="text-sm text-gray-500 dark:text-gray-400 mt-1">Exportar datos</p>
-              </div>
-            </div>
-          </Card>
+        <a href="/encargado/trabajos_en_curso" class="group bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-100 dark:border-gray-700 hover:border-amber-300 hover:shadow-lg hover:-translate-y-1 transition-all">
+          <div class="w-12 h-12 rounded-xl bg-amber-100 dark:bg-amber-900/30 text-amber-600 flex items-center justify-center mb-3 group-hover:bg-amber-600 group-hover:text-white transition-colors">
+            <span class="material-symbols-outlined">engineering</span>
+          </div>
+          <h3 class="font-bold text-gray-900 dark:text-white text-sm">En Curso</h3>
+        </a>
+        <a href="/encargado/reportes" class="group bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-100 dark:border-gray-700 hover:border-teal-300 hover:shadow-lg hover:-translate-y-1 transition-all">
+          <div class="w-12 h-12 rounded-xl bg-teal-100 dark:bg-teal-900/30 text-teal-600 flex items-center justify-center mb-3 group-hover:bg-teal-600 group-hover:text-white transition-colors">
+            <span class="material-symbols-outlined">analytics</span>
+          </div>
+          <h3 class="font-bold text-gray-900 dark:text-white text-sm">Reportes</h3>
+        </a>
+        <a href="/encargado/disp_mec" class="group bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-100 dark:border-gray-700 hover:border-rose-300 hover:shadow-lg hover:-translate-y-1 transition-all">
+          <div class="w-12 h-12 rounded-xl bg-rose-100 dark:bg-rose-900/30 text-rose-600 flex items-center justify-center mb-3 group-hover:bg-rose-600 group-hover:text-white transition-colors">
+            <span class="material-symbols-outlined">groups</span>
+          </div>
+          <h3 class="font-bold text-gray-900 dark:text-white text-sm">Mecánicos</h3>
         </a>
       </div>
     </section>
 
-    <!-- Main Content Grid -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-      <!-- Recent Activity -->
+    <!-- Actividad Reciente y Stock Bajo -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- Actividad Reciente -->
       <div class="lg:col-span-2">
-        <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4">Actividad Reciente</h2>
-        {recentOrders.length > 0 ? (
-          <Table headers={['ID', 'Cliente', 'Vehículo', 'Mecánico', 'Estado']}>
-            {recentOrders.map((order: any) => (
-              <tr class="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                <td class="px-6 py-4 font-medium text-gray-900 dark:text-white">OT-{order.id}</td>
-                <td class="px-6 py-4 text-gray-600 dark:text-gray-300">
-                  {order.cliente ? `${order.cliente.nombre} ${order.cliente.apellido}` : 'N/A'}
-                </td>
-                <td class="px-6 py-4 text-gray-600 dark:text-gray-300">
-                  {order.vehiculo ? `${order.vehiculo.marca} ${order.vehiculo.modelo}` : 'N/A'}
-                </td>
-                <td class="px-6 py-4 text-gray-600 dark:text-gray-300">
-                  {order.mecanico ? order.mecanico.nombre : 'Sin asignar'}
-                </td>
-                <td class="px-6 py-4">
-                  <Badge variant={getStatusVariant(order.estado)}>
-                    {formatStatus(order.estado)}
-                  </Badge>
-                </td>
-              </tr>
-            ))}
-          </Table>
-        ) : (
-          <EmptyState 
-            title="No hay órdenes recientes" 
-            description="Las órdenes de trabajo aparecerán aquí una vez creadas."
-            icon="assignment_late"
-          />
-        )}
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary-600">history</span>
+            Actividad Reciente
+          </h2>
+          <a href="/encargado/trabajos_en_curso" class="text-sm text-primary-600 hover:underline">Ver todo →</a>
+        </div>
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+          {recentOrders.length > 0 ? (
+            <div class="divide-y divide-gray-100 dark:divide-gray-700">
+              {recentOrders.slice(0, 6).map((order: any) => (
+                <a href={`/encargado/detalles_de_orden?id=${order.documentId}`} class="block p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                      <div class="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+                        <span class="material-symbols-outlined text-gray-500">receipt_long</span>
+                      </div>
+                      <div>
+                        <p class="font-semibold text-gray-900 dark:text-white">OT-{order.id}</p>
+                        <p class="text-sm text-gray-500">{order.vehiculo ? `${order.vehiculo.marca} ${order.vehiculo.modelo}` : 'N/A'}</p>
+                      </div>
+                    </div>
+                    <div class="text-right">
+                      <Badge variant={getStatusVariant(order.estado)}>{formatStatus(order.estado)}</Badge>
+                      <p class="text-xs text-gray-400 mt-1">
+                        {order.mecanico ? order.mecanico.nombre : 'Sin asignar'}
+                      </p>
+                    </div>
+                  </div>
+                </a>
+              ))}
+            </div>
+          ) : (
+            <div class="p-8 text-center text-gray-500">
+              <span class="material-symbols-outlined text-4xl mb-2 text-gray-300">inbox</span>
+              <p>No hay actividad reciente</p>
+            </div>
+          )}
+        </div>
       </div>
 
-      <!-- Low Stock Alert -->
+      <!-- Stock Bajo -->
       <div>
-        <h2 class="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+        <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
           <span class="material-symbols-outlined text-red-500">warning</span>
           Stock Bajo
         </h2>
-        <Card>
-          <div class="space-y-4">
-            {lowStockItems.length > 0 ? (
-              lowStockItems.map((item: any) => (
-                <div class="flex flex-col gap-2">
-                  <div class="flex justify-between items-center">
-                    <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{item.nombre}</span>
-                    <span class="text-xs font-bold text-red-600 dark:text-red-400">{item.stock} unid.</span>
+        <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-5">
+          {lowStockItems.length > 0 ? (
+            <div class="space-y-4">
+              {lowStockItems.map((item: any) => (
+                <div class="flex items-center justify-between">
+                  <div class="flex-1">
+                    <p class="font-medium text-gray-900 dark:text-white text-sm">{item.nombre}</p>
+                    <div class="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1.5 mt-1">
+                      <div class="h-1.5 rounded-full bg-red-500" style={`width: ${Math.min((item.stock / (item.stock_minimo || 5)) * 100, 100)}%`}></div>
+                    </div>
                   </div>
-                  <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                    <div 
-                      class="bg-red-500 h-2 rounded-full transition-all duration-500" 
-                      style={`width: ${Math.min(item.stock * 10, 100)}%`}
-                    ></div>
-                  </div>
+                  <span class="ml-3 px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-xs font-bold rounded">
+                    {item.stock}
+                  </span>
                 </div>
-              ))
-            ) : (
-              <div class="text-center py-8">
-                <span class="material-symbols-outlined text-green-500 text-4xl mb-2">check_circle</span>
-                <p class="text-gray-500 dark:text-gray-400">No hay alertas de stock bajo.</p>
-              </div>
-            )}
-          </div>
-          {lowStockItems.length > 0 && (
-            <div class="mt-6 pt-4 border-t border-gray-100 dark:border-gray-700">
-              <a href="/encargado/inventario" class="text-sm text-primary-600 dark:text-primary-400 hover:underline flex items-center justify-center gap-1">
-                Ver todo el inventario 
-                <span class="material-symbols-outlined text-sm">arrow_forward</span>
+              ))}
+              <a href="/encargado/inventario" class="block mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 text-center text-sm text-primary-600 hover:underline">
+                Ver inventario completo →
               </a>
             </div>
+          ) : (
+            <div class="text-center py-6">
+              <span class="material-symbols-outlined text-green-500 text-4xl mb-2">check_circle</span>
+              <p class="text-gray-500 text-sm">Todo el stock está en orden</p>
+            </div>
           )}
-        </Card>
+        </div>
       </div>
     </div>
   </div>
 </DashboardLayout>
+
+<style>
+  @keyframes pulse-slow {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.8; }
+  }
+  .animate-pulse-slow {
+    animation: pulse-slow 2s ease-in-out infinite;
+  }
+</style>
