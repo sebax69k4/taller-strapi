@@ -191,7 +191,7 @@ const breadcrumbs = [
                     <div>
                         <p class="text-green-100 text-sm font-medium uppercase tracking-wider">Monto Total Estimado</p>
                         <p class="text-4xl font-bold mt-1">
-                            ${completedOrders.reduce((sum, order) => sum + (order.calculatedTotals?.total || 0), 0).toLocaleString('es-CL')}
+                            ${completedOrders.reduce((sum: number, order: any) => sum + ((order as any).calculatedTotals?.total || 0), 0).toLocaleString('es-CL')}
                         </p>
                         <p class="text-green-200 text-xs mt-2">A recaudar</p>
                     </div>

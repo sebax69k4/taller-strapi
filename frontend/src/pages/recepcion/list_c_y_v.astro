@@ -29,8 +29,8 @@ try {
 
 // Estadísticas rápidas
 const totalClientes = clientes.length;
-const totalVehiculos = clientes.reduce((acc, c) => acc + (c.vehiculos?.length || 0), 0);
-const clientesSinVehiculos = clientes.filter(c => !c.vehiculos?.length).length;
+const totalVehiculos = clientes.reduce((acc: number, c: any) => acc + (c.vehiculos?.length || 0), 0);
+const clientesSinVehiculos = clientes.filter((c: any) => !c.vehiculos?.length).length;
 ---
 
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>

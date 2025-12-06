@@ -3,6 +3,7 @@ export const prerender = false;
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
 import Card from '../../components/ui/Card.astro';
 import Badge from '../../components/ui/Badge.astro';
+import { strapiGet } from '../../lib/strapi';
 import '../../styles/global.css';
 
 const userRole = Astro.cookies.get('user_role')?.value;
@@ -14,6 +15,34 @@ if (!userRole) {
   return Astro.redirect('/login');
 }
 
+// Cargar órdenes desde el servidor
+let initialOrders: any[] = [];
+let debugInfo = { mecanicoId: mecanicoId, endpoint: '', ordersCount: 0, error: '' };
+
+try {
+  let endpoint = '/api/orden-de-trabajos?populate[0]=vehiculo&populate[1]=mecanico&sort=updatedAt:desc&pagination[limit]=100';
+  if (mecanicoId) {
+    endpoint = `/api/orden-de-trabajos?filters[mecanico][id][$eq]=${mecanicoId}&populate[0]=vehiculo&populate[1]=mecanico&sort=updatedAt:desc&pagination[limit]=100`;
+  }
+  debugInfo.endpoint = endpoint;
+  
+  console.log('🔧 [DASH_MEC] Server-side loading');
+  console.log('🔧 [DASH_MEC] mecanicoId from cookie:', mecanicoId);
+  console.log('🔧 [DASH_MEC] Endpoint:', endpoint);
+  
+  const response = await strapiGet(endpoint);
+  initialOrders = response.data || [];
+  debugInfo.ordersCount = initialOrders.length;
+  
+  console.log('🔧 [DASH_MEC] Response data length:', initialOrders.length);
+  if (initialOrders.length > 0) {
+    console.log('🔧 [DASH_MEC] First order:', initialOrders[0].id, initialOrders[0].estado);
+  }
+} catch (e: any) {
+  console.error('🔧 [DASH_MEC] Error loading orders:', e.message || e);
+  debugInfo.error = e.message || 'Unknown error';
+}
+
 const getGreeting = () => {
   const hour = new Date().getHours();
   if (hour < 12) return '¡Buenos días';
@@ -23,13 +52,16 @@ const getGreeting = () => {
 ---
 
 <DashboardLayout title="Dashboard Mecánico" role="mecanico" currentPath={Astro.url.pathname}>
+  <!-- Inject server-loaded orders as JSON -->
+  <script type="application/json" id="initial-orders-data" set:html={JSON.stringify(initialOrders)}></script>
+  
   <div class="max-w-7xl mx-auto" 
     x-data=`{
       mecanicoId: '${mecanicoId || ''}',
       apiBase: '${apiBase}',
       orders: [],
-      loading: true,
-      lastUpdate: null,
+      loading: false,
+      lastUpdate: new Date(),
       refreshInterval: null,
 
       get todoOrders() {
@@ -57,9 +89,9 @@ const getGreeting = () => {
 
       async fetchOrders() {
         try {
-          let endpoint = this.apiBase + '/api/orden-de-trabajos?populate=vehiculo,mecanico&sort=updatedAt:desc&pagination[limit]=100';
+          let endpoint = this.apiBase + '/api/orden-de-trabajos?populate[0]=vehiculo&populate[1]=mecanico&sort=updatedAt:desc&pagination[limit]=100';
           if (this.mecanicoId) {
-            endpoint = this.apiBase + '/api/orden-de-trabajos?filters[mecanico][id][$eq]=' + this.mecanicoId + '&populate=vehiculo,mecanico&sort=updatedAt:desc&pagination[limit]=100';
+            endpoint = this.apiBase + '/api/orden-de-trabajos?filters[mecanico][id][$eq]=' + this.mecanicoId + '&populate[0]=vehiculo&populate[1]=mecanico&sort=updatedAt:desc&pagination[limit]=100';
           }
           
           console.log('🔧 Mechanic Dashboard - Fetching orders');
@@ -67,15 +99,24 @@ const getGreeting = () => {
           console.log('   endpoint:', endpoint);
           
           const res = await fetch(endpoint);
-          const data = await res.json();
+          console.log('   response status:', res.status);
           
+          const data = await res.json();
+          console.log('   full response:', data);
           console.log('   orders found:', data.data?.length || 0);
-          if (data.data?.length > 0) {
-            console.log('   sample order mecanico:', data.data[0].mecanico);
+          
+          if (data.error) {
+            console.error('   API Error:', data.error);
+          }
+          
+          if (data.data && data.data.length > 0) {
+            console.log('   first order:', data.data[0]);
+            console.log('   first order estado:', data.data[0].estado);
           }
           
           if (data.data) {
             this.orders = data.data;
+            console.log('   orders set, total:', this.orders.length);
           }
           this.lastUpdate = new Date();
           this.loading = false;
@@ -93,7 +134,17 @@ const getGreeting = () => {
       },
 
       init() {
-        this.fetchOrders();
+        // Load initial orders from server-injected JSON
+        const initialData = document.getElementById('initial-orders-data');
+        if (initialData) {
+          try {
+            this.orders = JSON.parse(initialData.textContent || '[]');
+            console.log('🔧 Initial orders loaded from server:', this.orders.length);
+          } catch (e) {
+            console.error('Error parsing initial orders:', e);
+          }
+        }
+        // Start refresh interval for updates
         this.refreshInterval = setInterval(() => this.fetchOrders(), 15000);
       },
 
@@ -133,14 +184,17 @@ const getGreeting = () => {
       </div>
     </div>
 
-    <!-- Debug Info Panel (temporary) -->
-    <div class="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-sm" x-show="!loading">
-      <div class="flex items-center gap-2 text-amber-700 dark:text-amber-300">
+    <!-- Debug Info Panel (server-side info) -->
+    <div class="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-sm">
+      <div class="flex flex-wrap items-center gap-2 text-amber-700 dark:text-amber-300">
         <span class="material-symbols-outlined text-base">info</span>
-        <strong>Debug Info:</strong>
-        <span x-text="mecanicoId ? 'mecanico_id=' + mecanicoId : '⚠️ mecanico_id NO CONFIGURADO - mostrando todas las órdenes'"></span>
-        <span class="mx-2">|</span>
-        <span x-text="'Órdenes encontradas: ' + orders.length"></span>
+        <strong>Debug (Server):</strong>
+        <span>mecanico_id={debugInfo.mecanicoId || 'NULL'}</span>
+        <span class="mx-1">|</span>
+        <span>Órdenes cargadas: {debugInfo.ordersCount}</span>
+        {debugInfo.error && (
+          <span class="text-red-600 ml-2">⚠️ Error: {debugInfo.error}</span>
+        )}
         <button @click="fetchOrders()" class="ml-auto px-2 py-1 bg-amber-200 dark:bg-amber-800 rounded text-xs hover:bg-amber-300">
           🔄 Refrescar
         </button>

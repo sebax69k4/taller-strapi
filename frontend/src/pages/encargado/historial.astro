@@ -60,8 +60,8 @@ if (Astro.request.method === 'POST') {
       ]);
       
       const csvContent = [
-        csvHeaders.join(','),
-        ...csvRows.map(row => row.map(v => `"${v}"`).join(','))
+        headers.join(','),
+        ...csvRows.map((row: any) => row.map((v: any) => `"${v}"`).join(','))
       ].join('\n');
       
       return new Response(csvContent, {

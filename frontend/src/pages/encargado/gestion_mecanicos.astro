@@ -2,7 +2,7 @@
 export const prerender = false;
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
 import Card from '../../components/ui/Card.astro';
-import { strapiGet, strapiPut } from '../../lib/strapi';
+import { strapiGet, strapiPut, strapiDelete } from '../../lib/strapi';
 import '../../styles/global.css';
 
 const userRole = Astro.cookies.get('user_role')?.value;
@@ -47,16 +47,14 @@ if (urlMessage) {
   messageType = urlType || 'success';
 }
 
-try {
-  // Obtener mecánicos con sus órdenes
-  const mecanicosRes = await strapiGet('/api/mecenicos?populate[orden_de_trabajos][populate][vehiculo][fields][0]=marca&populate[orden_de_trabajos][populate][vehiculo][fields][1]=modelo&populate[orden_de_trabajos][populate][vehiculo][fields][2]=patente');
-  mecanicos = mecanicosRes.data || [];
-
-  // Manejar POST para cambiar disponibilidad
-  if (Astro.request.method === 'POST') {
+// Manejar POST primero (antes de cargar datos)
+if (Astro.request.method === 'POST') {
+  try {
     const formData = await Astro.request.formData();
     const action = formData.get('action');
     const mecanicoId = formData.get('mecanicoId');
+
+    console.log('POST action:', action, 'mecanicoId:', mecanicoId);
 
     if (action === 'toggle_disponibilidad') {
       const disponibilidadActual = formData.get('disponibilidadActual') === 'true';
@@ -67,11 +65,27 @@ try {
 
       return Astro.redirect(`/encargado/gestion_mecanicos?message=${encodeURIComponent('Disponibilidad actualizada.')}&type=success`);
     }
+
+    if (action === 'delete_mecanico') {
+      console.log('Deleting mechanic:', mecanicoId);
+      await strapiDelete(`/api/mecenicos/${mecanicoId}`);
+      console.log('Mechanic deleted successfully');
+      return Astro.redirect(`/encargado/gestion_mecanicos?message=${encodeURIComponent('Mecánico eliminado correctamente.')}&type=success`);
+    }
+  } catch (postError: any) {
+    console.error('Error en POST:', postError);
+    error = postError.message || 'Error al procesar la acción';
   }
+}
+
+try {
+  // Obtener mecánicos con sus órdenes
+  const mecanicosRes = await strapiGet('/api/mecenicos?populate[orden_de_trabajos][populate][vehiculo][fields][0]=marca&populate[orden_de_trabajos][populate][vehiculo][fields][1]=modelo&populate[orden_de_trabajos][populate][vehiculo][fields][2]=patente');
+  mecanicos = mecanicosRes.data || [];
 
 } catch (e: any) {
   console.error('Error:', e);
-  error = 'Error al cargar mecánicos';
+  error = error || 'Error al cargar mecánicos';
 }
 
 // Calcular estadísticas
@@ -293,6 +307,17 @@ const estadoColors: Record<string, string> = {
                 >
                   <span class="material-symbols-outlined text-sm">assignment_add</span>
                 </a>
+                <form method="POST" onsubmit="return confirm('¿Estás seguro de eliminar este mecánico? Esta acción no se puede deshacer.')">
+                  <input type="hidden" name="action" value="delete_mecanico" />
+                  <input type="hidden" name="mecanicoId" value={mecanico.documentId} />
+                  <button 
+                    type="submit"
+                    class="p-2 bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-900/30 dark:text-red-400 rounded-lg transition-colors"
+                    title="Eliminar mecánico"
+                  >
+                    <span class="material-symbols-outlined text-sm">delete</span>
+                  </button>
+                </form>
               </div>
             </div>
           </Card>

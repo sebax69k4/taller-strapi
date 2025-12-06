@@ -215,7 +215,7 @@ try {
       ingresos: ingresos,
       eficiencia: total > 0 ? Math.round((completadas / total) * 100) : 0
     };
-  }).sort((a, b) => b.ordenesCompletadas - a.ordenesCompletadas);
+  }).sort((a: any, b: any) => b.ordenesCompletadas - a.ordenesCompletadas);
 
   stats.clientesNuevos = clientesRes.meta?.pagination?.total || 0;
 
