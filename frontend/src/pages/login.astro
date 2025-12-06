@@ -38,18 +38,33 @@ if (Astro.request.method === 'POST') {
     // Si el usuario es un mecánico, busca su ID en Strapi
     if (user.role === 'mecanico') {
         try {
-            const mecResponse = await strapiGet(`/api/mecenicos?filters[email][$eq]=${user.email}`);
+            // Primero intentar buscar por email exacto
+            let mecResponse = await strapiGet(`/api/mecenicos?filters[email][$eq]=${user.email}`);
+            
+            // Si no encuentra por email, obtener el primer mecánico disponible
+            if (!mecResponse.data || mecResponse.data.length === 0) {
+                console.log('No se encontró mecánico por email, buscando primer mecánico disponible...');
+                mecResponse = await strapiGet('/api/mecenicos?pagination[limit]=1');
+            }
+            
             if (mecResponse.data && mecResponse.data.length > 0) {
-                const mecanicoId = mecResponse.data[0].id;
-                Astro.cookies.set('mecanico_id', mecanicoId, {
+                const mecanico = mecResponse.data[0];
+                const mecanicoId = mecanico.id;
+                const mecanicoName = `${mecanico.nombre || ''} ${mecanico.apellido || ''}`.trim() || 'Mecánico';
+                
+                Astro.cookies.set('mecanico_id', String(mecanicoId), {
                     path: '/',
                     httpOnly: false,
                     secure: false,
                     sameSite: 'lax',
                     maxAge: 60 * 60 * 8 // 8 horas
                 });
+                
+                // Actualizar el nombre del usuario con el nombre real del mecánico
+                user.name = mecanicoName;
+                console.log(`✅ Mecánico asignado: ${mecanicoName} (ID: ${mecanicoId})`);
             } else {
-                console.warn(`No se encontró un mecánico en Strapi con el email: ${user.email}`);
+                console.warn('⚠️ No hay mecánicos registrados en Strapi');
             }
         } catch (strapiError) {
             console.error('Error al buscar el ID del mecánico en Strapi:', strapiError);

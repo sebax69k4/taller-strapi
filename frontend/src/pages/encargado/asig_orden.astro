@@ -307,7 +307,7 @@ const getTimeAgo = (dateStr: string) => {
                       ? 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 opacity-60' 
                       : 'border-gray-300 dark:border-gray-600 hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 cursor-pointer'
                   }`}
-                  data-mechanic-id={mechanic.documentId}
+                  data-mechanic-id={mechanic.id}
                   ondragover={!isOverloaded ? "event.preventDefault(); this.classList.add('border-primary-500', 'bg-primary-50', 'dark:bg-primary-900/20', 'scale-[1.02]')" : ""}
                   ondragleave="this.classList.remove('border-primary-500', 'bg-primary-50', 'dark:bg-primary-900/20', 'scale-[1.02]')"
                   ondrop={!isOverloaded ? "handleDrop(event, this.dataset.mechanicId)" : ""}

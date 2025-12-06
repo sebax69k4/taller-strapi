@@ -9,14 +9,14 @@ if (!userRole) {
   return Astro.redirect('/login');
 }
 
+const apiBase = import.meta.env.PUBLIC_STRAPI_URL || 'http://localhost:1337';
+
 interface Order {
   id: number;
   documentId: string;
   descripcion: string;
   estado: string;
   prioridad?: string;
-  fecha_ingreso?: string;
-  updatedAt?: string;
   vehiculo?: {
     marca: string;
     modelo: string;
@@ -27,21 +27,17 @@ interface Order {
 }
 
 let activeOrders: Order[] = [];
-let error = '';
 
-// Handle Status Update via POST (fallback for no-js or initial load actions)
 if (Astro.request.method === 'POST') {
   try {
     const formData = await Astro.request.formData();
     const orderId = formData.get('orderId');
     const newStatus = formData.get('newStatus');
-    
     if (orderId && newStatus) {
       await strapiPut(`/api/orden-de-trabajos/${orderId}`, { estado: newStatus });
     }
   } catch (e) {
     console.error('Error updating order:', e);
-    error = 'Error al actualizar el estado de la orden';
   }
 }
 
@@ -49,8 +45,7 @@ try {
   const data = await strapiGet('/api/orden-de-trabajos?filters[estado][$ne]=entregado&filters[estado][$ne]=facturado&populate[vehiculo][populate]=cliente&populate=mecanico&sort=prioridad:asc,updatedAt:desc');
   activeOrders = data.data || [];
 } catch (e) {
-  console.error('Error fetching active orders:', e);
-  error = 'Error al cargar las órdenes';
+  console.error('Error fetching orders:', e);
 }
 
 const columns = [
@@ -63,62 +58,76 @@ const columns = [
 
 <DashboardLayout title="Tablero de Órdenes" role="encargado" currentPath="/encargado/trabajos_en_curso">
   <div class="h-[calc(100vh-8rem)] flex flex-col" 
-       x-data="{
-         orders: [],
-         draggedOrder: null,
-         async init() {
-           this.orders = JSON.parse(document.getElementById('orders-data').textContent);
-         },
-         getOrdersByStatus(status) {
-           return this.orders.filter(o => o.estado === status);
-         },
-         async updateStatus(orderId, newStatus) {
-           // Optimistic update
-           const orderIndex = this.orders.findIndex(o => o.documentId === orderId);
-           if (orderIndex === -1) return;
-           
-           const oldStatus = this.orders[orderIndex].estado;
-           this.orders[orderIndex].estado = newStatus;
-           
-           try {
-             const formData = new FormData();
-             formData.append('orderId', orderId);
-             formData.append('newStatus', newStatus);
-             
-             await fetch(window.location.href, {
-               method: 'POST',
-               body: formData
-             });
-             
-             // Show success toast (global function)
-             if (window.showToast) window.showToast('Estado actualizado', 'success');
-             
-           } catch (e) {
-             // Revert on error
-             this.orders[orderIndex].estado = oldStatus;
-             if (window.showToast) window.showToast('Error al actualizar', 'error');
-           }
-         },
-         handleDrop(event, newStatus) {
-            const orderId = event.dataTransfer.getData('text/plain');
-            if (orderId) {
-                this.updateStatus(orderId, newStatus);
-            }
-            event.currentTarget.classList.remove('bg-gray-100', 'dark:bg-gray-800');
-         },
-         handleDragOver(event) {
-            event.preventDefault();
-            event.currentTarget.classList.add('bg-gray-100', 'dark:bg-gray-800');
-         },
-         handleDragLeave(event) {
-            event.currentTarget.classList.remove('bg-gray-100', 'dark:bg-gray-800');
-         }
-       }"
+    x-data=`{
+      orders: [],
+      loading: false,
+      lastUpdate: null,
+      apiBase: '${apiBase}',
+
+      async init() {
+        this.orders = JSON.parse(document.getElementById('orders-data').textContent);
+        this.lastUpdate = new Date();
+        setInterval(() => this.fetchOrders(), 15000);
+      },
+
+      async fetchOrders() {
+        this.loading = true;
+        try {
+          const res = await fetch(this.apiBase + '/api/orden-de-trabajos?filters[estado][$ne]=entregado&filters[estado][$ne]=facturado&populate[vehiculo][populate]=cliente&populate=mecanico&sort=prioridad:asc,updatedAt:desc');
+          const data = await res.json();
+          if (data.data) this.orders = data.data;
+          this.lastUpdate = new Date();
+        } catch(e) { console.error(e); }
+        this.loading = false;
+      },
+
+      getTimeSinceUpdate() {
+        if (!this.lastUpdate) return '';
+        const s = Math.floor((new Date() - this.lastUpdate) / 1000);
+        return s < 60 ? 'hace ' + s + 's' : 'hace ' + Math.floor(s/60) + 'm';
+      },
+
+      getOrdersByStatus(status) {
+        return this.orders.filter(o => o.estado === status);
+      },
+
+      async updateStatus(orderId, newStatus) {
+        const orderIndex = this.orders.findIndex(o => o.documentId === orderId);
+        if (orderIndex === -1) return;
+        
+        const oldStatus = this.orders[orderIndex].estado;
+        this.orders[orderIndex].estado = newStatus;
+        
+        try {
+          await fetch(this.apiBase + '/api/orden-de-trabajos/' + orderId, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ data: { estado: newStatus } })
+          });
+          if (window.showToast) window.showToast('Estado actualizado', 'success');
+        } catch (e) {
+          this.orders[orderIndex].estado = oldStatus;
+          if (window.showToast) window.showToast('Error al actualizar', 'error');
+        }
+      },
+
+      handleDrop(event, newStatus) {
+        const orderId = event.dataTransfer.getData('text/plain');
+        if (orderId) this.updateStatus(orderId, newStatus);
+        event.currentTarget.classList.remove('bg-gray-100', 'dark:bg-gray-800');
+      },
+
+      handleDragOver(event) {
+        event.preventDefault();
+        event.currentTarget.classList.add('bg-gray-100', 'dark:bg-gray-800');
+      },
+
+      handleDragLeave(event) {
+        event.currentTarget.classList.remove('bg-gray-100', 'dark:bg-gray-800');
+      }
+    }`
   >
-    <!-- Data Injection -->
-    <script type="application/json" id="orders-data">
-      {JSON.stringify(activeOrders)}
-    </script>
+    <script type="application/json" id="orders-data" set:html={JSON.stringify(activeOrders)}></script>
 
     <!-- Header -->
     <div class="flex justify-between items-center mb-6 px-1">
@@ -129,8 +138,15 @@ const columns = [
         </h1>
         <p class="text-gray-500 dark:text-gray-400 mt-1">Arrastra las órdenes para cambiar su estado</p>
       </div>
-      <div class="flex gap-2">
-        <a href="/recepcion/crear_orden" class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center gap-2 shadow-lg hover:shadow-primary-600/30 transition-all">
+      <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2 text-sm text-gray-500 bg-white dark:bg-gray-800 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700">
+          <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+          <span>Actualizado <span x-text="getTimeSinceUpdate()"></span></span>
+          <button @click="fetchOrders()" class="text-primary-600 hover:text-primary-700 ml-1">
+            <span class="material-symbols-outlined text-sm" :class="loading && 'animate-spin'">refresh</span>
+          </button>
+        </div>
+        <a href="/recepcion/crear_orden" class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center gap-2">
           <span class="material-symbols-outlined">add</span>
           Nueva Orden
         </a>
@@ -142,7 +158,6 @@ const columns = [
       <div class="flex gap-6 h-full min-w-[1000px]">
         {columns.map(col => (
           <div class="flex-1 flex flex-col min-w-[280px] h-full">
-            <!-- Column Header -->
             <div class={`flex items-center justify-between p-3 rounded-t-xl border-t-4 ${col.color} bg-white dark:bg-gray-800 shadow-sm mb-3`}>
               <div class="flex items-center gap-2">
                 <span class="material-symbols-outlined text-gray-500">{col.icon}</span>
@@ -151,39 +166,37 @@ const columns = [
               <span class="px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded-full text-xs font-bold text-gray-600 dark:text-gray-300" x-text={`getOrdersByStatus('${col.id}').length`}>0</span>
             </div>
 
-            <!-- Drop Zone -->
             <div 
-              class={`flex-1 rounded-xl p-3 transition-colors ${col.bg} overflow-y-auto custom-scrollbar`}
+              class={`flex-1 rounded-xl p-3 transition-colors ${col.bg} overflow-y-auto`}
               @dragover="handleDragOver($event)"
               @dragleave="handleDragLeave($event)"
               @drop={`handleDrop($event, '${col.id}')`}
             >
-              <template x-for="order in getOrdersByStatus('${col.id}')" :key="order.documentId">
+              <template x-for={`order in getOrdersByStatus('${col.id}')`} :key="order.documentId">
                 <div 
                   draggable="true"
-                  @dragstart="$event.dataTransfer.setData('text/plain', order.documentId); $event.dataTransfer.effectAllowed = 'move';"
-                  class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mb-3 cursor-grab active:cursor-grabbing hover:shadow-md transition-all group relative"
+                  @dragstart="$event.dataTransfer.setData('text/plain', order.documentId)"
+                  class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 mb-3 cursor-grab hover:shadow-md transition-all group relative"
                 >
-                  <!-- Priority Badge -->
                   <template x-if="order.prioridad === 'urgente'">
-                    <div class="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full animate-pulse" title="Urgente"></div>
+                    <div class="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
                   </template>
 
                   <div class="flex justify-between items-start mb-2">
                     <span class="text-xs font-mono text-gray-500" x-text="'OT-' + order.id"></span>
-                    <a :href="'/encargado/detalles_de_orden?id=' + order.documentId" class="text-gray-400 hover:text-primary-600 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <a :href="'/encargado/detalles_de_orden?id=' + order.documentId" class="text-gray-400 hover:text-primary-600 opacity-0 group-hover:opacity-100">
                       <span class="material-symbols-outlined text-lg">visibility</span>
                     </a>
                   </div>
 
-                  <h4 class="font-bold text-gray-900 dark:text-white mb-1" x-text="order.vehiculo?.marca + ' ' + order.vehiculo?.modelo"></h4>
+                  <h4 class="font-bold text-gray-900 dark:text-white mb-1" x-text="(order.vehiculo?.marca || '') + ' ' + (order.vehiculo?.modelo || '')"></h4>
                   <p class="text-sm text-gray-500 mb-3" x-text="order.vehiculo?.patente"></p>
                   
                   <div class="flex items-center gap-2 mb-3">
-                    <div class="w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-600 dark:text-gray-300">
+                    <div class="w-6 h-6 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-xs font-bold">
                       <span x-text="(order.vehiculo?.cliente?.nombre || 'C')[0]"></span>
                     </div>
-                    <span class="text-xs text-gray-600 dark:text-gray-400 truncate" x-text="order.vehiculo?.cliente?.nombre + ' ' + (order.vehiculo?.cliente?.apellido || '')"></span>
+                    <span class="text-xs text-gray-600 dark:text-gray-400 truncate" x-text="(order.vehiculo?.cliente?.nombre || '') + ' ' + (order.vehiculo?.cliente?.apellido || '')"></span>
                   </div>
 
                   <div class="pt-3 border-t border-gray-100 dark:border-gray-700 flex justify-between items-center">
@@ -192,9 +205,8 @@ const columns = [
                       <span x-text="order.mecanico ? order.mecanico.nombre : 'Sin asignar'"></span>
                     </div>
                     
-                    <!-- Action Buttons based on status -->
                     <template x-if="order.estado === 'finalizado'">
-                      <a :href="'/encargado/gen_factura?orden=' + order.documentId" class="text-xs font-medium text-green-600 hover:text-green-700 flex items-center gap-1 bg-green-50 px-2 py-1 rounded">
+                      <a :href="'/encargado/gen_factura?orden=' + order.documentId" class="text-xs font-medium text-green-600 flex items-center gap-1 bg-green-50 px-2 py-1 rounded">
                         <span class="material-symbols-outlined text-sm">receipt_long</span>
                         Facturar
                       </a>
@@ -203,8 +215,7 @@ const columns = [
                 </div>
               </template>
               
-              <!-- Empty State for Column -->
-              <div x-show="getOrdersByStatus('${col.id}').length === 0" class="h-full flex flex-col items-center justify-center text-gray-400 opacity-50 min-h-[100px]">
+              <div x-show={`getOrdersByStatus('${col.id}').length === 0`} class="h-full flex flex-col items-center justify-center text-gray-400 opacity-50 min-h-[100px]">
                 <span class="material-symbols-outlined text-3xl mb-1">inbox</span>
                 <span class="text-xs">Vacío</span>
               </div>
@@ -214,17 +225,4 @@ const columns = [
       </div>
     </div>
   </div>
-
-  <style>
-    .custom-scrollbar::-webkit-scrollbar {
-      width: 4px;
-    }
-    .custom-scrollbar::-webkit-scrollbar-track {
-      background: transparent;
-    }
-    .custom-scrollbar::-webkit-scrollbar-thumb {
-      background-color: rgba(156, 163, 175, 0.5);
-      border-radius: 20px;
-    }
-  </style>
 </DashboardLayout>

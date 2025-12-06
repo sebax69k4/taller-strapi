@@ -60,7 +60,7 @@ if (Astro.request.method === 'POST' && orden) {
       error = 'Debe indicar el motivo de la reasignación';
     } else {
       const mecanicoAnterior = orden.mecanico ? `${orden.mecanico.nombre} ${orden.mecanico.apellido || ''}` : 'Sin asignar';
-      const nuevoMecanico = mecanicos.find(m => m.documentId === nuevoMecanicoId);
+      const nuevoMecanico = mecanicos.find(m => String(m.id) === nuevoMecanicoId);
       
       // Actualizar orden con nuevo mecánico
       await strapiPut(`/api/orden-de-trabajos/${ordenId}`, {
@@ -310,7 +310,7 @@ const getStatusColor = (status: string) => {
                     <input 
                       type="radio" 
                       name="mecanico_id"
-                      value={mec.documentId}
+                      value={mec.id}
                       disabled={esActual}
                       x-model="selectedMechanic"
                       class="sr-only"
@@ -338,7 +338,7 @@ const getStatusColor = (status: string) => {
                         {mec.cargaTrabajo} orden{mec.cargaTrabajo !== 1 ? 'es' : ''}
                       </span>
                     </div>
-                    <div class="absolute top-2 right-2" x-show={`selectedMechanic === '${mec.documentId}'`}>
+                    <div class="absolute top-2 right-2" x-show={`selectedMechanic === '${mec.id}'`}>
                       <span class="material-symbols-outlined text-primary-500">check_circle</span>
                     </div>
                   </label>

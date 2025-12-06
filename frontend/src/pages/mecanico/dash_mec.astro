@@ -3,64 +3,15 @@ export const prerender = false;
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
 import Card from '../../components/ui/Card.astro';
 import Badge from '../../components/ui/Badge.astro';
-import { strapiGet } from '../../lib/strapi';
 import '../../styles/global.css';
 
 const userRole = Astro.cookies.get('user_role')?.value;
 const mecanicoId = Astro.cookies.get('mecanico_id')?.value;
 const mechanicName = Astro.cookies.get('user_name')?.value || 'Mecánico';
+const apiBase = import.meta.env.PUBLIC_STRAPI_URL || 'http://localhost:1337';
 
 if (!userRole) {
   return Astro.redirect('/login');
-}
-
-// Fechas
-const today = new Date();
-const todayStr = today.toISOString().split('T')[0];
-
-let assignedOrders: any[] = [];
-let activeOrdersCount = 0;
-let completedTodayCount = 0;
-let totalCompletedCount = 0;
-let error = '';
-
-// Columnas del Kanban Personal
-let todoOrders: any[] = []; // Ingresado, En Diagnóstico
-let inProgressOrders: any[] = []; // En Reparación
-let doneOrders: any[] = []; // Finalizado
-
-try {
-  let endpoint = '/api/orden-de-trabajos?populate=vehiculo&sort=updatedAt:desc&pagination[limit]=100';
-  
-  // Filtrar por mecánico si existe ID (si no, modo demo/admin)
-  if (mecanicoId) {
-    endpoint = `/api/orden-de-trabajos?filters[mecanico][id][$eq]=${mecanicoId}&populate=vehiculo&sort=updatedAt:desc&pagination[limit]=100`;
-  }
-  
-  const ordersRes = await strapiGet(endpoint);
-  
-  if (ordersRes && ordersRes.data) {
-    assignedOrders = ordersRes.data;
-    
-    // Calcular KPIs
-    activeOrdersCount = assignedOrders.filter(o => !['entregado', 'facturado', 'finalizado'].includes(o.estado)).length;
-    
-    // Completadas hoy (estado finalizado/entregado/facturado y updated hoy)
-    completedTodayCount = assignedOrders.filter(o => 
-      ['finalizado', 'entregado', 'facturado'].includes(o.estado) && 
-      o.updatedAt.startsWith(todayStr)
-    ).length;
-    
-    totalCompletedCount = assignedOrders.filter(o => ['finalizado', 'entregado', 'facturado'].includes(o.estado)).length;
-
-    // Clasificar para Kanban
-    todoOrders = assignedOrders.filter(o => ['ingresado', 'en_diagnostico'].includes(o.estado));
-    inProgressOrders = assignedOrders.filter(o => ['en_reparacion'].includes(o.estado));
-    doneOrders = assignedOrders.filter(o => ['finalizado'].includes(o.estado));
-  }
-} catch (e: any) {
-  console.error('Error fetching orders:', e);
-  error = 'Error al cargar tus órdenes.';
 }
 
 const getGreeting = () => {
@@ -72,7 +23,86 @@ const getGreeting = () => {
 ---
 
 <DashboardLayout title="Dashboard Mecánico" role="mecanico" currentPath={Astro.url.pathname}>
-  <div class="max-w-7xl mx-auto">
+  <div class="max-w-7xl mx-auto" 
+    x-data=`{
+      mecanicoId: '${mecanicoId || ''}',
+      apiBase: '${apiBase}',
+      orders: [],
+      loading: true,
+      lastUpdate: null,
+      refreshInterval: null,
+
+      get todoOrders() {
+        return this.orders.filter(o => ['ingresado', 'en_diagnostico'].includes(o.estado));
+      },
+      get inProgressOrders() {
+        return this.orders.filter(o => ['en_reparacion'].includes(o.estado));
+      },
+      get doneOrders() {
+        return this.orders.filter(o => ['finalizado'].includes(o.estado));
+      },
+      get activeCount() {
+        return this.orders.filter(o => !['entregado', 'facturado', 'finalizado'].includes(o.estado)).length;
+      },
+      get completedTodayCount() {
+        const today = new Date().toISOString().split('T')[0];
+        return this.orders.filter(o => 
+          ['finalizado', 'entregado', 'facturado'].includes(o.estado) && 
+          o.updatedAt.startsWith(today)
+        ).length;
+      },
+      get totalCompletedCount() {
+        return this.orders.filter(o => ['finalizado', 'entregado', 'facturado'].includes(o.estado)).length;
+      },
+
+      async fetchOrders() {
+        try {
+          let endpoint = this.apiBase + '/api/orden-de-trabajos?populate=vehiculo,mecanico&sort=updatedAt:desc&pagination[limit]=100';
+          if (this.mecanicoId) {
+            endpoint = this.apiBase + '/api/orden-de-trabajos?filters[mecanico][id][$eq]=' + this.mecanicoId + '&populate=vehiculo,mecanico&sort=updatedAt:desc&pagination[limit]=100';
+          }
+          
+          console.log('🔧 Mechanic Dashboard - Fetching orders');
+          console.log('   mecanico_id cookie:', this.mecanicoId || 'NOT SET');
+          console.log('   endpoint:', endpoint);
+          
+          const res = await fetch(endpoint);
+          const data = await res.json();
+          
+          console.log('   orders found:', data.data?.length || 0);
+          if (data.data?.length > 0) {
+            console.log('   sample order mecanico:', data.data[0].mecanico);
+          }
+          
+          if (data.data) {
+            this.orders = data.data;
+          }
+          this.lastUpdate = new Date();
+          this.loading = false;
+        } catch (e) {
+          console.error('Error fetching orders:', e);
+          this.loading = false;
+        }
+      },
+
+      getTimeSinceUpdate() {
+        if (!this.lastUpdate) return '';
+        const seconds = Math.floor((new Date() - this.lastUpdate) / 1000);
+        if (seconds < 60) return 'hace ' + seconds + 's';
+        return 'hace ' + Math.floor(seconds / 60) + 'm';
+      },
+
+      init() {
+        this.fetchOrders();
+        this.refreshInterval = setInterval(() => this.fetchOrders(), 15000);
+      },
+
+      destroy() {
+        if (this.refreshInterval) clearInterval(this.refreshInterval);
+      }
+    }`
+    @beforeunload.window="destroy()"
+  >
     <!-- Header -->
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
       <div>
@@ -83,215 +113,198 @@ const getGreeting = () => {
           Aquí tienes el resumen de tu trabajo hoy.
         </p>
       </div>
-      <div class="flex gap-3">
+      <div class="flex items-center gap-3">
+        <!-- Auto-refresh indicator -->
+        <div class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700">
+          <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+          <span>Actualizado <span x-text="getTimeSinceUpdate()"></span></span>
+          <button @click="fetchOrders()" class="text-primary-600 hover:text-primary-700 ml-1" title="Actualizar ahora">
+            <span class="material-symbols-outlined text-sm" :class="loading && 'animate-spin'">refresh</span>
+          </button>
+        </div>
         <a href="/mecanico/solicitar_repuesto" class="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-2">
           <span class="material-symbols-outlined">add_shopping_cart</span>
           Solicitar Repuesto
         </a>
         <a href="/mecanico/historial_vehiculo" class="px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-2">
           <span class="material-symbols-outlined">history</span>
-          Historial Vehículo
+          Historial
         </a>
       </div>
     </div>
 
-    {error && (
-      <div class="p-4 mb-6 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg text-red-800 dark:text-red-200 flex items-center gap-2">
-        <span class="material-symbols-outlined">error</span>
-        <p>{error}</p>
-      </div>
-    )}
-
-    <!-- KPIs -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-      <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
-        <div class="absolute right-0 top-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10 blur-2xl"></div>
-        <div class="relative z-10">
-          <div class="flex items-center gap-3 mb-2">
-            <div class="p-2 bg-white/20 rounded-lg">
-              <span class="material-symbols-outlined text-xl">build</span>
-            </div>
-            <span class="text-blue-100 font-medium">En Progreso</span>
-          </div>
-          <p class="text-4xl font-bold">{activeOrdersCount}</p>
-          <p class="text-blue-100 text-sm mt-1">Órdenes activas</p>
-        </div>
-      </div>
-
-      <div class="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
-        <div class="absolute right-0 top-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10 blur-2xl"></div>
-        <div class="relative z-10">
-          <div class="flex items-center gap-3 mb-2">
-            <div class="p-2 bg-white/20 rounded-lg">
-              <span class="material-symbols-outlined text-xl">check_circle</span>
-            </div>
-            <span class="text-green-100 font-medium">Finalizadas Hoy</span>
-          </div>
-          <p class="text-4xl font-bold">{completedTodayCount}</p>
-          <p class="text-green-100 text-sm mt-1">Buen trabajo</p>
-        </div>
-      </div>
-
-      <div class="bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
-        <div class="absolute right-0 top-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10 blur-2xl"></div>
-        <div class="relative z-10">
-          <div class="flex items-center gap-3 mb-2">
-            <div class="p-2 bg-white/20 rounded-lg">
-              <span class="material-symbols-outlined text-xl">emoji_events</span>
-            </div>
-            <span class="text-purple-100 font-medium">Total Histórico</span>
-          </div>
-          <p class="text-4xl font-bold">{totalCompletedCount}</p>
-          <p class="text-purple-100 text-sm mt-1">Órdenes completadas</p>
-        </div>
+    <!-- Debug Info Panel (temporary) -->
+    <div class="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-sm" x-show="!loading">
+      <div class="flex items-center gap-2 text-amber-700 dark:text-amber-300">
+        <span class="material-symbols-outlined text-base">info</span>
+        <strong>Debug Info:</strong>
+        <span x-text="mecanicoId ? 'mecanico_id=' + mecanicoId : '⚠️ mecanico_id NO CONFIGURADO - mostrando todas las órdenes'"></span>
+        <span class="mx-2">|</span>
+        <span x-text="'Órdenes encontradas: ' + orders.length"></span>
+        <button @click="fetchOrders()" class="ml-auto px-2 py-1 bg-amber-200 dark:bg-amber-800 rounded text-xs hover:bg-amber-300">
+          🔄 Refrescar
+        </button>
       </div>
     </div>
 
-    <!-- Kanban Personal -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      
-      <!-- Columna: Por Hacer -->
-      <div class="flex flex-col gap-4">
-        <div class="flex items-center justify-between px-1">
-          <h2 class="font-bold text-gray-700 dark:text-gray-200 flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full bg-gray-400"></span>
-            Por Hacer
-            <span class="bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-0.5 rounded-full text-xs">{todoOrders.length}</span>
-          </h2>
+    <!-- Loading State -->
+    <template x-if="loading">
+      <div class="flex items-center justify-center py-20">
+        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      </div>
+    </template>
+
+    <template x-if="!loading">
+      <div>
+        <!-- KPIs -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+          <div class="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-xl p-5 shadow-lg shadow-blue-500/20">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center">
+                  <span class="material-symbols-outlined text-xl">build</span>
+                </div>
+                <span class="text-blue-100 font-medium">Activas</span>
+              </div>
+              <p class="text-4xl font-bold" x-text="activeCount">0</p>
+            </div>
+          </div>
+          <div class="bg-gradient-to-br from-green-500 to-green-600 text-white rounded-xl p-5 shadow-lg shadow-green-500/20">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center">
+                  <span class="material-symbols-outlined text-xl">check_circle</span>
+                </div>
+                <span class="text-green-100 font-medium">Hoy</span>
+              </div>
+              <p class="text-4xl font-bold" x-text="completedTodayCount">0</p>
+            </div>
+          </div>
+          <div class="bg-gradient-to-br from-purple-500 to-purple-600 text-white rounded-xl p-5 shadow-lg shadow-purple-500/20">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center">
+                  <span class="material-symbols-outlined text-xl">emoji_events</span>
+                </div>
+                <span class="text-purple-100 font-medium">Total</span>
+              </div>
+              <p class="text-4xl font-bold" x-text="totalCompletedCount">0</p>
+            </div>
+          </div>
         </div>
-        
-        <div class="flex flex-col gap-3 min-h-[200px]">
-          {todoOrders.length > 0 ? (
-            todoOrders.map(order => (
-              <a href={`/mecanico/detalle_orden_trabajo?id=${order.documentId}`} class="block group">
-                <Card noPadding class="hover:shadow-md transition-shadow border-l-4 border-l-gray-400">
-                  <div class="p-4">
+
+        <!-- Kanban -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <!-- Por Hacer -->
+          <div class="flex flex-col gap-4">
+            <div class="flex items-center justify-between px-1">
+              <h2 class="font-bold text-gray-700 dark:text-gray-200 flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-gray-400"></span>
+                Por Hacer
+                <span class="bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 px-2 py-0.5 rounded-full text-xs" x-text="todoOrders.length">0</span>
+              </h2>
+            </div>
+            <div class="flex flex-col gap-3 min-h-[200px]">
+              <template x-for="order in todoOrders" :key="order.id">
+                <a :href="`/mecanico/detalle_orden_trabajo?id=${order.documentId}`" class="block group">
+                  <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow border-l-4 border-l-gray-400 p-4">
                     <div class="flex justify-between items-start mb-2">
-                      <span class="font-bold text-gray-900 dark:text-white">OT-{order.id}</span>
-                      <Badge variant={order.estado === 'en_diagnostico' ? 'warning' : 'default'}>
-                        {order.estado === 'en_diagnostico' ? 'Diagnóstico' : 'Ingresado'}
-                      </Badge>
+                      <span class="font-bold text-gray-900 dark:text-white" x-text="'OT-' + order.id"></span>
+                      <span class="px-2 py-1 rounded-full text-xs font-medium"
+                        :class="order.estado === 'en_diagnostico' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-700'"
+                        x-text="order.estado === 'en_diagnostico' ? 'Diagnóstico' : 'Ingresado'">
+                      </span>
                     </div>
-                    <p class="text-sm font-medium text-gray-800 dark:text-gray-200 mb-1">
-                      {order.vehiculo?.marca} {order.vehiculo?.modelo}
-                    </p>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mb-3">
-                      {order.descripcion}
-                    </p>
-                    <div class="flex items-center justify-between text-xs text-gray-400">
-                      <span class="flex items-center gap-1">
-                        <span class="material-symbols-outlined text-sm">calendar_today</span>
-                        {new Date(order.createdAt).toLocaleDateString()}
-                      </span>
-                      <span class="group-hover:translate-x-1 transition-transform text-primary-600 font-medium">
-                        Ver detalles →
-                      </span>
+                    <p class="text-sm font-medium text-gray-800 dark:text-gray-200 mb-1" x-text="(order.vehiculo?.marca || '') + ' ' + (order.vehiculo?.modelo || '')"></p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mb-3" x-text="order.descripcion"></p>
+                    <div class="flex items-center justify-end text-xs text-primary-600 font-medium">
+                      <span class="group-hover:translate-x-1 transition-transform">Ver →</span>
                     </div>
                   </div>
-                </Card>
-              </a>
-            ))
-          ) : (
-            <div class="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl p-6 text-center text-gray-400">
-              <span class="material-symbols-outlined text-3xl mb-2">check</span>
-              <p class="text-sm">Nada pendiente</p>
+                </a>
+              </template>
+              <template x-if="todoOrders.length === 0">
+                <div class="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl p-6 text-center text-gray-400">
+                  <p class="text-sm">No hay órdenes pendientes</p>
+                </div>
+              </template>
             </div>
-          )}
-        </div>
-      </div>
+          </div>
 
-      <!-- Columna: En Progreso -->
-      <div class="flex flex-col gap-4">
-        <div class="flex items-center justify-between px-1">
-          <h2 class="font-bold text-blue-700 dark:text-blue-400 flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
-            En Progreso
-            <span class="bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 px-2 py-0.5 rounded-full text-xs">{inProgressOrders.length}</span>
-          </h2>
-        </div>
-        
-        <div class="flex flex-col gap-3 min-h-[200px]">
-          {inProgressOrders.length > 0 ? (
-            inProgressOrders.map(order => (
-              <a href={`/mecanico/detalle_orden_trabajo?id=${order.documentId}`} class="block group">
-                <Card noPadding class="hover:shadow-md transition-shadow border-l-4 border-l-blue-500">
-                  <div class="p-4">
+          <!-- En Progreso -->
+          <div class="flex flex-col gap-4">
+            <div class="flex items-center justify-between px-1">
+              <h2 class="font-bold text-blue-700 dark:text-blue-400 flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+                En Progreso
+                <span class="bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 px-2 py-0.5 rounded-full text-xs" x-text="inProgressOrders.length">0</span>
+              </h2>
+            </div>
+            <div class="flex flex-col gap-3 min-h-[200px]">
+              <template x-for="order in inProgressOrders" :key="order.id">
+                <a :href="`/mecanico/detalle_orden_trabajo?id=${order.documentId}`" class="block group">
+                  <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow border-l-4 border-l-blue-500 p-4">
                     <div class="flex justify-between items-start mb-2">
-                      <span class="font-bold text-gray-900 dark:text-white">OT-{order.id}</span>
-                      <Badge variant="info">Reparación</Badge>
+                      <span class="font-bold text-gray-900 dark:text-white" x-text="'OT-' + order.id"></span>
+                      <span class="bg-blue-100 text-blue-700 px-2 py-1 rounded-full text-xs font-medium">En Reparación</span>
                     </div>
-                    <p class="text-sm font-medium text-gray-800 dark:text-gray-200 mb-1">
-                      {order.vehiculo?.marca} {order.vehiculo?.modelo}
-                    </p>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mb-3">
-                      {order.descripcion}
-                    </p>
-                    <div class="flex items-center justify-between text-xs text-gray-400">
-                      <span class="flex items-center gap-1 text-blue-600 dark:text-blue-400 font-medium">
-                        <span class="material-symbols-outlined text-sm">timelapse</span>
-                        En curso
+                    <p class="text-sm font-medium text-gray-800 dark:text-gray-200 mb-1" x-text="(order.vehiculo?.marca || '') + ' ' + (order.vehiculo?.modelo || '')"></p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mb-3" x-text="order.descripcion"></p>
+                    <div class="flex items-center justify-between text-xs">
+                      <span class="flex items-center gap-1 text-blue-600">
+                        <span class="material-symbols-outlined text-sm animate-pulse">autorenew</span>
+                        Trabajando
                       </span>
-                      <span class="group-hover:translate-x-1 transition-transform text-primary-600 font-medium">
-                        Continuar →
-                      </span>
+                      <span class="group-hover:translate-x-1 transition-transform text-primary-600 font-medium">Ver →</span>
                     </div>
                   </div>
-                </Card>
-              </a>
-            ))
-          ) : (
-            <div class="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl p-6 text-center text-gray-400">
-              <span class="material-symbols-outlined text-3xl mb-2">handyman</span>
-              <p class="text-sm">Sin trabajos activos</p>
+                </a>
+              </template>
+              <template x-if="inProgressOrders.length === 0">
+                <div class="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl p-6 text-center text-gray-400">
+                  <p class="text-sm">No hay órdenes en progreso</p>
+                </div>
+              </template>
             </div>
-          )}
-        </div>
-      </div>
+          </div>
 
-      <!-- Columna: Listo / Finalizado -->
-      <div class="flex flex-col gap-4">
-        <div class="flex items-center justify-between px-1">
-          <h2 class="font-bold text-green-700 dark:text-green-400 flex items-center gap-2">
-            <span class="w-2 h-2 rounded-full bg-green-500"></span>
-            Listo para Entrega
-            <span class="bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-300 px-2 py-0.5 rounded-full text-xs">{doneOrders.length}</span>
-          </h2>
-        </div>
-        
-        <div class="flex flex-col gap-3 min-h-[200px]">
-          {doneOrders.length > 0 ? (
-            doneOrders.map(order => (
-              <a href={`/mecanico/detalle_orden_trabajo?id=${order.documentId}`} class="block group">
-                <Card noPadding class="hover:shadow-md transition-shadow border-l-4 border-l-green-500 opacity-75 hover:opacity-100">
-                  <div class="p-4">
+          <!-- Listo -->
+          <div class="flex flex-col gap-4">
+            <div class="flex items-center justify-between px-1">
+              <h2 class="font-bold text-green-700 dark:text-green-400 flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                Listo para Entrega
+                <span class="bg-green-50 dark:bg-green-900/30 text-green-600 dark:text-green-300 px-2 py-0.5 rounded-full text-xs" x-text="doneOrders.length">0</span>
+              </h2>
+            </div>
+            <div class="flex flex-col gap-3 min-h-[200px]">
+              <template x-for="order in doneOrders" :key="order.id">
+                <a :href="`/mecanico/detalle_orden_trabajo?id=${order.documentId}`" class="block group">
+                  <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow border-l-4 border-l-green-500 opacity-75 hover:opacity-100 p-4">
                     <div class="flex justify-between items-start mb-2">
-                      <span class="font-bold text-gray-900 dark:text-white">OT-{order.id}</span>
-                      <Badge variant="success">Finalizado</Badge>
+                      <span class="font-bold text-gray-900 dark:text-white" x-text="'OT-' + order.id"></span>
+                      <span class="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-medium">Finalizado</span>
                     </div>
-                    <p class="text-sm font-medium text-gray-800 dark:text-gray-200 mb-1">
-                      {order.vehiculo?.marca} {order.vehiculo?.modelo}
-                    </p>
+                    <p class="text-sm font-medium text-gray-800 dark:text-gray-200 mb-1" x-text="(order.vehiculo?.marca || '') + ' ' + (order.vehiculo?.modelo || '')"></p>
                     <div class="flex items-center justify-between text-xs text-gray-400 mt-3">
                       <span class="flex items-center gap-1 text-green-600 dark:text-green-400">
                         <span class="material-symbols-outlined text-sm">check_circle</span>
                         Completado
                       </span>
-                      <span class="group-hover:translate-x-1 transition-transform text-primary-600 font-medium">
-                        Ver →
-                      </span>
+                      <span class="group-hover:translate-x-1 transition-transform text-primary-600 font-medium">Ver →</span>
                     </div>
                   </div>
-                </Card>
-              </a>
-            ))
-          ) : (
-            <div class="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl p-6 text-center text-gray-400">
-              <p class="text-sm">No hay órdenes finalizadas recientes</p>
+                </a>
+              </template>
+              <template x-if="doneOrders.length === 0">
+                <div class="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl p-6 text-center text-gray-400">
+                  <p class="text-sm">No hay órdenes finalizadas</p>
+                </div>
+              </template>
             </div>
-          )}
+          </div>
         </div>
       </div>
-
-    </div>
+    </template>
   </div>
 </DashboardLayout>

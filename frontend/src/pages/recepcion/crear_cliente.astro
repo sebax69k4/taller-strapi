@@ -46,16 +46,76 @@ if (Astro.request.method === 'POST') {
     const comuna = params.get('comuna')?.trim() || '';
     const idToUpdate = params.get('id');
 
-    // Validaciones del servidor
+    // ========================================
+    // VALIDACIONES COMPLETAS DEL SERVIDOR
+    // ========================================
+
+    // 1. Validar Nombre
     const nombreVal = validateRequired(nombre, 'Nombre');
-    if (!nombreVal.valid) validationErrors.push(nombreVal.message);
+    if (!nombreVal.valid) {
+      validationErrors.push('⚠️ El nombre es obligatorio');
+    } else if (nombre.length < 2) {
+      validationErrors.push('⚠️ El nombre debe tener al menos 2 caracteres');
+    }
 
+    // 2. Validar Apellido
     const apellidoVal = validateRequired(apellido, 'Apellido');
-    if (!apellidoVal.valid) validationErrors.push(apellidoVal.message);
+    if (!apellidoVal.valid) {
+      validationErrors.push('⚠️ El apellido es obligatorio');
+    } else if (apellido.length < 2) {
+      validationErrors.push('⚠️ El apellido debe tener al menos 2 caracteres');
+    }
 
-    // Si hay errores de validación, redirigir
+    // 3. Validar RUT (formato y dígito verificador)
+    const rutVal = validateRut(rut);
+    if (!rutVal.valid) {
+      validationErrors.push(`⚠️ RUT: ${rutVal.message}`);
+    }
+
+    // 4. Validar Email
+    const emailVal = validateEmail(email);
+    if (!emailVal.valid) {
+      validationErrors.push(`⚠️ Email: ${emailVal.message}`);
+    }
+
+    // 5. Validar Teléfono
+    const telefonoVal = validatePhone(telefono);
+    if (!telefonoVal.valid) {
+      validationErrors.push(`⚠️ Teléfono: ${telefonoVal.message}`);
+    }
+
+    // 6. Validar RUT único (solo si el RUT es válido)
+    if (rutVal.valid) {
+      try {
+        // Limpiar RUT para búsqueda
+        const cleanedRut = rut.replace(/\./g, '').replace(/-/g, '').toUpperCase();
+        const existingClients = await strapiGet(`/api/clientes?filters[rut][$containsi]=${cleanedRut.slice(0, -1)}`);
+        
+        if (existingClients?.data && existingClients.data.length > 0) {
+          // Si estamos editando, verificar que no sea el mismo cliente
+          const isDuplicate = existingClients.data.some((c: any) => {
+            const existingRut = (c.rut || '').replace(/\./g, '').replace(/-/g, '').toUpperCase();
+            const currentRut = cleanedRut;
+            // Si es el mismo cliente que estamos editando, no es duplicado
+            if (idToUpdate && String(c.id) === String(idToUpdate)) {
+              return false;
+            }
+            return existingRut === currentRut;
+          });
+
+          if (isDuplicate) {
+            validationErrors.push('⚠️ Ya existe un cliente registrado con este RUT');
+          }
+        }
+      } catch (checkError) {
+        console.error('Error verificando RUT único:', checkError);
+        // No bloqueamos si hay error de conexión, pero logueamos
+      }
+    }
+
+    // Si hay errores de validación, redirigir con mensaje detallado
     if (validationErrors.length > 0) {
-      const errorMsg = validationErrors.join(', ');
+      const errorMsg = validationErrors.join(' | ');
       const redirectUrl = clientId ? `/recepcion/crear_cliente?id=${clientId}` : '/recepcion/crear_cliente';
       return Astro.redirect(`${redirectUrl}?message=${encodeURIComponent(errorMsg)}&type=error`);
     }

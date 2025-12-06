@@ -1,466 +1,323 @@
 ---
 export const prerender = false;
-
 import DashboardLayout from '../../layouts/DashboardLayout.astro';
-import Card from '../../components/ui/Card.astro';
-import KPICard from '../../components/ui/KPICard.astro';
-import Table from '../../components/ui/Table.astro';
-import Badge from '../../components/ui/Badge.astro';
 import '../../styles/global.css';
-import { strapiGet } from '../../lib/strapi';
 
-// Verificar sesión
 const userRole = Astro.cookies.get('user_role')?.value;
 const userName = Astro.cookies.get('user_name')?.value || 'Recepcionista';
+const apiBase = import.meta.env.PUBLIC_STRAPI_URL || 'http://localhost:1337';
 
 if (!userRole) {
   return Astro.redirect('/login');
 }
 
-// --- DATA FETCHING & STATE ---
-let ordersTodayCount = 0;
-let activeOrdersCount = 0;
-let readyForDeliveryCount = 0;
-let recentOrders: any[] = [];
-let totalClientes = 0;
-let totalVehiculos = 0;
-let ordenesPorEstado: Record<string, number> = {};
-let vehiculosListos: any[] = [];
-let error = '';
-
-const today = new Date().toISOString().split('T')[0];
 const currentHour = new Date().getHours();
-
-// Saludo según hora del día
 const getGreeting = () => {
-    if (currentHour < 12) return '¡Buenos días';
-    if (currentHour < 18) return '¡Buenas tardes';
-    return '¡Buenas noches';
-};
-
-try {
-    const [
-        ordersTodayData, 
-        activeOrdersData, 
-        readyData, 
-        recentOrdersData,
-        clientesData,
-        vehiculosData,
-        ingresadosData,
-        enDiagnosticoData,
-        enReparacionData,
-        finalizadosData,
-        readyVehiclesData
-    ] = await Promise.all([
-        // Órdenes creadas hoy
-        strapiGet(`/api/orden-de-trabajos?filters[createdAt][$gte]=${today}&pagination[pageSize]=1`),
-        // En Taller (No entregado ni facturado)
-        strapiGet('/api/orden-de-trabajos?filters[estado][$notIn][0]=entregado&filters[estado][$notIn][1]=facturado&pagination[pageSize]=1'),
-        // Listas para Entrega (Finalizado)
-        strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=finalizado&pagination[pageSize]=1'),
-        // Recientes
-        strapiGet('/api/orden-de-trabajos?sort[0]=createdAt:desc&pagination[limit]=8&populate=vehiculo&populate=vehiculo.cliente'),
-        // Total clientes
-        strapiGet('/api/clientes?pagination[pageSize]=1'),
-        // Total vehículos
-        strapiGet('/api/vehiculos?pagination[pageSize]=1'),
-        // Estados para gráfico
-        strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=ingresado&pagination[pageSize]=1'),
-        strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=en_diagnostico&pagination[pageSize]=1'),
-        strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=en_reparacion&pagination[pageSize]=1'),
-        strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=finalizado&pagination[pageSize]=1'),
-        // Vehículos listos para entrega con detalles
-        strapiGet('/api/orden-de-trabajos?filters[estado][$eq]=finalizado&populate=vehiculo&populate=vehiculo.cliente&pagination[limit]=5')
-    ]);
-
-    ordersTodayCount = ordersTodayData.meta?.pagination?.total || 0;
-    activeOrdersCount = activeOrdersData.meta?.pagination?.total || 0;
-    readyForDeliveryCount = readyData.meta?.pagination?.total || 0;
-    recentOrders = recentOrdersData.data || [];
-    totalClientes = clientesData.meta?.pagination?.total || 0;
-    totalVehiculos = vehiculosData.meta?.pagination?.total || 0;
-    vehiculosListos = readyVehiclesData.data || [];
-    
-    ordenesPorEstado = {
-        ingresado: ingresadosData.meta?.pagination?.total || 0,
-        en_diagnostico: enDiagnosticoData.meta?.pagination?.total || 0,
-        en_reparacion: enReparacionData.meta?.pagination?.total || 0,
-        finalizado: finalizadosData.meta?.pagination?.total || 0
-    };
-
-} catch (e: any) {
-    console.error('Error fetching dashboard data:', e);
-    error = e.message;
-}
-
-const totalOrdenesTaller = Object.values(ordenesPorEstado).reduce((a, b) => a + b, 0);
-
-const getStatusVariant = (status: string) => {
-  switch (status) {
-    case 'entregado': return 'success';
-    case 'facturado': return 'info';
-    case 'finalizado': return 'success';
-    case 'ingresado': return 'warning';
-    case 'en_diagnostico': return 'info';
-    case 'en_reparacion': return 'info';
-    default: return 'default';
-  }
-};
-
-const formatStatus = (status: string) => {
-  const map: Record<string, string> = {
-    ingresado: 'Ingresado',
-    en_diagnostico: 'En Diagnóstico',
-    en_reparacion: 'En Reparación',
-    finalizado: 'Listo para Entrega',
-    facturado: 'Facturado',
-    entregado: 'Entregado'
-  };
-  return map[status] || status;
-};
-
-const getStatusColor = (status: string) => {
-  const colors: Record<string, string> = {
-    ingresado: 'bg-amber-500',
-    en_diagnostico: 'bg-blue-500',
-    en_reparacion: 'bg-purple-500',
-    finalizado: 'bg-green-500'
-  };
-  return colors[status] || 'bg-gray-500';
+  if (currentHour < 12) return '¡Buenos días';
+  if (currentHour < 18) return '¡Buenas tardes';
+  return '¡Buenas noches';
 };
 ---
 
 <DashboardLayout title="Dashboard Recepción" role="recepcionista" currentPath={Astro.url.pathname}>
-    {error && (
-        <div class="p-4 mb-6 text-sm text-red-700 bg-red-50 rounded-lg border border-red-100 flex items-center gap-2" role="alert">
-            <span class="material-symbols-outlined text-lg">error</span>
-            <span>Error cargando datos: {error}</span>
-        </div>
-    )}
-    
-    <div class="max-w-7xl mx-auto">
-        <!-- Header con hora actual -->
-        <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-            <div>
-                <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">
-                    {getGreeting()}, {userName}!
-                </h1>
-                <p class="text-gray-500 dark:text-gray-400 flex items-center gap-2 mt-1">
-                    <span class="material-symbols-outlined text-sm">calendar_today</span>
-                    {new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-                </p>
-            </div>
-            <div class="flex gap-3">
-                <a href="/recepcion/crear_orden" class="inline-flex items-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors font-medium shadow-lg shadow-primary-600/20">
-                    <span class="material-symbols-outlined">add</span>
-                    Nueva Orden
-                </a>
-            </div>
-        </div>
+  <div class="max-w-7xl mx-auto"
+    x-data=`{
+      apiBase: '${apiBase}',
+      loading: true,
+      lastUpdate: null,
+      
+      // KPIs
+      ordersTodayCount: 0,
+      activeOrdersCount: 0,
+      readyForDeliveryCount: 0,
+      totalClientes: 0,
+      totalVehiculos: 0,
+      
+      // Data
+      recentOrders: [],
+      vehiculosListos: [],
+      ordenesPorEstado: { ingresado: 0, en_diagnostico: 0, en_reparacion: 0, finalizado: 0 },
 
-        <!-- KPIs Row 1 -->
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-5 text-white shadow-lg shadow-blue-500/20">
-                <div class="flex items-center justify-between mb-3">
-                    <span class="text-blue-100 text-sm font-medium">Órdenes Hoy</span>
-                    <div class="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
-                        <span class="material-symbols-outlined text-xl">today</span>
-                    </div>
-                </div>
-                <p class="text-4xl font-bold">{ordersTodayCount}</p>
-                <p class="text-blue-100 text-sm mt-1">nuevas este día</p>
-            </div>
-            
-            <div class="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl p-5 text-white shadow-lg shadow-purple-500/20">
-                <div class="flex items-center justify-between mb-3">
-                    <span class="text-purple-100 text-sm font-medium">En Taller</span>
-                    <div class="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
-                        <span class="material-symbols-outlined text-xl">garage</span>
-                    </div>
-                </div>
-                <p class="text-4xl font-bold">{activeOrdersCount}</p>
-                <p class="text-purple-100 text-sm mt-1">vehículos activos</p>
-            </div>
-            
-            <div class="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl p-5 text-white shadow-lg shadow-green-500/20 relative overflow-hidden">
-                {readyForDeliveryCount > 0 && (
-                    <div class="absolute top-2 right-2 w-3 h-3 bg-white rounded-full animate-ping"></div>
-                )}
-                <div class="flex items-center justify-between mb-3">
-                    <span class="text-green-100 text-sm font-medium">Listos para Entrega</span>
-                    <div class="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
-                        <span class="material-symbols-outlined text-xl">key</span>
-                    </div>
-                </div>
-                <p class="text-4xl font-bold">{readyForDeliveryCount}</p>
-                <p class="text-green-100 text-sm mt-1">esperando cliente</p>
-            </div>
-            
-            <div class="bg-gradient-to-br from-amber-500 to-orange-500 rounded-2xl p-5 text-white shadow-lg shadow-orange-500/20">
-                <div class="flex items-center justify-between mb-3">
-                    <span class="text-amber-100 text-sm font-medium">Ingresados</span>
-                    <div class="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
-                        <span class="material-symbols-outlined text-xl">pending</span>
-                    </div>
-                </div>
-                <p class="text-4xl font-bold">{ordenesPorEstado.ingresado}</p>
-                <p class="text-amber-100 text-sm mt-1">pendientes de asignar</p>
-            </div>
+      get totalOrdenesTaller() {
+        return Object.values(this.ordenesPorEstado).reduce((a, b) => a + b, 0);
+      },
+
+      getStatusColor(status) {
+        const colors = { ingresado: 'bg-amber-500', en_diagnostico: 'bg-blue-500', en_reparacion: 'bg-purple-500', finalizado: 'bg-green-500' };
+        return colors[status] || 'bg-gray-500';
+      },
+
+      formatStatus(status) {
+        const map = { ingresado: 'Ingresado', en_diagnostico: 'En Diagnóstico', en_reparacion: 'En Reparación', finalizado: 'Listo', facturado: 'Facturado', entregado: 'Entregado' };
+        return map[status] || status;
+      },
+
+      getStatusBg(status) {
+        const bg = { ingresado: 'bg-amber-100 text-amber-700', en_diagnostico: 'bg-blue-100 text-blue-700', en_reparacion: 'bg-purple-100 text-purple-700', finalizado: 'bg-green-100 text-green-700' };
+        return bg[status] || 'bg-gray-100 text-gray-700';
+      },
+
+      formatTimeAgo(dateStr) {
+        const date = new Date(dateStr);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        if (diffMins < 60) return 'hace ' + diffMins + ' min';
+        if (diffHours < 24) return 'hace ' + diffHours + 'h';
+        return 'hace ' + Math.floor(diffMs / 86400000) + ' días';
+      },
+
+      getTimeSinceUpdate() {
+        if (!this.lastUpdate) return '';
+        const s = Math.floor((new Date() - this.lastUpdate) / 1000);
+        return s < 60 ? 'hace ' + s + 's' : 'hace ' + Math.floor(s/60) + 'm';
+      },
+
+      async fetchData() {
+        const today = new Date().toISOString().split('T')[0];
+        try {
+          const [todayRes, activeRes, readyRes, recentRes, clientesRes, vehiculosRes, ingRes, diagRes, repRes, finRes, listosRes] = await Promise.all([
+            fetch(this.apiBase + '/api/orden-de-trabajos?filters[createdAt][$gte]=' + today + '&pagination[pageSize]=1'),
+            fetch(this.apiBase + '/api/orden-de-trabajos?filters[estado][$notIn][0]=entregado&filters[estado][$notIn][1]=facturado&pagination[pageSize]=1'),
+            fetch(this.apiBase + '/api/orden-de-trabajos?filters[estado][$eq]=finalizado&pagination[pageSize]=1'),
+            fetch(this.apiBase + '/api/orden-de-trabajos?sort[0]=createdAt:desc&pagination[limit]=8&populate=vehiculo&populate=vehiculo.cliente'),
+            fetch(this.apiBase + '/api/clientes?pagination[pageSize]=1'),
+            fetch(this.apiBase + '/api/vehiculos?pagination[pageSize]=1'),
+            fetch(this.apiBase + '/api/orden-de-trabajos?filters[estado][$eq]=ingresado&pagination[pageSize]=1'),
+            fetch(this.apiBase + '/api/orden-de-trabajos?filters[estado][$eq]=en_diagnostico&pagination[pageSize]=1'),
+            fetch(this.apiBase + '/api/orden-de-trabajos?filters[estado][$eq]=en_reparacion&pagination[pageSize]=1'),
+            fetch(this.apiBase + '/api/orden-de-trabajos?filters[estado][$eq]=finalizado&pagination[pageSize]=1'),
+            fetch(this.apiBase + '/api/orden-de-trabajos?filters[estado][$eq]=finalizado&populate=vehiculo&populate=vehiculo.cliente&pagination[limit]=5')
+          ]);
+
+          const [todayData, activeData, readyData, recentData, clientesData, vehiculosData, ingData, diagData, repData, finData, listosData] = await Promise.all([
+            todayRes.json(), activeRes.json(), readyRes.json(), recentRes.json(), clientesRes.json(), vehiculosRes.json(), ingData = ingRes.json(), diagRes.json(), repRes.json(), finRes.json(), listosRes.json()
+          ]);
+
+          this.ordersTodayCount = todayData.meta?.pagination?.total || 0;
+          this.activeOrdersCount = activeData.meta?.pagination?.total || 0;
+          this.readyForDeliveryCount = readyData.meta?.pagination?.total || 0;
+          this.recentOrders = recentData.data || [];
+          this.totalClientes = clientesData.meta?.pagination?.total || 0;
+          this.totalVehiculos = vehiculosData.meta?.pagination?.total || 0;
+          this.vehiculosListos = listosData.data || [];
+          
+          this.ordenesPorEstado = {
+            ingresado: ingData.meta?.pagination?.total || 0,
+            en_diagnostico: diagData.meta?.pagination?.total || 0,
+            en_reparacion: repData.meta?.pagination?.total || 0,
+            finalizado: finData.meta?.pagination?.total || 0
+          };
+
+          this.lastUpdate = new Date();
+          this.loading = false;
+        } catch(e) {
+          console.error('Error:', e);
+          this.loading = false;
+        }
+      },
+
+      init() {
+        this.fetchData();
+        setInterval(() => this.fetchData(), 15000);
+      }
+    }`
+  >
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+      <div>
+        <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">
+          {getGreeting()}, {userName}!
+        </h1>
+        <p class="text-gray-500 dark:text-gray-400 flex items-center gap-2 mt-1">
+          <span class="material-symbols-outlined text-sm">calendar_today</span>
+          {new Date().toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+        </p>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2 text-sm text-gray-500 bg-white dark:bg-gray-800 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700">
+          <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+          <span>Actualizado <span x-text="getTimeSinceUpdate()"></span></span>
+          <button @click="fetchData()" class="text-primary-600 hover:text-primary-700 ml-1">
+            <span class="material-symbols-outlined text-sm" :class="loading && 'animate-spin'">refresh</span>
+          </button>
         </div>
-
-        <!-- Main Content Grid -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-            
-            <!-- Estado de Órdenes (2/3 width) -->
-            <div class="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6">
-                <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
-                    <span class="material-symbols-outlined text-primary-600">donut_large</span>
-                    Estado de Órdenes en Taller
-                </h2>
-                
-                <!-- Progress bars -->
-                <div class="space-y-4">
-                    {Object.entries(ordenesPorEstado).map(([estado, count]) => (
-                        <div>
-                            <div class="flex justify-between items-center mb-2">
-                                <span class="text-sm font-medium text-gray-700 dark:text-gray-300 capitalize">
-                                    {formatStatus(estado)}
-                                </span>
-                                <span class="text-sm font-bold text-gray-900 dark:text-white">{count}</span>
-                            </div>
-                            <div class="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
-                                <div 
-                                    class={`h-full rounded-full transition-all duration-500 ${getStatusColor(estado)}`}
-                                    style={`width: ${totalOrdenesTaller > 0 ? (count / totalOrdenesTaller) * 100 : 0}%`}
-                                ></div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-                
-                <!-- Total -->
-                <div class="mt-6 pt-4 border-t border-gray-100 dark:border-gray-700 flex justify-between items-center">
-                    <span class="text-gray-500 dark:text-gray-400">Total en taller</span>
-                    <span class="text-2xl font-bold text-gray-900 dark:text-white">{totalOrdenesTaller}</span>
-                </div>
-            </div>
-            
-            <!-- Estadísticas Rápidas (1/3 width) -->
-            <div class="space-y-4">
-                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-5">
-                    <div class="flex items-center gap-4">
-                        <div class="p-3 bg-blue-100 dark:bg-blue-900/30 rounded-xl">
-                            <span class="material-symbols-outlined text-2xl text-blue-600 dark:text-blue-400">group</span>
-                        </div>
-                        <div>
-                            <p class="text-2xl font-bold text-gray-900 dark:text-white">{totalClientes}</p>
-                            <p class="text-sm text-gray-500 dark:text-gray-400">Clientes registrados</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-5">
-                    <div class="flex items-center gap-4">
-                        <div class="p-3 bg-purple-100 dark:bg-purple-900/30 rounded-xl">
-                            <span class="material-symbols-outlined text-2xl text-purple-600 dark:text-purple-400">directions_car</span>
-                        </div>
-                        <div>
-                            <p class="text-2xl font-bold text-gray-900 dark:text-white">{totalVehiculos}</p>
-                            <p class="text-sm text-gray-500 dark:text-gray-400">Vehículos en sistema</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Alerta de listos para entrega -->
-                {readyForDeliveryCount > 0 && (
-                    <div class="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-2xl p-5 border border-green-200 dark:border-green-800">
-                        <div class="flex items-start gap-3">
-                            <div class="p-2 bg-green-500 rounded-lg text-white animate-pulse">
-                                <span class="material-symbols-outlined">notifications_active</span>
-                            </div>
-                            <div>
-                                <p class="font-bold text-green-800 dark:text-green-300">¡Atención!</p>
-                                <p class="text-sm text-green-700 dark:text-green-400 mt-1">
-                                    {readyForDeliveryCount} vehículo{readyForDeliveryCount > 1 ? 's' : ''} listo{readyForDeliveryCount > 1 ? 's' : ''} para entregar
-                                </p>
-                                <a href="/recepcion/entrega_vehiculo" class="inline-flex items-center gap-1 text-sm font-medium text-green-700 dark:text-green-400 hover:text-green-800 mt-2">
-                                    Ver entregas <span class="material-symbols-outlined text-sm">arrow_forward</span>
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </div>
-        </div>
-
-        <!-- Quick Actions -->
-        <section class="mb-8">
-            <h2 class="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                <span class="material-symbols-outlined text-primary-600">rocket_launch</span>
-                Accesos Rápidos
-            </h2>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <a href="/recepcion/crear_cliente" class="group bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-100 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 hover:shadow-lg hover:shadow-blue-500/10 transition-all duration-200 hover:-translate-y-1">
-                    <div class="w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-3 group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                        <span class="material-symbols-outlined text-2xl">person_add</span>
-                    </div>
-                    <h3 class="font-bold text-gray-900 dark:text-white">Nuevo Cliente</h3>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Registrar cliente</p>
-                </a>
-                
-                <a href="/recepcion/crear_vehiculo" class="group bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-100 dark:border-gray-700 hover:border-purple-300 dark:hover:border-purple-600 hover:shadow-lg hover:shadow-purple-500/10 transition-all duration-200 hover:-translate-y-1">
-                    <div class="w-12 h-12 rounded-xl bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 flex items-center justify-center mb-3 group-hover:bg-purple-600 group-hover:text-white transition-colors">
-                        <span class="material-symbols-outlined text-2xl">directions_car</span>
-                    </div>
-                    <h3 class="font-bold text-gray-900 dark:text-white">Nuevo Vehículo</h3>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Asociar a cliente</p>
-                </a>
-                
-                <a href="/recepcion/crear_orden" class="group bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-100 dark:border-gray-700 hover:border-orange-300 dark:hover:border-orange-600 hover:shadow-lg hover:shadow-orange-500/10 transition-all duration-200 hover:-translate-y-1">
-                    <div class="w-12 h-12 rounded-xl bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 flex items-center justify-center mb-3 group-hover:bg-orange-600 group-hover:text-white transition-colors">
-                        <span class="material-symbols-outlined text-2xl">post_add</span>
-                    </div>
-                    <h3 class="font-bold text-gray-900 dark:text-white">Nueva Orden</h3>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Ingresar vehículo</p>
-                </a>
-                
-                <a href="/recepcion/list_c_y_v" class="group bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-100 dark:border-gray-700 hover:border-teal-300 dark:hover:border-teal-600 hover:shadow-lg hover:shadow-teal-500/10 transition-all duration-200 hover:-translate-y-1">
-                    <div class="w-12 h-12 rounded-xl bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 flex items-center justify-center mb-3 group-hover:bg-teal-600 group-hover:text-white transition-colors">
-                        <span class="material-symbols-outlined text-2xl">manage_search</span>
-                    </div>
-                    <h3 class="font-bold text-gray-900 dark:text-white">Buscar Cliente</h3>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Gestión de clientes</p>
-                </a>
-            </div>
-        </section>
-
-        <!-- Two columns: Recent Activity + Ready for Delivery -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <!-- Recent Activity -->
-            <section>
-                <div class="flex items-center justify-between mb-4">
-                    <h2 class="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                        <span class="material-symbols-outlined text-primary-600">history</span>
-                        Actividad Reciente
-                    </h2>
-                    <a href="/recepcion/ver_estado_orden" class="text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1">
-                        Ver todo <span class="material-symbols-outlined text-sm">arrow_forward</span>
-                    </a>
-                </div>
-                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
-                    {recentOrders.length > 0 ? (
-                        <div class="divide-y divide-gray-100 dark:divide-gray-700">
-                            {recentOrders.slice(0, 5).map((order: any) => (
-                                <a href={`/recepcion/orden/${order.documentId}`} class="block p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                                    <div class="flex items-center justify-between">
-                                        <div class="flex items-center gap-3">
-                                            <div class="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
-                                                <span class="material-symbols-outlined text-gray-500 dark:text-gray-400">receipt_long</span>
-                                            </div>
-                                            <div>
-                                                <p class="font-semibold text-gray-900 dark:text-white">OT-{order.id}</p>
-                                                <p class="text-sm text-gray-500 dark:text-gray-400">
-                                                    {order.vehiculo ? `${order.vehiculo.marca} ${order.vehiculo.modelo}` : 'N/A'}
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <div class="text-right">
-                                            <Badge variant={getStatusVariant(order.estado)}>
-                                                {formatStatus(order.estado)}
-                                            </Badge>
-                                            <div class="flex items-center justify-end gap-2 mt-1">
-                                                {order.vehiculo?.cliente?.telefono && (
-                                                    <a 
-                                                        href={`https://wa.me/${order.vehiculo.cliente.telefono.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola ${order.vehiculo.cliente.nombre}, su vehículo ${order.vehiculo.marca} ${order.vehiculo.modelo} ha ingresado a taller con la orden OT-${order.id}. Le mantendremos informado.`)}`}
-                                                        target="_blank"
-                                                        class="text-green-600 hover:text-green-700 p-1 rounded-full hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors"
-                                                        title="Enviar WhatsApp"
-                                                        @click.stop
-                                                    >
-                                                        <span class="material-symbols-outlined text-[18px]">chat</span>
-                                                    </a>
-                                                )}
-                                                <p class="text-xs text-gray-400">
-                                                    {new Date(order.createdAt).toLocaleDateString('es-CL', { day: '2-digit', month: 'short' })}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </a>
-                            ))}
-                        </div>
-                    ) : (
-                        <div class="p-8 text-center text-gray-500 dark:text-gray-400">
-                            <span class="material-symbols-outlined text-4xl mb-2 text-gray-300">inbox</span>
-                            <p>No hay actividad reciente.</p>
-                        </div>
-                    )}
-                </div>
-            </section>
-
-            <!-- Vehículos listos para entrega -->
-            <section>
-                <div class="flex items-center justify-between mb-4">
-                    <h2 class="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                        <span class="material-symbols-outlined text-green-600">check_circle</span>
-                        Listos para Entregar
-                    </h2>
-                    {vehiculosListos.length > 0 && (
-                        <span class="px-2 py-1 text-xs font-bold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded-full">
-                            {vehiculosListos.length}
-                        </span>
-                    )}
-                </div>
-                <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
-                    {vehiculosListos.length > 0 ? (
-                        <div class="divide-y divide-gray-100 dark:divide-gray-700">
-                            {vehiculosListos.map((order: any) => (
-                                <div class="p-4 hover:bg-green-50/50 dark:hover:bg-green-900/10 transition-colors">
-                                    <div class="flex items-center justify-between">
-                                        <div class="flex items-center gap-3">
-                                            <div class="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                                                <span class="material-symbols-outlined text-green-600 dark:text-green-400">key</span>
-                                            </div>
-                                            <div>
-                                                <p class="font-semibold text-gray-900 dark:text-white">
-                                                    {order.vehiculo?.patente || 'N/A'}
-                                                </p>
-                                                <p class="text-sm text-gray-500 dark:text-gray-400">
-                                                    {order.vehiculo ? `${order.vehiculo.marca} ${order.vehiculo.modelo}` : 'N/A'}
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <div class="text-right">
-                                            <p class="text-sm font-medium text-gray-900 dark:text-white">
-                                                {order.vehiculo?.cliente ? `${order.vehiculo.cliente.nombre}` : 'N/A'}
-                                            </p>
-                                            <div class="flex items-center justify-end gap-3 mt-1">
-                                                {order.vehiculo?.cliente?.telefono && (
-                                                    <a 
-                                                        href={`https://wa.me/${order.vehiculo.cliente.telefono.replace(/\D/g, '')}?text=${encodeURIComponent(`Hola ${order.vehiculo.cliente.nombre}, su vehículo ${order.vehiculo.marca} ${order.vehiculo.modelo} está listo para retiro. ¡Le esperamos!`)}`}
-                                                        target="_blank"
-                                                        class="text-green-600 hover:text-green-700 flex items-center gap-1 text-xs font-medium"
-                                                    >
-                                                        <span class="material-symbols-outlined text-[16px]">chat</span> Notificar
-                                                    </a>
-                                                )}
-                                                <a href={`/recepcion/entrega_vehiculo?orden=${order.documentId}`} class="text-xs text-green-600 hover:text-green-700 font-medium flex items-center gap-1">
-                                                    Procesar entrega <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
-                                                </a>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <div class="p-8 text-center text-gray-500 dark:text-gray-400">
-                            <span class="material-symbols-outlined text-4xl mb-2 text-gray-300">inventory_2</span>
-                            <p>No hay vehículos listos para entrega.</p>
-                        </div>
-                    )}
-                </div>
-            </section>
-        </div>
+        <a href="/recepcion/crear_orden" class="inline-flex items-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium shadow-lg shadow-primary-600/20">
+          <span class="material-symbols-outlined">add</span>
+          Nueva Orden
+        </a>
+      </div>
     </div>
+
+    <!-- Loading -->
+    <template x-if="loading">
+      <div class="flex items-center justify-center py-20">
+        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      </div>
+    </template>
+
+    <template x-if="!loading">
+      <div>
+        <!-- KPIs -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div class="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-5 text-white shadow-lg shadow-blue-500/20">
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-blue-100 text-sm font-medium">Órdenes Hoy</span>
+              <div class="p-2 bg-white/20 rounded-lg"><span class="material-symbols-outlined text-xl">today</span></div>
+            </div>
+            <p class="text-4xl font-bold" x-text="ordersTodayCount">0</p>
+            <p class="text-blue-100 text-sm mt-1">nuevas este día</p>
+          </div>
+          
+          <div class="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl p-5 text-white shadow-lg shadow-purple-500/20">
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-purple-100 text-sm font-medium">En Taller</span>
+              <div class="p-2 bg-white/20 rounded-lg"><span class="material-symbols-outlined text-xl">garage</span></div>
+            </div>
+            <p class="text-4xl font-bold" x-text="activeOrdersCount">0</p>
+            <p class="text-purple-100 text-sm mt-1">vehículos activos</p>
+          </div>
+          
+          <div class="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl p-5 text-white shadow-lg shadow-green-500/20 relative overflow-hidden">
+            <div x-show="readyForDeliveryCount > 0" class="absolute top-2 right-2 w-3 h-3 bg-white rounded-full animate-ping"></div>
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-green-100 text-sm font-medium">Listos para Entrega</span>
+              <div class="p-2 bg-white/20 rounded-lg"><span class="material-symbols-outlined text-xl">key</span></div>
+            </div>
+            <p class="text-4xl font-bold" x-text="readyForDeliveryCount">0</p>
+            <p class="text-green-100 text-sm mt-1">esperando cliente</p>
+          </div>
+          
+          <div class="bg-gradient-to-br from-amber-500 to-orange-500 rounded-2xl p-5 text-white shadow-lg shadow-orange-500/20">
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-amber-100 text-sm font-medium">Clientes / Vehículos</span>
+              <div class="p-2 bg-white/20 rounded-lg"><span class="material-symbols-outlined text-xl">groups</span></div>
+            </div>
+            <p class="text-4xl font-bold"><span x-text="totalClientes">0</span> / <span x-text="totalVehiculos">0</span></p>
+            <p class="text-amber-100 text-sm mt-1">registrados</p>
+          </div>
+        </div>
+
+        <!-- Content Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <!-- Órdenes Recientes -->
+          <div class="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            <div class="p-5 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <h2 class="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                <span class="material-symbols-outlined text-primary-600">list_alt</span>
+                Órdenes Recientes
+              </h2>
+              <a href="/recepcion/ver_estado_orden" class="text-primary-600 hover:underline text-sm">Ver todas</a>
+            </div>
+            <div class="divide-y divide-gray-100 dark:divide-gray-700">
+              <template x-for="order in recentOrders" :key="order.id">
+                <a :href="'/recepcion/ver_estado_orden?type=orden&q=' + order.id" class="block p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                      <div class="w-10 h-10 rounded-lg flex items-center justify-center" :class="getStatusBg(order.estado)">
+                        <span class="material-symbols-outlined text-lg">directions_car</span>
+                      </div>
+                      <div>
+                        <div class="flex items-center gap-2">
+                          <span class="font-bold text-gray-900 dark:text-white" x-text="'OT-' + order.id"></span>
+                          <span class="text-xs px-2 py-0.5 rounded-full" :class="getStatusBg(order.estado)" x-text="formatStatus(order.estado)"></span>
+                        </div>
+                        <p class="text-sm text-gray-500" x-text="(order.vehiculo?.marca || '') + ' ' + (order.vehiculo?.modelo || '') + ' - ' + (order.vehiculo?.patente || '')"></p>
+                      </div>
+                    </div>
+                    <div class="text-right">
+                      <p class="text-xs text-gray-400" x-text="formatTimeAgo(order.createdAt)"></p>
+                      <p class="text-sm text-gray-600 dark:text-gray-300" x-text="(order.vehiculo?.cliente?.nombre || '') + ' ' + (order.vehiculo?.cliente?.apellido || '')"></p>
+                    </div>
+                  </div>
+                </a>
+              </template>
+              <template x-if="recentOrders.length === 0">
+                <div class="p-8 text-center text-gray-500">
+                  <span class="material-symbols-outlined text-4xl mb-2">inbox</span>
+                  <p>No hay órdenes recientes</p>
+                </div>
+              </template>
+            </div>
+          </div>
+
+          <!-- Panel derecho -->
+          <div class="space-y-6">
+            <!-- Estado del Taller -->
+            <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5">
+              <h3 class="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                <span class="material-symbols-outlined text-primary-600">analytics</span>
+                Estado del Taller
+              </h3>
+              <div class="space-y-3">
+                <template x-for="(count, estado) in ordenesPorEstado" :key="estado">
+                  <div>
+                    <div class="flex justify-between text-sm mb-1">
+                      <span class="text-gray-600 dark:text-gray-300" x-text="formatStatus(estado)"></span>
+                      <span class="font-bold" x-text="count"></span>
+                    </div>
+                    <div class="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                      <div class="h-full rounded-full transition-all" :class="getStatusColor(estado)" :style="'width: ' + (totalOrdenesTaller > 0 ? (count / totalOrdenesTaller * 100) : 0) + '%'"></div>
+                    </div>
+                  </div>
+                </template>
+              </div>
+              <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 text-center">
+                <span class="text-2xl font-bold text-gray-900 dark:text-white" x-text="totalOrdenesTaller"></span>
+                <span class="text-gray-500 text-sm ml-2">órdenes en taller</span>
+              </div>
+            </div>
+
+            <!-- Listos para Entrega -->
+            <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5">
+              <h3 class="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                <span class="material-symbols-outlined text-green-600">key</span>
+                Listos para Entrega
+              </h3>
+              <div class="space-y-3">
+                <template x-for="orden in vehiculosListos" :key="orden.id">
+                  <a :href="'/recepcion/confirmar_pago'" class="block p-3 bg-green-50 dark:bg-green-900/20 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30">
+                    <div class="flex items-center gap-3">
+                      <span class="material-symbols-outlined text-green-600">check_circle</span>
+                      <div>
+                        <p class="font-medium text-gray-900 dark:text-white" x-text="'OT-' + orden.id"></p>
+                        <p class="text-xs text-gray-500" x-text="(orden.vehiculo?.marca || '') + ' ' + (orden.vehiculo?.patente || '')"></p>
+                      </div>
+                    </div>
+                  </a>
+                </template>
+                <template x-if="vehiculosListos.length === 0">
+                  <p class="text-center text-gray-500 text-sm py-4">No hay vehículos listos</p>
+                </template>
+              </div>
+            </div>
+
+            <!-- Acciones Rápidas -->
+            <div class="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-5">
+              <h3 class="font-bold text-gray-900 dark:text-white mb-4">Acciones Rápidas</h3>
+              <div class="grid grid-cols-2 gap-2">
+                <a href="/recepcion/crear_cliente" class="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 text-center">
+                  <span class="material-symbols-outlined text-primary-600 block mb-1">person_add</span>
+                  <span class="text-xs text-gray-600 dark:text-gray-300">Nuevo Cliente</span>
+                </a>
+                <a href="/recepcion/crear_vehiculo" class="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 text-center">
+                  <span class="material-symbols-outlined text-primary-600 block mb-1">directions_car</span>
+                  <span class="text-xs text-gray-600 dark:text-gray-300">Nuevo Vehículo</span>
+                </a>
+                <a href="/recepcion/agenda" class="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 text-center">
+                  <span class="material-symbols-outlined text-primary-600 block mb-1">calendar_month</span>
+                  <span class="text-xs text-gray-600 dark:text-gray-300">Agenda</span>
+                </a>
+                <a href="/recepcion/confirmar_pago" class="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 text-center">
+                  <span class="material-symbols-outlined text-primary-600 block mb-1">payments</span>
+                  <span class="text-xs text-gray-600 dark:text-gray-300">Cobrar</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
 </DashboardLayout>

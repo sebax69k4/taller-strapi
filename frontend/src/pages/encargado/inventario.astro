@@ -102,9 +102,31 @@ const formatCurrency = (amount: number) => new Intl.NumberFormat('es-CL', { styl
          showAddModal: false, 
          editPart: null, 
          restockPart: null,
+         lastUpdate: null,
+         loading: false,
+         apiBase: 'http://localhost:1337',
+
+         async fetchParts() {
+           this.loading = true;
+           try {
+             const res = await fetch(this.apiBase + '/api/repuestos?sort=nombre:asc');
+             const data = await res.json();
+             if (data.data) this.allParts = data.data;
+             this.lastUpdate = new Date();
+           } catch(e) { console.error(e); }
+           this.loading = false;
+         },
+
+         getTimeSinceUpdate() {
+           if (!this.lastUpdate) return '';
+           const s = Math.floor((new Date() - this.lastUpdate) / 1000);
+           return s < 60 ? 'hace ' + s + 's' : 'hace ' + Math.floor(s/60) + 'm';
+         },
 
          init() {
            this.allParts = JSON.parse(document.getElementById('parts-data').textContent);
+           this.lastUpdate = new Date();
+           setInterval(() => this.fetchParts(), 15000);
          },
 
          get filteredParts() {
@@ -193,9 +215,7 @@ const formatCurrency = (amount: number) => new Intl.NumberFormat('es-CL', { styl
        }"
   >
     <!-- Data Injection -->
-    <script type="application/json" id="parts-data">
-      {JSON.stringify(parts)}
-    </script>
+    <script type="application/json" id="parts-data" set:html={JSON.stringify(parts)}></script>
 
     <!-- Header -->
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
@@ -203,7 +223,15 @@ const formatCurrency = (amount: number) => new Intl.NumberFormat('es-CL', { styl
         <h1 class="text-3xl font-bold text-gray-900 dark:text-white font-display">Inventario de Repuestos</h1>
         <p class="text-gray-500 dark:text-gray-400 mt-1">Gestiona el stock y precios de los repuestos del taller</p>
       </div>
-      <div class="flex gap-2">
+      <div class="flex items-center gap-2">
+        <!-- Auto-refresh indicator -->
+        <div class="flex items-center gap-2 text-sm text-gray-500 bg-white dark:bg-gray-800 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700">
+          <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+          <span>Stock <span x-text="getTimeSinceUpdate()"></span></span>
+          <button @click="fetchParts()" class="text-primary-600 hover:text-primary-700 ml-1" title="Actualizar ahora">
+            <span class="material-symbols-outlined text-sm" :class="loading && 'animate-spin'">refresh</span>
+          </button>
+        </div>
         <a href="/encargado/presupuestos" class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 flex items-center gap-2 font-medium">
           <span class="material-symbols-outlined">add</span>
           Crear Presupuesto
